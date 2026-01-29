@@ -1,0 +1,27 @@
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2xl);
+  background-color: var(--color-bg);
+}
+
+.sidecar-loading,
+.sidecar-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-secondary);
+  gap: var(--space-sm);
+}
+
+.sidecar-error {
+  color: #dc2626;
+}
