@@ -1,0 +1,226 @@
+@page {
+  size: A4;
+  margin: 2cm;
+}
+
+body {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+h1 {
+  font-size: 20pt;
+  font-weight: 600;
+  margin: 0;
+}
+
+h2 {
+  font-size: 14pt;
+  font-weight: 600;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+/* Header */
+.report-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.test-type-badge {
+  font-size: 9pt;
+  color: #64748b;
+  background-color: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Summary */
+.summary-card {
+  background-color: #eff6ff;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #60a5fa;
+}
+
+.summary-card p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+/* Findings */
+.finding-card {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  page-break-inside: avoid;
+}
+
+.finding-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.finding-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 8pt;
+  color: #fff;
+}
+
+.finding-icon--normal {
+  background-color: #16a34a;
+}
+
+.finding-icon--mild {
+  background-color: #d97706;
+}
+
+.finding-icon--moderate {
+  background-color: #ea580c;
+}
+
+.finding-icon--severe {
+  background-color: #dc2626;
+}
+
+.finding-icon--informational {
+  background-color: #2563eb;
+}
+
+.finding-explanation {
+  font-size: 10pt;
+  color: #475569;
+  margin: 0;
+  padding-left: 26px;
+}
+
+/* Measurements Table */
+.measurements-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+  margin-top: 8px;
+}
+
+.measurements-table th {
+  text-align: left;
+  padding: 6px 8px;
+  background-color: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 8pt;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.measurements-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+.measurement-row {
+  page-break-inside: avoid;
+}
+
+.measurement-row--mildly_abnormal td {
+  background-color: #fffbeb;
+}
+
+.measurement-row--moderately_abnormal td {
+  background-color: #fff7ed;
+}
+
+.measurement-row--severely_abnormal td {
+  background-color: #fef2f2;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 8pt;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-badge--normal {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.status-badge--mildly_abnormal {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge--moderately_abnormal {
+  background-color: #ffedd5;
+  color: #9a3412;
+}
+
+.status-badge--severely_abnormal {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge--undetermined {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+/* Questions */
+.questions-list {
+  padding-left: 20px;
+}
+
+.questions-list li {
+  margin-bottom: 6px;
+  font-size: 10pt;
+}
+
+/* Disclaimer */
+.disclaimer {
+  margin-top: 24px;
+  padding: 12px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.disclaimer p {
+  margin: 0;
+  font-size: 9pt;
+  color: #64748b;
+  font-style: italic;
+  line-height: 1.6;
+}
+
+/* Footer */
+.report-footer {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 8pt;
+  color: #94a3b8;
+}
+
+.report-footer p {
+  margin: 0;
+}

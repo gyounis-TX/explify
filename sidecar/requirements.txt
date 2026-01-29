@@ -1,0 +1,14 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.12
+pdfplumber==0.11.4
+PyMuPDF==1.24.11
+pymupdf4llm==0.0.17
+pytesseract==0.3.13
+pdf2image==1.17.0
+Pillow==10.4.0
+numpy==1.26.4
+anthropic>=0.39.0
+openai>=1.50.0
+weasyprint>=62.0
+Jinja2>=3.1.0
