@@ -78,6 +78,14 @@ class TestPromptEngine:
         )
         assert "4th-grade" in prompt
 
+    def test_system_prompt_grade_12_literacy(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_12, MOCK_PROMPT_CONTEXT
+        )
+        assert "12th-grade" in prompt
+        assert "adult language" in prompt
+
     def test_system_prompt_contains_anti_hallucination_rules(self):
         engine = PromptEngine()
         prompt = engine.build_system_prompt(
@@ -198,7 +206,199 @@ class TestPromptEngine:
         prompt = engine.build_system_prompt(
             LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT
         )
-        assert "## Tone" not in prompt
+        # The template-provided "## Tone\n" section should be absent,
+        # but the always-present "## Tone and Language Style" is expected.
+        assert "## Tone\n" not in prompt
+
+    def test_system_prompt_contains_hedging_instructions(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT
+        )
+        assert "## Tone and Language Style" in prompt
+        assert "hedging" in prompt.lower()
+        assert "appears to" in prompt
+        assert "may" in prompt
+
+    def test_user_prompt_contains_refinement_instruction(self):
+        engine = PromptEngine()
+        report = _make_parsed_report()
+        prompt = engine.build_user_prompt(
+            report,
+            MOCK_REFERENCE_RANGES,
+            MOCK_GLOSSARY,
+            "scrubbed text",
+            refinement_instruction="Make it shorter and simpler.",
+        )
+        assert "## Refinement Instruction" in prompt
+        assert "Make it shorter and simpler." in prompt
+
+    def test_user_prompt_without_refinement_instruction(self):
+        engine = PromptEngine()
+        report = _make_parsed_report()
+        prompt = engine.build_user_prompt(
+            report,
+            MOCK_REFERENCE_RANGES,
+            MOCK_GLOSSARY,
+            "scrubbed text",
+            refinement_instruction=None,
+        )
+        assert "Refinement Instruction" not in prompt
+
+    def test_user_prompt_contains_liked_examples(self):
+        engine = PromptEngine()
+        report = _make_parsed_report()
+        liked_examples = [
+            {
+                "overall_summary": "Your heart looks great and healthy.",
+                "key_findings": [
+                    {
+                        "finding": "Normal heart function",
+                        "explanation": "Everything is working well.",
+                    },
+                ],
+            },
+        ]
+        prompt = engine.build_user_prompt(
+            report,
+            MOCK_REFERENCE_RANGES,
+            MOCK_GLOSSARY,
+            "scrubbed text",
+            liked_examples=liked_examples,
+        )
+        assert "## Preferred Output Style" in prompt
+        assert "Your heart looks great and healthy." in prompt
+        assert "Normal heart function" in prompt
+        assert "Everything is working well." in prompt
+
+    def test_user_prompt_without_liked_examples(self):
+        engine = PromptEngine()
+        report = _make_parsed_report()
+        prompt = engine.build_user_prompt(
+            report,
+            MOCK_REFERENCE_RANGES,
+            MOCK_GLOSSARY,
+            "scrubbed text",
+            liked_examples=None,
+        )
+        assert "Preferred Output Style" not in prompt
+
+    def test_user_prompt_empty_liked_examples(self):
+        engine = PromptEngine()
+        report = _make_parsed_report()
+        prompt = engine.build_user_prompt(
+            report,
+            MOCK_REFERENCE_RANGES,
+            MOCK_GLOSSARY,
+            "scrubbed text",
+            liked_examples=[],
+        )
+        assert "Preferred Output Style" not in prompt
+
+    def test_system_prompt_tone_preference_1(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, tone_preference=1
+        )
+        assert "direct and clinical" in prompt
+
+    def test_system_prompt_tone_preference_5(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, tone_preference=5
+        )
+        assert "warm, empathetic" in prompt
+
+    def test_system_prompt_detail_preference_1(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, detail_preference=1
+        )
+        assert "extremely brief" in prompt.lower()
+
+    def test_system_prompt_detail_preference_5(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, detail_preference=5
+        )
+        assert "comprehensive" in prompt.lower()
+
+    def test_system_prompt_default_preferences(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT
+        )
+        assert "## Tone Preference" in prompt
+        assert "## Detail Level" in prompt
+        # Default tone=3: "Balance clinical precision"
+        assert "Balance clinical precision" in prompt
+        # Default detail=3: "standard level of detail"
+        assert "standard level of detail" in prompt
+
+    def test_system_prompt_contains_physician_name(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, physician_name="Dr. Smith"
+        )
+        assert "Physician Attribution" in prompt
+        assert "Dr. Smith" in prompt
+        assert "your doctor" in prompt.lower()
+
+    def test_system_prompt_no_physician_section_when_none(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, physician_name=None
+        )
+        assert "Physician Attribution" not in prompt
+
+    def test_system_prompt_no_physician_section_when_empty(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT, physician_name=""
+        )
+        assert "Physician Attribution" not in prompt
+
+    def test_system_prompt_no_disclaimer_rule(self):
+        engine = PromptEngine()
+        prompt = engine.build_system_prompt(
+            LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT
+        )
+        assert "disclaimer MUST state" not in prompt
+
+    def test_response_without_questions_and_disclaimer(self):
+        """Backward compat: response parser accepts output without questions/disclaimer."""
+        report = _make_parsed_report()
+        tool_result = {
+            "overall_summary": "Your heart appears to be functioning normally.",
+            "measurements": [
+                {
+                    "abbreviation": "LVEF",
+                    "value": 57.5,
+                    "unit": "%",
+                    "status": "normal",
+                    "plain_language": "Your heart pumps normally.",
+                },
+                {
+                    "abbreviation": "LVIDd",
+                    "value": 4.8,
+                    "unit": "cm",
+                    "status": "normal",
+                    "plain_language": "Heart chamber size is normal.",
+                },
+            ],
+            "key_findings": [
+                {
+                    "finding": "Normal heart function",
+                    "severity": "normal",
+                    "explanation": "Everything looks good.",
+                }
+            ],
+        }
+
+        result, issues = parse_and_validate_response(tool_result, report)
+        assert isinstance(result, ExplanationResult)
+        assert result.questions_for_doctor == []
+        assert result.disclaimer == ""
 
 
 class TestResponseParser:

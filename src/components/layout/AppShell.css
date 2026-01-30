@@ -54,3 +54,45 @@
 .setup-banner-btn:hover {
   background-color: #d97706;
 }
+
+.setup-banner-dismiss {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #92400e;
+  font-size: 1.1rem;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.setup-banner-dismiss:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Print Styles */
+@media print {
+  .sidebar {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .app-content {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .setup-banner {
+    display: none !important;
+  }
+}

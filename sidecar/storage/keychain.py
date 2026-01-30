@@ -11,7 +11,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_SERVICE_NAME = "verba"
+_SERVICE_NAME = "explify"
 
 
 class KeychainManager:

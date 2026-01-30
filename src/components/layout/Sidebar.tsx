@@ -3,16 +3,19 @@ import "./Sidebar.css";
 
 const navItems = [
   { path: "/", label: "Import" },
+  { path: "/results", label: "Report Explanation" },
+  { path: "/letters", label: "Letters" },
   { path: "/history", label: "History" },
   { path: "/templates", label: "Templates" },
   { path: "/settings", label: "Settings" },
+  { path: "/ai-model", label: "AI Model" },
 ];
 
 export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <h1 className="sidebar-title">Verba</h1>
+        <h1 className="sidebar-title">Explify</h1>
       </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (

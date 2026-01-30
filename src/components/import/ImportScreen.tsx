@@ -5,8 +5,20 @@ import { useToast } from "../shared/Toast";
 import type { ExtractionResult, Template } from "../../types/sidecar";
 import "./ImportScreen.css";
 
+type HelpMeStatus = "idle" | "generating" | "success" | "error";
+
 type ImportMode = "pdf" | "text";
 type ImportStatus = "idle" | "extracting" | "success" | "error";
+
+interface FileExtractionEntry {
+  result?: ExtractionResult;
+  error?: string;
+  status: "pending" | "extracting" | "success" | "error";
+}
+
+function fileKey(file: File): string {
+  return `${file.name}::${file.size}`;
+}
 
 export function ImportScreen() {
   const navigate = useNavigate();
@@ -14,31 +26,57 @@ export function ImportScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [mode, setMode] = useState<ImportMode>("pdf");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pastedText, setPastedText] = useState("");
   const [status, setStatus] = useState<ImportStatus>("idle");
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [clinicalContext, setClinicalContext] = useState("");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<
     number | undefined
   >(undefined);
 
+  // Help Me state
+  const [helpMeText, setHelpMeText] = useState("");
+  const [helpMeStatus, setHelpMeStatus] = useState<HelpMeStatus>("idle");
+
+  // Batch extraction state
+  const [extractionResults, setExtractionResults] = useState<
+    Map<string, FileExtractionEntry>
+  >(new Map());
+  const [selectedResultKey, setSelectedResultKey] = useState<string | null>(
+    null,
+  );
+
   useEffect(() => {
-    sidecarApi
-      .listTemplates()
-      .then((res) => setTemplates(res.items))
-      .catch(() => {
-        showToast("error", "Failed to load templates.");
-      });
-  }, [showToast]);
+    let cancelled = false;
+    async function loadTemplates(attempts = 5, backoffMs = 1000) {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const res = await sidecarApi.listTemplates();
+          if (!cancelled) setTemplates(res.items);
+          return;
+        } catch {
+          if (i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+          }
+        }
+      }
+      // Templates are optional — silently fall back to empty list
+    }
+    loadTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const resetState = useCallback(() => {
     setStatus("idle");
     setResult(null);
     setError(null);
+    setExtractionResults(new Map());
+    setSelectedResultKey(null);
   }, []);
 
   const handleModeChange = useCallback(
@@ -51,26 +89,51 @@ export function ImportScreen() {
 
   const validateFile = (file: File): string | null => {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
-      return "Only PDF files are accepted.";
+      return `"${file.name}": Only PDF files are accepted.`;
     }
     if (file.size === 0) {
-      return "File is empty.";
+      return `"${file.name}": File is empty.`;
     }
     if (file.size > 50 * 1024 * 1024) {
-      return "File is too large. Maximum size is 50 MB.";
+      return `"${file.name}": File is too large. Maximum size is 50 MB.`;
     }
     return null;
   };
 
   const handleFileSelect = useCallback(
-    (file: File) => {
-      const validationError = validateFile(file);
-      if (validationError) {
-        setError(validationError);
-        setSelectedFile(null);
-        return;
+    (files: File[]) => {
+      const validFiles: File[] = [];
+      const errors: string[] = [];
+      for (const file of files) {
+        const validationError = validateFile(file);
+        if (validationError) {
+          errors.push(validationError);
+        } else {
+          validFiles.push(file);
+        }
       }
-      setSelectedFile(file);
+      if (errors.length > 0) {
+        setError(errors.join(" "));
+      }
+      if (validFiles.length > 0) {
+        setSelectedFiles((prev) => {
+          const existingKeys = new Set(prev.map(fileKey));
+          const newFiles = validFiles.filter(
+            (f) => !existingKeys.has(fileKey(f)),
+          );
+          return [...prev, ...newFiles];
+        });
+        resetState();
+      } else if (validFiles.length === 0 && errors.length > 0) {
+        setSelectedFiles([]);
+      }
+    },
+    [resetState],
+  );
+
+  const handleRemoveFile = useCallback(
+    (index: number) => {
+      setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
       resetState();
     },
     [resetState],
@@ -78,9 +141,9 @@ export function ImportScreen() {
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        handleFileSelect(file);
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleFileSelect(Array.from(files));
       }
     },
     [handleFileSelect],
@@ -100,9 +163,9 @@ export function ImportScreen() {
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOver(false);
-      const file = e.dataTransfer.files[0];
-      if (file) {
-        handleFileSelect(file);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        handleFileSelect(files);
       }
     },
     [handleFileSelect],
@@ -114,49 +177,124 @@ export function ImportScreen() {
     setResult(null);
 
     try {
-      let extractionResult: ExtractionResult;
-
       if (mode === "pdf") {
-        if (!selectedFile) {
-          setError("No file selected.");
+        if (selectedFiles.length === 0) {
+          setError("No files selected.");
           setStatus("error");
           return;
         }
-        extractionResult = await sidecarApi.extractPdf(selectedFile);
+
+        const results = new Map<string, FileExtractionEntry>();
+        // Initialize all as pending
+        for (const file of selectedFiles) {
+          results.set(fileKey(file), { status: "pending" });
+        }
+        setExtractionResults(new Map(results));
+
+        let lastSuccessKey: string | null = null;
+
+        for (const file of selectedFiles) {
+          const key = fileKey(file);
+          results.set(key, { status: "extracting" });
+          setExtractionResults(new Map(results));
+
+          try {
+            const extractionResult = await sidecarApi.extractPdf(file);
+            results.set(key, {
+              status: "success",
+              result: extractionResult,
+            });
+            lastSuccessKey = key;
+          } catch (err) {
+            const msg =
+              err instanceof Error ? err.message : "Extraction failed.";
+            results.set(key, { status: "error", error: msg });
+          }
+          setExtractionResults(new Map(results));
+        }
+
+        // Count successes
+        const successes = [...results.values()].filter(
+          (e) => e.status === "success",
+        );
+        if (successes.length === 0) {
+          setStatus("error");
+          setError("All file extractions failed.");
+          return;
+        }
+
+        // If single success, auto-select it
+        if (successes.length === 1 && lastSuccessKey) {
+          setSelectedResultKey(lastSuccessKey);
+          setResult(successes[0].result!);
+        } else if (lastSuccessKey) {
+          setSelectedResultKey(lastSuccessKey);
+          setResult(
+            results.get(lastSuccessKey)?.result ?? successes[0].result!,
+          );
+        }
+
+        setStatus("success");
       } else {
         if (!pastedText.trim()) {
           setError("Please enter some text.");
           setStatus("error");
           return;
         }
-        extractionResult = await sidecarApi.extractText(pastedText);
+        const extractionResult = await sidecarApi.extractText(pastedText);
+        setResult(extractionResult);
+        setStatus("success");
       }
-
-      setResult(extractionResult);
-      setStatus("success");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Extraction failed.";
       setError(msg);
       setStatus("error");
       showToast("error", msg);
     }
-  }, [mode, selectedFile, pastedText, showToast]);
+  }, [mode, selectedFiles, pastedText, showToast]);
+
+  const handleSelectResult = useCallback(
+    (key: string) => {
+      setSelectedResultKey(key);
+      const entry = extractionResults.get(key);
+      if (entry?.result) {
+        setResult(entry.result);
+      }
+    },
+    [extractionResults],
+  );
 
   const handleProceed = useCallback(() => {
     if (result) {
       navigate("/processing", {
         state: {
           extractionResult: result,
-          clinicalContext: clinicalContext.trim() || undefined,
           templateId: selectedTemplateId,
         },
       });
     }
-  }, [navigate, result, clinicalContext, selectedTemplateId]);
+  }, [navigate, result, selectedTemplateId]);
+
+  const handleHelpMe = useCallback(async () => {
+    if (!helpMeText.trim()) return;
+    setHelpMeStatus("generating");
+    try {
+      await sidecarApi.generateLetter({
+        prompt: helpMeText.trim(),
+        letter_type: "general",
+      });
+      setHelpMeStatus("success");
+      setHelpMeText("");
+      showToast("success", "Letter generated. View it in the Letters section.");
+    } catch {
+      setHelpMeStatus("error");
+      showToast("error", "Failed to generate letter. Check your API key in Settings.");
+    }
+  }, [helpMeText, showToast]);
 
   const canExtract =
     status !== "extracting" &&
-    ((mode === "pdf" && selectedFile !== null) ||
+    ((mode === "pdf" && selectedFiles.length > 0) ||
       (mode === "text" && pastedText.trim().length > 0));
 
   const formatFileSize = (bytes: number): string => {
@@ -165,12 +303,16 @@ export function ImportScreen() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const successCount = [...extractionResults.values()].filter(
+    (e) => e.status === "success",
+  ).length;
+
   return (
     <div className="import-screen">
       <header className="import-header">
         <h2 className="import-title">Import Report</h2>
         <p className="import-description">
-          Upload a PDF report or paste text from your EMR system.
+          Upload PDF reports or paste text from your EMR system.
         </p>
       </header>
 
@@ -192,7 +334,7 @@ export function ImportScreen() {
       {mode === "pdf" && (
         <div className="input-panel">
           <div
-            className={`drop-zone ${isDragOver ? "drop-zone--active" : ""} ${selectedFile ? "drop-zone--has-file" : ""}`}
+            className={`drop-zone ${isDragOver ? "drop-zone--active" : ""} ${selectedFiles.length > 0 ? "drop-zone--has-file" : ""}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -202,25 +344,67 @@ export function ImportScreen() {
               ref={fileInputRef}
               type="file"
               accept=".pdf,application/pdf"
+              multiple
               onChange={handleInputChange}
               className="drop-zone-input"
             />
-            {selectedFile ? (
+            {selectedFiles.length > 0 ? (
               <div className="drop-zone-file-info">
-                <span className="file-name">{selectedFile.name}</span>
+                <span className="file-name">
+                  {selectedFiles.length} file{selectedFiles.length !== 1 ? "s" : ""} selected
+                </span>
                 <span className="file-size">
-                  {formatFileSize(selectedFile.size)}
+                  Click or drop to add more
                 </span>
               </div>
             ) : (
               <div className="drop-zone-prompt">
                 <p className="drop-zone-primary">
-                  Drag and drop a PDF here, or click to browse
+                  Drag and drop PDFs here, or click to browse
                 </p>
-                <p className="drop-zone-secondary">PDF files up to 50 MB</p>
+                <p className="drop-zone-secondary">
+                  PDF files up to 50 MB each. Multiple files supported.
+                </p>
               </div>
             )}
           </div>
+
+          {selectedFiles.length > 0 && (
+            <div className="file-list">
+              {selectedFiles.map((file, index) => {
+                const key = fileKey(file);
+                const entry = extractionResults.get(key);
+                return (
+                  <div key={key} className="file-list-item">
+                    <span className="file-list-name">{file.name}</span>
+                    <span className="file-list-size">
+                      {formatFileSize(file.size)}
+                    </span>
+                    {entry && (
+                      <span
+                        className={`file-list-status file-list-status--${entry.status}`}
+                      >
+                        {entry.status === "pending" && "Pending"}
+                        {entry.status === "extracting" && "Extracting..."}
+                        {entry.status === "success" && "Done"}
+                        {entry.status === "error" && (entry.error ?? "Failed")}
+                      </span>
+                    )}
+                    <button
+                      className="file-list-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFile(index);
+                      }}
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -249,7 +433,11 @@ export function ImportScreen() {
         onClick={handleExtract}
         disabled={!canExtract}
       >
-        {status === "extracting" ? "Extracting..." : "Extract Text"}
+        {status === "extracting"
+          ? "Extracting..."
+          : mode === "pdf" && selectedFiles.length > 1
+            ? `Extract All (${selectedFiles.length})`
+            : "Extract Text"}
       </button>
 
       {error && (
@@ -261,7 +449,29 @@ export function ImportScreen() {
       {status === "extracting" && (
         <div className="extraction-progress">
           <div className="spinner" />
-          <p>Analyzing document...</p>
+          <p>Analyzing document{selectedFiles.length > 1 ? "s" : ""}...</p>
+        </div>
+      )}
+
+      {status === "success" && successCount > 1 && (
+        <div className="batch-results-selector">
+          <h3 className="preview-title">
+            {successCount} files extracted. Select one to process:
+          </h3>
+          {selectedFiles.map((file) => {
+            const key = fileKey(file);
+            const entry = extractionResults.get(key);
+            if (entry?.status !== "success") return null;
+            return (
+              <button
+                key={key}
+                className={`batch-result-item ${selectedResultKey === key ? "batch-result-item--selected" : ""}`}
+                onClick={() => handleSelectResult(key)}
+              >
+                {file.name}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -313,19 +523,6 @@ export function ImportScreen() {
             </pre>
           </div>
 
-          <div className="clinical-context-group">
-            <label className="clinical-context-label">
-              Clinical Reason for Test (Optional)
-            </label>
-            <textarea
-              className="clinical-context-input"
-              placeholder="e.g. Chest pain, shortness of breath, follow-up for diabetes..."
-              value={clinicalContext}
-              onChange={(e) => setClinicalContext(e.target.value)}
-              rows={3}
-            />
-          </div>
-
           {templates.length > 0 && (
             <div className="clinical-context-group">
               <label className="clinical-context-label">
@@ -356,6 +553,48 @@ export function ImportScreen() {
           </button>
         </div>
       )}
+
+      {/* Help Me Section */}
+      <div className="help-me-section">
+        <h3 className="help-me-title">Help Me</h3>
+        <p className="help-me-description">
+          Need help explaining something to a patient? Describe your question,
+          topic, or situation below and we'll generate a clear, patient-friendly
+          explanation, letter, or response. Results appear in the Letters section.
+        </p>
+        <textarea
+          className="help-me-input"
+          placeholder="e.g., Explain to the patient why their potassium is slightly elevated and what dietary changes might help..."
+          value={helpMeText}
+          onChange={(e) => {
+            setHelpMeText(e.target.value);
+            if (helpMeStatus !== "idle") setHelpMeStatus("idle");
+          }}
+          rows={4}
+        />
+        <div className="help-me-footer">
+          <span className="char-count">
+            {helpMeText.length.toLocaleString()} characters
+          </span>
+          <button
+            className="help-me-btn"
+            onClick={handleHelpMe}
+            disabled={!helpMeText.trim() || helpMeStatus === "generating"}
+          >
+            {helpMeStatus === "generating" ? "Generating..." : "Generate"}
+          </button>
+        </div>
+        {helpMeStatus === "success" && (
+          <p className="help-me-success">
+            Letter generated successfully. View it in the Letters section.
+          </p>
+        )}
+        {helpMeStatus === "error" && (
+          <p className="help-me-error">
+            Failed to generate. Please check your API key in Settings.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -24,7 +24,7 @@ class TestKeychainAvailable:
         mock_keyring.get_password.return_value = "sk-test123"
         mgr.set_key("claude_api_key", "sk-test123")
         mock_keyring.set_password.assert_called_once_with(
-            "verba", "claude_api_key", "sk-test123"
+            "explify", "claude_api_key", "sk-test123"
         )
         result = mgr.get_key("claude_api_key")
         assert result == "sk-test123"
@@ -33,7 +33,7 @@ class TestKeychainAvailable:
         mgr, mock_keyring = manager
         mgr.delete_key("claude_api_key")
         mock_keyring.delete_password.assert_called_once_with(
-            "verba", "claude_api_key"
+            "explify", "claude_api_key"
         )
 
     def test_convenience_methods(self, manager):
@@ -43,10 +43,10 @@ class TestKeychainAvailable:
         assert mgr.get_openai_key() == "key123"
 
         mgr.set_claude_key("ck")
-        mock_keyring.set_password.assert_called_with("verba", "claude_api_key", "ck")
+        mock_keyring.set_password.assert_called_with("explify", "claude_api_key", "ck")
 
         mgr.set_openai_key("ok")
-        mock_keyring.set_password.assert_called_with("verba", "openai_api_key", "ok")
+        mock_keyring.set_password.assert_called_with("explify", "openai_api_key", "ok")
 
 
 class TestKeychainUnavailable:

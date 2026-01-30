@@ -146,6 +146,218 @@
   color: var(--color-text-secondary);
 }
 
+/* Preference Sliders */
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.slider-label-left,
+.slider-label-right {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.slider-label-left {
+  text-align: right;
+}
+
+.slider-label-right {
+  text-align: left;
+}
+
+.preference-slider {
+  flex: 1;
+  height: 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--color-gray-200);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.preference-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary-600);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.preference-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.preference-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary-600);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.slider-ticks {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 80px;
+  margin-top: 2px;
+  margin-bottom: var(--space-sm);
+}
+
+.slider-ticks {
+  padding: 0 calc(80px + var(--space-sm));
+}
+
+.slider-tick {
+  font-size: 0.7rem;
+  color: var(--color-gray-400);
+  width: 16px;
+  text-align: center;
+}
+
+.slider-tick--active {
+  color: var(--color-primary-600);
+  font-weight: 600;
+}
+
+.slider-value-label {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-primary-600);
+  background-color: var(--color-primary-50);
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+/* List Input (Quick Reasons & Physicians) */
+.list-input-row {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.list-input-row .form-input {
+  flex: 1;
+}
+
+.list-add-btn {
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.list-add-btn:hover:not(:disabled) {
+  background-color: var(--color-primary-700);
+}
+
+.list-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.list-item-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background-color: var(--color-gray-100);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.list-item-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.list-item-remove:hover {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.list-count {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* Next Steps Settings */
+.next-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.next-step-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.next-step-row--codified {
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-gray-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.next-step-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.next-step-badge {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  background-color: var(--color-gray-100);
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.next-step-edit-input {
+  flex: 1;
+}
+
 /* Actions */
 .settings-actions {
   display: flex;

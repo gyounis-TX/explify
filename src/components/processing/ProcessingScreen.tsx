@@ -99,11 +99,9 @@ export function ProcessingScreen() {
   const navigate = useNavigate();
   const locationState = location.state as {
     extractionResult?: ExtractionResult;
-    clinicalContext?: string;
     templateId?: number;
   } | null;
   const extractionResult = locationState?.extractionResult;
-  const clinicalContext = locationState?.clinicalContext;
   const templateId = locationState?.templateId;
 
   const { showToast } = useToast();
@@ -137,7 +135,6 @@ export function ProcessingScreen() {
       const response: ExplainResponse = await sidecarApi.explainReport({
         extraction_result: extractionResult,
         test_type: testType,
-        clinical_context: clinicalContext,
         template_id: templateId,
       });
 
@@ -161,7 +158,6 @@ export function ProcessingScreen() {
           state: {
             explainResponse: response,
             extractionResult,
-            clinicalContext,
             templateId,
           },
         });
@@ -171,7 +167,7 @@ export function ProcessingScreen() {
       setError(categorizeError(msg));
       setCurrentStep("error");
     }
-  }, [extractionResult, clinicalContext, templateId, navigate, showToast]);
+  }, [extractionResult, templateId, navigate, showToast]);
 
   useEffect(() => {
     runPipeline();

@@ -108,7 +108,9 @@ export interface ParseRequest {
 // --- Phase 4: LLM Explanation Types ---
 
 export type LLMProvider = "claude" | "openai";
-export type LiteracyLevel = "grade_4" | "grade_6" | "grade_8" | "clinical";
+export type LiteracyLevel = "grade_4" | "grade_6" | "grade_8" | "grade_12" | "clinical";
+export type ExplanationVoice = "first_person" | "third_person";
+export type PhysicianNameSource = "auto_extract" | "custom" | "generic";
 
 export interface MeasurementExplanation {
   abbreviation: string;
@@ -140,6 +142,11 @@ export interface ExplainRequest {
   api_key?: string;
   clinical_context?: string;
   template_id?: number;
+  refinement_instruction?: string;
+  tone_preference?: number;
+  detail_preference?: number;
+  next_steps?: string[];
+  short_comment?: boolean;
 }
 
 export interface ExplainResponse {
@@ -147,6 +154,7 @@ export interface ExplainResponse {
   parsed_report: ParsedReport;
   validation_warnings: string[];
   phi_categories_found: string[];
+  physician_name?: string;
   model_used: string;
   input_tokens: number;
   output_tokens: number;
@@ -166,6 +174,17 @@ export interface AppSettings {
   literacy_level: LiteracyLevel;
   specialty: string | null;
   practice_name: string | null;
+  include_key_findings: boolean;
+  include_measurements: boolean;
+  tone_preference: number;
+  detail_preference: number;
+  quick_reasons: string[];
+  next_steps_options: string[];
+  explanation_voice: ExplanationVoice;
+  name_drop: boolean;
+  physician_name_source: PhysicianNameSource;
+  custom_physician_name: string | null;
+  short_comment_char_limit: number | null;
 }
 
 export interface SettingsUpdate {
@@ -177,6 +196,17 @@ export interface SettingsUpdate {
   literacy_level?: LiteracyLevel;
   specialty?: string;
   practice_name?: string;
+  include_key_findings?: boolean;
+  include_measurements?: boolean;
+  tone_preference?: number;
+  detail_preference?: number;
+  quick_reasons?: string[];
+  next_steps_options?: string[];
+  explanation_voice?: ExplanationVoice;
+  name_drop?: boolean;
+  physician_name_source?: PhysicianNameSource;
+  custom_physician_name?: string;
+  short_comment_char_limit?: number | null;
 }
 
 // --- Template Types ---
@@ -222,6 +252,7 @@ export interface HistoryListItem {
   test_type_display: string;
   filename: string | null;
   summary: string;
+  liked: boolean;
 }
 
 export interface HistoryListResponse {
@@ -241,6 +272,8 @@ export interface HistoryCreateRequest {
   filename: string | null;
   summary: string;
   full_response: ExplainResponse;
+  tone_preference?: number;
+  detail_preference?: number;
 }
 
 export interface HistoryDeleteResponse {
@@ -248,6 +281,40 @@ export interface HistoryDeleteResponse {
   id: number;
 }
 
+export interface HistoryLikeRequest {
+  liked: boolean;
+}
+
+export interface HistoryLikeResponse {
+  id: number;
+  liked: boolean;
+}
+
 export interface ConsentStatusResponse {
   consent_given: boolean;
+}
+
+// --- Letter Types ---
+
+export interface LetterGenerateRequest {
+  prompt: string;
+  letter_type?: string;
+}
+
+export interface LetterResponse {
+  id: number;
+  created_at: string;
+  prompt: string;
+  content: string;
+  letter_type: string;
+}
+
+export interface LetterListResponse {
+  items: LetterResponse[];
+  total: number;
+}
+
+export interface LetterDeleteResponse {
+  deleted: boolean;
+  id: number;
 }

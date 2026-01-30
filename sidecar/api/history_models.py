@@ -15,6 +15,8 @@ class HistoryCreateRequest(BaseModel):
     filename: Optional[str] = None
     summary: str = Field(..., max_length=200)
     full_response: dict[str, Any]
+    tone_preference: Optional[int] = None
+    detail_preference: Optional[int] = None
 
 
 class HistoryListItem(BaseModel):
@@ -26,6 +28,7 @@ class HistoryListItem(BaseModel):
     test_type_display: str
     filename: Optional[str] = None
     summary: str
+    liked: bool = False
 
 
 class HistoryListResponse(BaseModel):
@@ -46,6 +49,7 @@ class HistoryDetailResponse(BaseModel):
     test_type_display: str
     filename: Optional[str] = None
     summary: str
+    liked: bool = False
     full_response: dict[str, Any]
 
 
@@ -54,6 +58,19 @@ class HistoryDeleteResponse(BaseModel):
 
     deleted: bool
     id: int
+
+
+class HistoryLikeRequest(BaseModel):
+    """Request body for PATCH /history/{id}/like."""
+
+    liked: bool
+
+
+class HistoryLikeResponse(BaseModel):
+    """Response for PATCH /history/{id}/like."""
+
+    id: int
+    liked: bool
 
 
 class ConsentStatusResponse(BaseModel):

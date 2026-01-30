@@ -60,13 +60,25 @@ def render_pdf(explain_response: dict) -> bytes:
     )
     template = env.get_template("report.html")
 
+    # Build branding footer
+    try:
+        from api import settings_store
+        settings = settings_store.get_settings()
+        practice_name = settings.practice_name
+    except Exception:
+        practice_name = None
+
+    if practice_name:
+        branding_footer = f"Powered by Explify, refined by {practice_name}."
+    else:
+        branding_footer = "Powered by Explify."
+
     html_str = template.render(
         test_type_display=parsed_report.get("test_type_display", "Medical Report"),
         summary=explanation.get("overall_summary", ""),
         findings=explanation.get("key_findings", []),
         measurements=measurements,
-        questions=explanation.get("questions_for_doctor", []),
-        disclaimer=explanation.get("disclaimer", ""),
+        disclaimer=branding_footer,
         severity_labels=SEVERITY_LABELS,
         severity_icons=SEVERITY_ICONS,
         finding_severity_icons=FINDING_SEVERITY_ICONS,

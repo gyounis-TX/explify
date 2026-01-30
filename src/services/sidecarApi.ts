@@ -18,7 +18,12 @@ import type {
   HistoryDetailResponse,
   HistoryCreateRequest,
   HistoryDeleteResponse,
+  HistoryLikeResponse,
   ConsentStatusResponse,
+  LetterGenerateRequest,
+  LetterResponse,
+  LetterListResponse,
+  LetterDeleteResponse,
 } from "../types/sidecar";
 
 class SidecarApi {
@@ -47,11 +52,17 @@ class SidecarApi {
     return false;
   }
 
-  private ensureInitialized(): string {
+  private async ensureInitialized(): Promise<string> {
     if (!this.baseUrl) {
-      throw new Error("SidecarApi not initialized");
+      try {
+        await this.initialize();
+      } catch {
+        throw new Error(
+          "SidecarApi not initialized. Backend may still be starting.",
+        );
+      }
     }
-    return this.baseUrl;
+    return this.baseUrl!;
   }
 
   private async handleErrorResponse(response: Response): Promise<never> {
@@ -76,8 +87,8 @@ class SidecarApi {
   }
 
   async healthCheck(): Promise<HealthResponse> {
-    const baseUrl = this.ensureInitialized();
-    const response = await fetch(`${baseUrl}/health`);
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/health`, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Health check failed: ${response.status}`);
     }
@@ -85,7 +96,7 @@ class SidecarApi {
   }
 
   async extractPdf(file: File): Promise<ExtractionResult> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const formData = new FormData();
     formData.append("file", file);
 
@@ -102,7 +113,7 @@ class SidecarApi {
   }
 
   async extractText(text: string): Promise<ExtractionResult> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
 
     const response = await fetch(`${baseUrl}/extract/text`, {
       method: "POST",
@@ -118,7 +129,7 @@ class SidecarApi {
   }
 
   async detectPdfType(file: File): Promise<DetectionResult> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const formData = new FormData();
     formData.append("file", file);
 
@@ -137,7 +148,7 @@ class SidecarApi {
   async detectTestType(
     extractionResult: ExtractionResult,
   ): Promise<DetectTypeResponse> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
 
     const response = await fetch(`${baseUrl}/analyze/detect-type`, {
       method: "POST",
@@ -156,7 +167,7 @@ class SidecarApi {
     extractionResult: ExtractionResult,
     testType?: string,
   ): Promise<ParsedReport> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
 
     const response = await fetch(`${baseUrl}/analyze/parse`, {
       method: "POST",
@@ -175,7 +186,7 @@ class SidecarApi {
   }
 
   async explainReport(request: ExplainRequest): Promise<ExplainResponse> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
 
     const body: Record<string, unknown> = {
       extraction_result: request.extraction_result,
@@ -188,6 +199,15 @@ class SidecarApi {
     if (request.clinical_context != null)
       body.clinical_context = request.clinical_context;
     if (request.template_id != null) body.template_id = request.template_id;
+    if (request.refinement_instruction != null)
+      body.refinement_instruction = request.refinement_instruction;
+    if (request.tone_preference != null)
+      body.tone_preference = request.tone_preference;
+    if (request.detail_preference != null)
+      body.detail_preference = request.detail_preference;
+    if (request.next_steps != null) body.next_steps = request.next_steps;
+    if (request.short_comment != null)
+      body.short_comment = request.short_comment;
 
     const response = await fetch(`${baseUrl}/analyze/explain`, {
       method: "POST",
@@ -203,8 +223,10 @@ class SidecarApi {
   }
 
   async getGlossary(testType: string): Promise<GlossaryResponse> {
-    const baseUrl = this.ensureInitialized();
-    const response = await fetch(`${baseUrl}/glossary/${testType}`);
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/glossary/${testType}`, {
+      cache: "no-store",
+    });
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
@@ -212,7 +234,7 @@ class SidecarApi {
   }
 
   async exportPdf(explainResponse: ExplainResponse): Promise<Blob> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/export/pdf`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -225,8 +247,8 @@ class SidecarApi {
   }
 
   async getSettings(): Promise<AppSettings> {
-    const baseUrl = this.ensureInitialized();
-    const response = await fetch(`${baseUrl}/settings`);
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/settings`, { cache: "no-store" });
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
@@ -234,7 +256,7 @@ class SidecarApi {
   }
 
   async updateSettings(update: SettingsUpdate): Promise<AppSettings> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/settings`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -249,8 +271,8 @@ class SidecarApi {
   // --- Templates ---
 
   async listTemplates(): Promise<TemplateListResponse> {
-    const baseUrl = this.ensureInitialized();
-    const response = await fetch(`${baseUrl}/templates`);
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/templates`, { cache: "no-store" });
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
@@ -258,7 +280,7 @@ class SidecarApi {
   }
 
   async createTemplate(request: TemplateCreateRequest): Promise<Template> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/templates`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -274,7 +296,7 @@ class SidecarApi {
     id: number,
     request: TemplateUpdateRequest,
   ): Promise<Template> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/templates/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -287,7 +309,7 @@ class SidecarApi {
   }
 
   async deleteTemplate(id: number): Promise<{ deleted: boolean; id: number }> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/templates/${id}`, {
       method: "DELETE",
     });
@@ -303,8 +325,9 @@ class SidecarApi {
     offset = 0,
     limit = 20,
     search?: string,
+    likedOnly?: boolean,
   ): Promise<HistoryListResponse> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const params = new URLSearchParams({
       offset: String(offset),
       limit: String(limit),
@@ -312,7 +335,12 @@ class SidecarApi {
     if (search) {
       params.set("search", search);
     }
-    const response = await fetch(`${baseUrl}/history?${params}`);
+    if (likedOnly) {
+      params.set("liked_only", "true");
+    }
+    const response = await fetch(`${baseUrl}/history?${params}`, {
+      cache: "no-store",
+    });
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
@@ -320,8 +348,10 @@ class SidecarApi {
   }
 
   async getHistoryDetail(id: number): Promise<HistoryDetailResponse> {
-    const baseUrl = this.ensureInitialized();
-    const response = await fetch(`${baseUrl}/history/${id}`);
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/history/${id}`, {
+      cache: "no-store",
+    });
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
@@ -331,7 +361,7 @@ class SidecarApi {
   async saveHistory(
     request: HistoryCreateRequest,
   ): Promise<HistoryDetailResponse> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/history`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -344,9 +374,25 @@ class SidecarApi {
   }
 
   async deleteHistory(id: number): Promise<HistoryDeleteResponse> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/history/${id}`, {
       method: "DELETE",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async toggleHistoryLiked(
+    id: number,
+    liked: boolean,
+  ): Promise<HistoryLikeResponse> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/history/${id}/like`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ liked }),
     });
     if (!response.ok) {
       await this.handleErrorResponse(response);
@@ -357,8 +403,8 @@ class SidecarApi {
   // --- Consent ---
 
   async getConsent(): Promise<ConsentStatusResponse> {
-    const baseUrl = this.ensureInitialized();
-    const response = await fetch(`${baseUrl}/consent`);
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/consent`, { cache: "no-store" });
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
@@ -366,9 +412,57 @@ class SidecarApi {
   }
 
   async grantConsent(): Promise<ConsentStatusResponse> {
-    const baseUrl = this.ensureInitialized();
+    const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/consent`, {
       method: "POST",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  // --- Letters ---
+
+  async generateLetter(
+    request: LetterGenerateRequest,
+  ): Promise<LetterResponse> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/letters/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async listLetters(): Promise<LetterListResponse> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/letters`, { cache: "no-store" });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async getLetter(id: number): Promise<LetterResponse> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/letters/${id}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async deleteLetter(id: number): Promise<LetterDeleteResponse> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/letters/${id}`, {
+      method: "DELETE",
     });
     if (!response.ok) {
       await this.handleErrorResponse(response);

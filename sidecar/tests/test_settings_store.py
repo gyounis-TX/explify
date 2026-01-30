@@ -37,7 +37,7 @@ class TestGetSettings:
              patch.object(settings_store, "get_keychain", return_value=mock_keychain):
             s = settings_store.get_settings()
             assert s.llm_provider == LLMProviderEnum.CLAUDE
-            assert s.literacy_level == LiteracyLevelEnum.GRADE_6
+            assert s.literacy_level == LiteracyLevelEnum.GRADE_8
             assert s.specialty is None
             assert s.practice_name is None
             assert s.claude_model is None
@@ -116,6 +116,130 @@ class TestUpdateSettings:
             # Untouched fields preserved
             assert result.specialty == "Cardiology"
             assert result.llm_provider == LLMProviderEnum.CLAUDE
+
+
+class TestBooleanSettings:
+    def test_boolean_settings_default_true(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            s = settings_store.get_settings()
+            assert s.include_key_findings is True
+            assert s.include_measurements is True
+
+    def test_boolean_settings_persist_false(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            update = SettingsUpdate(include_key_findings=False, include_measurements=False)
+            result = settings_store.update_settings(update)
+            assert result.include_key_findings is False
+            assert result.include_measurements is False
+
+            # Verify persistence
+            s = settings_store.get_settings()
+            assert s.include_key_findings is False
+            assert s.include_measurements is False
+
+
+class TestPreferenceSettings:
+    def test_tone_preference_default(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            s = settings_store.get_settings()
+            assert s.tone_preference == 3
+            assert s.detail_preference == 3
+
+    def test_tone_preference_persist(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            update = SettingsUpdate(tone_preference=5, detail_preference=1)
+            result = settings_store.update_settings(update)
+            assert result.tone_preference == 5
+            assert result.detail_preference == 1
+
+            # Verify persistence
+            s = settings_store.get_settings()
+            assert s.tone_preference == 5
+            assert s.detail_preference == 1
+
+    def test_partial_update_preserves_preferences(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            settings_store.update_settings(SettingsUpdate(tone_preference=4))
+            result = settings_store.update_settings(SettingsUpdate(detail_preference=2))
+            assert result.tone_preference == 4
+            assert result.detail_preference == 2
+
+
+class TestQuickReasonsSettings:
+    def test_quick_reasons_default_empty(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            s = settings_store.get_settings()
+            assert s.quick_reasons == []
+
+    def test_quick_reasons_persist(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            reasons = ["Chest pain", "Shortness of breath", "Follow-up"]
+            update = SettingsUpdate(quick_reasons=reasons)
+            result = settings_store.update_settings(update)
+            assert result.quick_reasons == reasons
+
+            # Verify persistence
+            s = settings_store.get_settings()
+            assert s.quick_reasons == reasons
+
+    def test_quick_reasons_clear_to_empty(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            settings_store.update_settings(SettingsUpdate(quick_reasons=["Chest pain"]))
+            result = settings_store.update_settings(SettingsUpdate(quick_reasons=[]))
+            assert result.quick_reasons == []
+
+    def test_partial_update_preserves_quick_reasons(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            settings_store.update_settings(SettingsUpdate(quick_reasons=["Chest pain"]))
+            result = settings_store.update_settings(SettingsUpdate(tone_preference=5))
+            assert result.quick_reasons == ["Chest pain"]
+            assert result.tone_preference == 5
+
+
+class TestNextStepsOptionsSettings:
+    def test_next_steps_options_default(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            s = settings_store.get_settings()
+            assert s.next_steps_options == [
+                "Will follow this over time",
+                "We will contact you to discuss next steps",
+            ]
+
+    def test_next_steps_options_persist(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            options = ["Schedule follow-up", "Repeat in 6 months"]
+            update = SettingsUpdate(next_steps_options=options)
+            result = settings_store.update_settings(update)
+            assert result.next_steps_options == options
+
+            s = settings_store.get_settings()
+            assert s.next_steps_options == options
+
+    def test_next_steps_options_clear_to_empty(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            settings_store.update_settings(SettingsUpdate(next_steps_options=["Some step"]))
+            result = settings_store.update_settings(SettingsUpdate(next_steps_options=[]))
+            assert result.next_steps_options == []
+
+    def test_partial_update_preserves_next_steps(self, mock_db, mock_keychain):
+        with patch.object(settings_store, "get_db", return_value=mock_db), \
+             patch.object(settings_store, "get_keychain", return_value=mock_keychain):
+            settings_store.update_settings(SettingsUpdate(next_steps_options=["Custom step"]))
+            result = settings_store.update_settings(SettingsUpdate(tone_preference=2))
+            assert result.next_steps_options == ["Custom step"]
+            assert result.tone_preference == 2
 
 
 class TestGetApiKeyForProvider:

@@ -7,7 +7,7 @@ from storage import get_db, get_keychain
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Verba Sidecar", version="0.2.0")
+    app = FastAPI(title="Explify Sidecar", version="0.2.0")
     add_cors_middleware(app)
     app.include_router(router)
 

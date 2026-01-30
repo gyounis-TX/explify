@@ -1,7 +1,7 @@
 [package]
-name = "verba"
+name = "explify"
 version = "0.1.0"
-description = "Verba Desktop Application"
+description = "Explify Desktop Application"
 authors = ["you"]
 edition = "2021"
 rust-version = "1.77.2"

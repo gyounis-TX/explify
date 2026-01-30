@@ -45,39 +45,79 @@ const FINDING_SEVERITY_ICONS: Record<string, string> = {
   informational: "\u24D8",
 };
 
+const TONE_LABELS = ["", "Concerning", "Straightforward", "Neutral", "Reassuring", "Very Reassuring"];
+const DETAIL_LABELS = ["", "Minimal", "Concise", "Moderate", "Detailed", "Very Detailed"];
+
 const LITERACY_OPTIONS: { value: LiteracyLevel; label: string }[] = [
   { value: "grade_4", label: "Grade 4" },
   { value: "grade_6", label: "Grade 6" },
   { value: "grade_8", label: "Grade 8" },
+  { value: "grade_12", label: "Grade 12" },
   { value: "clinical", label: "Clinical" },
 ];
+
+function replacePhysician(text: string, physicianName?: string): string {
+  if (!physicianName) return text;
+  return text
+    .replace(/\byour doctor\b/gi, physicianName)
+    .replace(/\byour physician\b/gi, physicianName)
+    .replace(/\byour healthcare provider\b/gi, physicianName)
+    .replace(/\byour provider\b/gi, physicianName);
+}
 
 function buildCopyText(
   summary: string,
   findings: { finding: string; explanation: string }[],
-  questions: string[],
-  disclaimer: string,
+  measurements: MeasurementExplanation[],
+  footer: string,
+  includeKeyFindings: boolean,
+  includeMeasurements: boolean,
+  nextSteps?: string[],
 ): string {
   const parts: string[] = [];
+  if (nextSteps && nextSteps.length > 0 && !(nextSteps.length === 1 && nextSteps[0] === "No comment")) {
+    parts.push("NEXT STEPS");
+    for (const step of nextSteps) {
+      parts.push(`- ${step}`);
+    }
+    parts.push("");
+  }
   parts.push("SUMMARY");
   parts.push(summary);
-  if (findings.length > 0) {
+  if (includeKeyFindings && findings.length > 0) {
     parts.push("");
     parts.push("KEY FINDINGS");
     for (const f of findings) {
       parts.push(`- ${f.finding}: ${f.explanation}`);
     }
   }
-  if (questions.length > 0) {
+  if (includeMeasurements && measurements.length > 0) {
     parts.push("");
-    parts.push("QUESTIONS TO ASK YOUR DOCTOR");
-    for (const q of questions) {
-      parts.push(`- ${q}`);
+    parts.push("MEASUREMENTS");
+    for (const m of measurements) {
+      parts.push(`- ${m.abbreviation}: ${m.value} ${m.unit} (${m.plain_language})`);
     }
   }
   parts.push("");
-  parts.push(disclaimer);
+  parts.push(footer);
   return parts.join("\n");
+}
+
+const SESSION_KEY = "explify_results_state";
+
+function saveSessionState(data: Record<string, unknown>) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function loadSessionState(): Record<string, unknown> | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function ResultsScreen() {
@@ -87,25 +127,54 @@ export function ResultsScreen() {
     explainResponse?: ExplainResponse;
     fromHistory?: boolean;
     extractionResult?: ExtractionResult;
-    clinicalContext?: string;
     templateId?: number;
+    historyId?: number;
+    historyLiked?: boolean;
   } | null;
 
-  const initialResponse = locationState?.explainResponse ?? null;
-  const fromHistory = locationState?.fromHistory ?? false;
-  const extractionResult = locationState?.extractionResult ?? null;
-  const clinicalContext = locationState?.clinicalContext;
-  const templateId = locationState?.templateId;
+  // Restore from sessionStorage if location.state is empty (e.g. after Settings round-trip)
+  const session = loadSessionState();
+  const initialResponse = (locationState?.explainResponse
+    ?? session?.explainResponse as ExplainResponse | undefined) ?? null;
+  const fromHistory = locationState?.fromHistory ?? (session?.fromHistory as boolean | undefined) ?? false;
+  const extractionResult = (locationState?.extractionResult
+    ?? session?.extractionResult as ExtractionResult | undefined) ?? null;
+  const templateId = locationState?.templateId ?? (session?.templateId as number | undefined);
 
   const { showToast } = useToast();
   const [currentResponse, setCurrentResponse] =
     useState<ExplainResponse | null>(initialResponse);
   const [glossary, setGlossary] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [isLiked, setIsLiked] = useState(
+    locationState?.historyLiked ?? (session?.historyLiked as boolean | undefined) ?? false,
+  );
+  const [historyId, setHistoryId] = useState<number | null>(
+    locationState?.historyId ?? (session?.historyId as number | undefined) ?? null,
+  );
+  const [sectionSettings, setSectionSettings] = useState({
+    include_key_findings: true,
+    include_measurements: true,
+    practice_name: null as string | null,
+  });
+  const [toneSlider, setToneSlider] = useState(3);
+  const [detailSlider, setDetailSlider] = useState(3);
+  const [isSpanish, setIsSpanish] = useState(false);
+
+  // Comment panel state
+  const [commentMode, setCommentMode] = useState<"long" | "short">("short");
+  const [shortCommentText, setShortCommentText] = useState<string | null>(null);
+  const [isGeneratingComment, setIsGeneratingComment] = useState(false);
+
+  // Next steps state
+  const [nextStepsOptions, setNextStepsOptions] = useState<string[]>([]);
+  const [checkedNextSteps, setCheckedNextSteps] = useState<Set<string>>(
+    new Set(["No comment"]),
+  );
 
   // Refinement state
   const [selectedLiteracy, setSelectedLiteracy] =
-    useState<LiteracyLevel>("grade_6");
+    useState<LiteracyLevel>("grade_8");
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Edit state
@@ -114,7 +183,6 @@ export function ResultsScreen() {
   const [editedFindings, setEditedFindings] = useState<
     { finding: string; explanation: string }[]
   >([]);
-  const [editedQuestions, setEditedQuestions] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
 
   // Sync edit state when response changes
@@ -128,7 +196,6 @@ export function ResultsScreen() {
         explanation: f.explanation,
       })),
     );
-    setEditedQuestions([...expl.questions_for_doctor]);
     setIsDirty(false);
     setIsEditing(false);
   }, [currentResponse]);
@@ -144,6 +211,36 @@ export function ResultsScreen() {
       });
   }, [currentResponse, showToast]);
 
+  useEffect(() => {
+    sidecarApi
+      .getSettings()
+      .then((s) => {
+        setSectionSettings({
+          include_key_findings: s.include_key_findings,
+          include_measurements: s.include_measurements,
+          practice_name: s.practice_name,
+        });
+        setToneSlider(s.tone_preference);
+        setDetailSlider(s.detail_preference);
+        setSelectedLiteracy(s.literacy_level);
+        setNextStepsOptions(s.next_steps_options ?? []);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Persist state to sessionStorage so it survives Settings round-trips
+  useEffect(() => {
+    if (!currentResponse) return;
+    saveSessionState({
+      explainResponse: currentResponse,
+      fromHistory,
+      extractionResult,
+      templateId,
+      historyId,
+      historyLiked: isLiked,
+    });
+  }, [currentResponse, fromHistory, extractionResult, templateId, historyId, isLiked]);
+
   const canRefine = !fromHistory && extractionResult != null;
 
   const handleRegenerate = useCallback(async () => {
@@ -154,8 +251,10 @@ export function ResultsScreen() {
         extraction_result: extractionResult,
         test_type: currentResponse?.parsed_report.test_type,
         literacy_level: selectedLiteracy,
-        clinical_context: clinicalContext,
         template_id: templateId,
+        tone_preference: toneSlider,
+        detail_preference: detailSlider,
+        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
       });
       setCurrentResponse(response);
       showToast("success", "Explanation regenerated.");
@@ -164,7 +263,34 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, clinicalContext, templateId, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, showToast]);
+
+  const handleTranslateToggle = useCallback(async () => {
+    if (!extractionResult) return;
+    setIsRegenerating(true);
+    const translatingToSpanish = !isSpanish;
+    try {
+      const response = await sidecarApi.explainReport({
+        extraction_result: extractionResult,
+        test_type: currentResponse?.parsed_report.test_type,
+        literacy_level: selectedLiteracy,
+        template_id: templateId,
+        tone_preference: toneSlider,
+        detail_preference: detailSlider,
+        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+        refinement_instruction: translatingToSpanish
+          ? "Translate the entire explanation into Spanish. Keep all medical values and units in their original form. Use simple, patient-friendly Spanish."
+          : undefined,
+      });
+      setCurrentResponse(response);
+      setIsSpanish(translatingToSpanish);
+      showToast("success", translatingToSpanish ? "Translated to Spanish." : "Translated to English.");
+    } catch {
+      showToast("error", "Failed to translate explanation.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, isSpanish, showToast]);
 
   const handleExportPdf = useCallback(async () => {
     if (!currentResponse) return;
@@ -174,7 +300,7 @@ export function ResultsScreen() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "verba-report.pdf";
+      a.download = "explify-report.pdf";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -187,17 +313,27 @@ export function ResultsScreen() {
     }
   }, [currentResponse, showToast]);
 
+  const brandingFooter = sectionSettings.practice_name
+    ? `Powered by Explify, refined by ${sectionSettings.practice_name}.`
+    : "Powered by Explify.";
+
   const handleCopy = useCallback(async () => {
     if (!currentResponse) return;
     const expl = currentResponse.explanation;
     const summary = isDirty ? editedSummary : expl.overall_summary;
     const findings = isDirty ? editedFindings : expl.key_findings;
-    const questions = isDirty ? editedQuestions : expl.questions_for_doctor;
-    const text = buildCopyText(summary, findings, questions, expl.disclaimer);
+    const text = buildCopyText(
+      summary,
+      findings,
+      expl.measurements,
+      brandingFooter,
+      sectionSettings.include_key_findings,
+      sectionSettings.include_measurements,
+      [...checkedNextSteps],
+    );
     try {
       await navigator.clipboard.writeText(text);
       showToast("success", "Copied to clipboard.");
-      // Future: capture learning event
     } catch {
       showToast("error", "Failed to copy to clipboard.");
     }
@@ -206,17 +342,122 @@ export function ResultsScreen() {
     isDirty,
     editedSummary,
     editedFindings,
-    editedQuestions,
+    brandingFooter,
+    sectionSettings,
+    checkedNextSteps,
     showToast,
   ]);
+
+  const handleToggleLike = useCallback(async () => {
+    if (!currentResponse) return;
+    let id = historyId;
+    try {
+      if (id == null) {
+        // Auto-save to history first
+        const detail = await sidecarApi.saveHistory({
+          test_type: currentResponse.parsed_report.test_type,
+          test_type_display: currentResponse.parsed_report.test_type_display,
+          filename: null,
+          summary: (currentResponse.explanation.overall_summary || "").slice(0, 200),
+          full_response: currentResponse,
+          tone_preference: toneSlider,
+          detail_preference: detailSlider,
+        });
+        id = detail.id;
+        setHistoryId(id);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      showToast("error", `Failed to save report: ${msg}`);
+      return;
+    }
+    try {
+      const newLiked = !isLiked;
+      await sidecarApi.toggleHistoryLiked(id, newLiked);
+      setIsLiked(newLiked);
+      showToast(
+        "success",
+        newLiked
+          ? "Will process more like this in the future."
+          : "Like removed.",
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      showToast("error", `Failed to update like status: ${msg}`);
+    }
+  }, [currentResponse, historyId, isLiked, toneSlider, detailSlider, showToast]);
 
   const markDirty = () => {
     if (!isDirty) setIsDirty(true);
   };
 
+  // Generate short comment on demand
+  const generateShortComment = useCallback(async () => {
+    if (!extractionResult || !currentResponse) return;
+    setIsGeneratingComment(true);
+    try {
+      const response = await sidecarApi.explainReport({
+        extraction_result: extractionResult,
+        test_type: currentResponse.parsed_report.test_type,
+        literacy_level: selectedLiteracy,
+        template_id: templateId,
+        tone_preference: toneSlider,
+        detail_preference: detailSlider,
+        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+        short_comment: true,
+      });
+      setShortCommentText(response.explanation.overall_summary);
+    } catch {
+      showToast("error", "Failed to generate short comment.");
+    } finally {
+      setIsGeneratingComment(false);
+    }
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, showToast]);
+
+  // Auto-generate short comment when switching to short mode
+  useEffect(() => {
+    if (commentMode === "short" && shortCommentText === null && extractionResult) {
+      generateShortComment();
+    }
+  }, [commentMode, shortCommentText, extractionResult, generateShortComment]);
+
+  // Cache invalidation: clear short comment when response changes
+  useEffect(() => {
+    setShortCommentText(null);
+  }, [currentResponse]);
+
+  // Compute preview text for comment panel
+  const commentPreviewText = (() => {
+    if (commentMode === "short") {
+      return shortCommentText ?? "";
+    }
+    if (!currentResponse) return "";
+    const expl = currentResponse.explanation;
+    const summary = isDirty ? editedSummary : expl.overall_summary;
+    const findings = isDirty ? editedFindings : expl.key_findings;
+    return buildCopyText(
+      summary,
+      findings,
+      expl.measurements,
+      brandingFooter,
+      sectionSettings.include_key_findings,
+      sectionSettings.include_measurements,
+      [...checkedNextSteps],
+    );
+  })();
+
+  const handleCopyComment = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(commentPreviewText);
+      showToast("success", "Copied to clipboard.");
+    } catch {
+      showToast("error", "Failed to copy to clipboard.");
+    }
+  }, [commentPreviewText, showToast]);
+
   if (!currentResponse) {
     return (
-      <div className="results-screen">
+      <div className="results-main-panel">
         <h2 className="results-title">No Results</h2>
         <p className="results-empty">
           No analysis results found. Please import and process a report
@@ -233,18 +474,19 @@ export function ResultsScreen() {
   }
 
   const { explanation, parsed_report } = currentResponse;
-  const displaySummary = isDirty ? editedSummary : explanation.overall_summary;
-  const displayFindings = isDirty
+  const rawSummary = isDirty ? editedSummary : explanation.overall_summary;
+  const displaySummary = replacePhysician(rawSummary, currentResponse?.physician_name);
+  const rawFindings = isDirty
     ? editedFindings.map((f, i) => ({
         ...(explanation.key_findings[i] ?? { severity: "informational" }),
         finding: f.finding,
         explanation: f.explanation,
       }))
     : explanation.key_findings;
-  const displayQuestions = isDirty
-    ? editedQuestions
-    : explanation.questions_for_doctor;
-
+  const displayFindings = rawFindings.map((f) => ({
+    ...f,
+    explanation: replacePhysician(f.explanation, currentResponse?.physician_name),
+  }));
   const measurementMap = new Map<string, ParsedMeasurement>();
   if (parsed_report.measurements) {
     for (const m of parsed_report.measurements) {
@@ -254,6 +496,7 @@ export function ResultsScreen() {
 
   return (
     <div className="results-screen">
+      <div className="results-main-panel">
       <header className="results-header">
         <h2 className="results-title">Report Explanation</h2>
         <span className="results-test-type">
@@ -278,6 +521,12 @@ export function ResultsScreen() {
         </button>
         <button className="export-btn" onClick={handleCopy}>
           Copy Explanation
+        </button>
+        <button
+          className={`like-btn${isLiked ? " like-btn--active" : ""}`}
+          onClick={handleToggleLike}
+        >
+          {isLiked ? "\u2665 Liked" : "\u2661 Like"}
         </button>
       </div>
 
@@ -317,6 +566,112 @@ export function ResultsScreen() {
         </div>
       )}
 
+      {/* Quick Adjustments */}
+      {canRefine && (
+        <div className="quick-actions-panel">
+          <span className="quick-actions-label">Quick adjustments:</span>
+          <div className="quick-sliders">
+            <div className="quick-slider-group">
+              <label className="quick-slider-label">
+                Tone
+                <span className="quick-slider-value">{TONE_LABELS[toneSlider]}</span>
+              </label>
+              <div className="quick-slider-row">
+                <span className="quick-slider-end">Concerning</span>
+                <input
+                  type="range"
+                  className="preference-slider"
+                  min={1}
+                  max={5}
+                  step={1}
+                  value={toneSlider}
+                  onChange={(e) => setToneSlider(Number(e.target.value))}
+                />
+                <span className="quick-slider-end">Very Reassuring</span>
+              </div>
+            </div>
+            <div className="quick-slider-group">
+              <label className="quick-slider-label">
+                Detail
+                <span className="quick-slider-value">{DETAIL_LABELS[detailSlider]}</span>
+              </label>
+              <div className="quick-slider-row">
+                <span className="quick-slider-end">Minimal</span>
+                <input
+                  type="range"
+                  className="preference-slider"
+                  min={1}
+                  max={5}
+                  step={1}
+                  value={detailSlider}
+                  onChange={(e) => setDetailSlider(Number(e.target.value))}
+                />
+                <span className="quick-slider-end">Very Detailed</span>
+              </div>
+            </div>
+          </div>
+          <div className="quick-actions-buttons">
+            <button
+              className="quick-action-btn"
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+            >
+              {isRegenerating ? "Regenerating\u2026" : "Apply"}
+            </button>
+            <button
+              className="quick-action-btn"
+              onClick={handleTranslateToggle}
+              disabled={isRegenerating}
+            >
+              {isSpanish ? "Translate to English" : "Translate to Spanish"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Next Steps */}
+      {(nextStepsOptions.length > 0 || true) && (
+        <section className="results-section next-steps-box">
+          <h3 className="section-heading">Next Steps</h3>
+          <div className="next-steps-checks">
+            {/* Codified "No comment" */}
+            <label className="next-step-check">
+              <input
+                type="checkbox"
+                checked={checkedNextSteps.has("No comment")}
+                onChange={() => {
+                  setCheckedNextSteps(new Set(["No comment"]));
+                }}
+              />
+              <span>No comment</span>
+            </label>
+            {/* Configurable options */}
+            {nextStepsOptions.map((option) => (
+              <label key={option} className="next-step-check">
+                <input
+                  type="checkbox"
+                  checked={checkedNextSteps.has(option)}
+                  onChange={() => {
+                    setCheckedNextSteps((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(option)) {
+                        next.delete(option);
+                        if (next.size === 0) next.add("No comment");
+                      } else {
+                        next.add(option);
+                        next.delete("No comment");
+                      }
+                      return next;
+                    });
+                  }}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Overall Summary */}
       <section className="results-section">
         <h3 className="section-heading">Summary</h3>
@@ -338,7 +693,7 @@ export function ResultsScreen() {
       </section>
 
       {/* Key Findings */}
-      {displayFindings.length > 0 && (
+      {sectionSettings.include_key_findings && displayFindings.length > 0 && (
         <details open className="results-section results-collapsible">
           <summary className="section-heading">
             Key Findings
@@ -420,7 +775,7 @@ export function ResultsScreen() {
       )}
 
       {/* Measurements Table */}
-      {explanation.measurements.length > 0 && (
+      {sectionSettings.include_measurements && explanation.measurements.length > 0 && (
         <details open className="results-section results-collapsible">
           <summary className="section-heading">
             Measurements
@@ -492,43 +847,9 @@ export function ResultsScreen() {
         </details>
       )}
 
-      {/* Questions for Doctor */}
-      {displayQuestions.length > 0 && (
-        <details open className="results-section results-collapsible">
-          <summary className="section-heading">
-            Questions to Ask Your Doctor
-            <span className="section-count">
-              {displayQuestions.length}
-            </span>
-          </summary>
-          <div className="section-body">
-            <ul className="questions-list">
-              {displayQuestions.map((q: string, i: number) => (
-                <li key={i} className="question-item">
-                  {isEditing ? (
-                    <input
-                      className="question-edit-input"
-                      value={editedQuestions[i] ?? q}
-                      onChange={(e) => {
-                        const updated = [...editedQuestions];
-                        updated[i] = e.target.value;
-                        setEditedQuestions(updated);
-                        markDirty();
-                      }}
-                    />
-                  ) : (
-                    q
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </details>
-      )}
-
-      {/* Disclaimer */}
+      {/* Branding Footer */}
       <section className="results-disclaimer">
-        <p>{explanation.disclaimer}</p>
+        <p>{brandingFooter}</p>
       </section>
 
       {/* Metadata */}
@@ -564,6 +885,35 @@ export function ResultsScreen() {
       >
         Analyze Another Report
       </button>
+      </div>
+
+      {/* Comment Panel */}
+      <div className="results-comment-panel">
+        <h3>Result Comment</h3>
+        <div className="comment-type-toggle">
+          <button
+            className={`comment-type-btn${commentMode === "short" ? " comment-type-btn--active" : ""}`}
+            onClick={() => setCommentMode("short")}
+          >
+            Short Comment
+          </button>
+          <button
+            className={`comment-type-btn${commentMode === "long" ? " comment-type-btn--active" : ""}`}
+            onClick={() => setCommentMode("long")}
+          >
+            Long Comment
+          </button>
+        </div>
+        {isGeneratingComment && commentMode === "short" ? (
+          <div className="comment-generating">Generating short comment...</div>
+        ) : (
+          <div className="comment-preview">{commentPreviewText}</div>
+        )}
+        <span className="comment-char-count">{commentPreviewText.length} chars</span>
+        <button className="comment-copy-btn" onClick={handleCopyComment}>
+          Copy to Clipboard
+        </button>
+      </div>
     </div>
   );
 }

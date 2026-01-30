@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
-import type {
-  AppSettings,
-  LLMProvider,
-  LiteracyLevel,
-} from "../../types/sidecar";
+import type { LiteracyLevel, ExplanationVoice, PhysicianNameSource } from "../../types/sidecar";
 import "./SettingsScreen.css";
 
 const SPECIALTY_OPTIONS = [
@@ -33,13 +29,18 @@ const LITERACY_OPTIONS: {
   },
   {
     value: "grade_6",
-    label: "Grade 6 (Default)",
+    label: "Grade 6",
     description: "Simple, clear language",
   },
   {
     value: "grade_8",
     label: "Grade 8",
     description: "Clear with some technical terms",
+  },
+  {
+    value: "grade_12",
+    label: "Grade 12 (Default)",
+    description: "Adult language, medical terms in context",
   },
   {
     value: "clinical",
@@ -50,33 +51,53 @@ const LITERACY_OPTIONS: {
 
 export function SettingsScreen() {
   const { showToast } = useToast();
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const [provider, setProvider] = useState<LLMProvider>("claude");
-  const [claudeKey, setClaudeKey] = useState("");
-  const [openaiKey, setOpenaiKey] = useState("");
   const [literacyLevel, setLiteracyLevel] =
-    useState<LiteracyLevel>("grade_6");
+    useState<LiteracyLevel>("grade_12");
   const [specialty, setSpecialty] = useState("");
   const [practiceName, setPracticeName] = useState("");
-  const [claudeModel, setClaudeModel] = useState("");
-  const [openaiModel, setOpenaiModel] = useState("");
+  const [includeKeyFindings, setIncludeKeyFindings] = useState(true);
+  const [includeMeasurements, setIncludeMeasurements] = useState(true);
+  const [tonePreference, setTonePreference] = useState(3);
+  const [detailPreference, setDetailPreference] = useState(3);
+  const [quickReasons, setQuickReasons] = useState<string[]>([]);
+  const [newReason, setNewReason] = useState("");
+  const [nextStepsOptions, setNextStepsOptions] = useState<string[]>([
+    "Will follow this over time",
+    "We will contact you to discuss next steps",
+  ]);
+  const [newNextStep, setNewNextStep] = useState("");
+  const [explanationVoice, setExplanationVoice] = useState<ExplanationVoice>("third_person");
+  const [nameDrop, setNameDrop] = useState(true);
+  const [physicianNameSource, setPhysicianNameSource] = useState<PhysicianNameSource>("auto_extract");
+  const [customPhysicianName, setCustomPhysicianName] = useState("");
+  const [shortCommentCharLimit, setShortCommentCharLimit] = useState<number | null>(1000);
 
   useEffect(() => {
     async function loadSettings() {
       try {
         const s = await sidecarApi.getSettings();
-        setSettings(s);
-        setProvider(s.llm_provider);
         setLiteracyLevel(s.literacy_level);
         setSpecialty(s.specialty ?? "");
         setPracticeName(s.practice_name ?? "");
-        setClaudeModel(s.claude_model ?? "");
-        setOpenaiModel(s.openai_model ?? "");
+        setIncludeKeyFindings(s.include_key_findings);
+        setIncludeMeasurements(s.include_measurements);
+        setTonePreference(s.tone_preference);
+        setDetailPreference(s.detail_preference);
+        setQuickReasons(s.quick_reasons ?? []);
+        setNextStepsOptions(s.next_steps_options ?? [
+          "Will follow this over time",
+          "We will contact you to discuss next steps",
+        ]);
+        setExplanationVoice(s.explanation_voice ?? "third_person");
+        setNameDrop(s.name_drop ?? true);
+        setPhysicianNameSource(s.physician_name_source ?? "auto_extract");
+        setCustomPhysicianName(s.custom_physician_name ?? "");
+        setShortCommentCharLimit(s.short_comment_char_limit ?? 1000);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to load settings";
         setError(msg);
@@ -95,25 +116,24 @@ export function SettingsScreen() {
 
     try {
       const update: Record<string, unknown> = {
-        llm_provider: provider,
         literacy_level: literacyLevel,
         specialty: specialty || null,
         practice_name: practiceName.trim() || null,
-        claude_model: claudeModel.trim() || null,
-        openai_model: openaiModel.trim() || null,
+        include_key_findings: includeKeyFindings,
+        include_measurements: includeMeasurements,
+        tone_preference: tonePreference,
+        detail_preference: detailPreference,
+        quick_reasons: quickReasons,
+        next_steps_options: nextStepsOptions,
+        explanation_voice: explanationVoice,
+        name_drop: nameDrop,
+        physician_name_source: physicianNameSource,
+        custom_physician_name: customPhysicianName.trim() || null,
+        short_comment_char_limit: shortCommentCharLimit,
       };
-      if (claudeKey.trim()) {
-        update.claude_api_key = claudeKey.trim();
-      }
-      if (openaiKey.trim()) {
-        update.openai_api_key = openaiKey.trim();
-      }
 
-      const updated = await sidecarApi.updateSettings(update);
-      setSettings(updated);
+      await sidecarApi.updateSettings(update);
       setSuccess(true);
-      setClaudeKey("");
-      setOpenaiKey("");
       showToast("success", "Settings saved.");
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -123,7 +143,7 @@ export function SettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [provider, claudeKey, openaiKey, literacyLevel, specialty, practiceName, claudeModel, openaiModel, showToast]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, shortCommentCharLimit, showToast]);
 
   if (loading) {
     return (
@@ -138,8 +158,7 @@ export function SettingsScreen() {
       <header className="settings-header">
         <h2 className="settings-title">Settings</h2>
         <p className="settings-description">
-          Configure your LLM provider, API keys, and explanation
-          preferences.
+          Configure your explanation preferences.
         </p>
       </header>
 
@@ -171,100 +190,7 @@ export function SettingsScreen() {
             onChange={(e) => setPracticeName(e.target.value)}
           />
         </div>
-      </section>
 
-      {/* Provider Selection */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">LLM Provider</h3>
-        <div className="provider-toggle">
-          <button
-            className={`provider-btn ${provider === "claude" ? "provider-btn--active" : ""}`}
-            onClick={() => setProvider("claude")}
-          >
-            Claude (Anthropic)
-          </button>
-          <button
-            className={`provider-btn ${provider === "openai" ? "provider-btn--active" : ""}`}
-            onClick={() => setProvider("openai")}
-          >
-            OpenAI
-          </button>
-        </div>
-      </section>
-
-      {/* API Keys */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">API Keys</h3>
-        <div className="form-group">
-          <label className="form-label">
-            Claude API Key
-            {settings?.claude_api_key && (
-              <span className="key-status key-status--set">
-                Configured
-              </span>
-            )}
-          </label>
-          <input
-            type="password"
-            className="form-input"
-            placeholder={
-              settings?.claude_api_key
-                ? "Enter new key to replace"
-                : "sk-ant-..."
-            }
-            value={claudeKey}
-            onChange={(e) => setClaudeKey(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">
-            OpenAI API Key
-            {settings?.openai_api_key && (
-              <span className="key-status key-status--set">
-                Configured
-              </span>
-            )}
-          </label>
-          <input
-            type="password"
-            className="form-input"
-            placeholder={
-              settings?.openai_api_key
-                ? "Enter new key to replace"
-                : "sk-..."
-            }
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-          />
-        </div>
-      </section>
-
-      {/* Model Override */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Model Override</h3>
-        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
-          Leave blank to use the default model for each provider.
-        </p>
-        <div className="form-group">
-          <label className="form-label">Claude Model</label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g. claude-sonnet-4-20250514"
-            value={claudeModel}
-            onChange={(e) => setClaudeModel(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">OpenAI Model</label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g. gpt-4o"
-            value={openaiModel}
-            onChange={(e) => setOpenaiModel(e.target.value)}
-          />
-        </div>
       </section>
 
       {/* Literacy Level */}
@@ -292,6 +218,397 @@ export function SettingsScreen() {
               </div>
             </label>
           ))}
+        </div>
+      </section>
+
+      {/* Output Sections */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Output Sections</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Choose which sections appear in the explanation output. Summary is always included.
+        </p>
+        <div className="form-group">
+          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+            <input
+              type="checkbox"
+              checked={includeKeyFindings}
+              onChange={(e) => setIncludeKeyFindings(e.target.checked)}
+            />
+            Key Findings
+          </label>
+        </div>
+        <div className="form-group">
+          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+            <input
+              type="checkbox"
+              checked={includeMeasurements}
+              onChange={(e) => setIncludeMeasurements(e.target.checked)}
+            />
+            Measurements
+          </label>
+        </div>
+      </section>
+
+      {/* Tone & Detail Preferences */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Explanation Preferences</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Adjust how explanations are generated for every analysis.
+        </p>
+        <div className="form-group">
+          <label className="form-label">
+            Tone
+            <span className="slider-value-label">
+              {["", "Concerning", "Straightforward", "Neutral", "Reassuring", "Very Reassuring"][tonePreference]}
+            </span>
+          </label>
+          <div className="slider-container">
+            <span className="slider-label-left">Concerning</span>
+            <input
+              type="range"
+              className="preference-slider"
+              min={1}
+              max={5}
+              step={1}
+              value={tonePreference}
+              onChange={(e) => setTonePreference(Number(e.target.value))}
+            />
+            <span className="slider-label-right">Very Reassuring</span>
+          </div>
+          <div className="slider-ticks">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <span key={n} className={`slider-tick${tonePreference === n ? " slider-tick--active" : ""}`}>{n}</span>
+            ))}
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">
+            Detail Level
+            <span className="slider-value-label">
+              {["", "Minimal", "Concise", "Moderate", "Detailed", "Very Detailed"][detailPreference]}
+            </span>
+          </label>
+          <div className="slider-container">
+            <span className="slider-label-left">Minimal</span>
+            <input
+              type="range"
+              className="preference-slider"
+              min={1}
+              max={5}
+              step={1}
+              value={detailPreference}
+              onChange={(e) => setDetailPreference(Number(e.target.value))}
+            />
+            <span className="slider-label-right">Very Detailed</span>
+          </div>
+          <div className="slider-ticks">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <span key={n} className={`slider-tick${detailPreference === n ? " slider-tick--active" : ""}`}>{n}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Physician Voice & Attribution */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Physician Voice & Attribution</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Control how the physician is referenced in explanations.
+        </p>
+
+        <div className="form-group">
+          <label className="form-label">Explanation Voice</label>
+          <div className="literacy-options">
+            <label
+              className={`literacy-option ${explanationVoice === "first_person" ? "literacy-option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="explanation_voice"
+                value="first_person"
+                checked={explanationVoice === "first_person"}
+                onChange={() => setExplanationVoice("first_person")}
+                className="literacy-radio"
+              />
+              <div className="literacy-content">
+                <span className="literacy-label">First Person</span>
+                <span className="literacy-desc">
+                  "I have reviewed your results..."
+                </span>
+              </div>
+            </label>
+            <label
+              className={`literacy-option ${explanationVoice === "third_person" ? "literacy-option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="explanation_voice"
+                value="third_person"
+                checked={explanationVoice === "third_person"}
+                onChange={() => setExplanationVoice("third_person")}
+                className="literacy-radio"
+              />
+              <div className="literacy-content">
+                <span className="literacy-label">Third Person</span>
+                <span className="literacy-desc">
+                  "Your doctor has reviewed your results..."
+                </span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {explanationVoice === "third_person" && (
+          <>
+            <div className="form-group">
+              <label className="form-label">Physician Name Source</label>
+              <div className="literacy-options">
+                <label
+                  className={`literacy-option ${physicianNameSource === "auto_extract" ? "literacy-option--selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="physician_name_source"
+                    value="auto_extract"
+                    checked={physicianNameSource === "auto_extract"}
+                    onChange={() => setPhysicianNameSource("auto_extract")}
+                    className="literacy-radio"
+                  />
+                  <div className="literacy-content">
+                    <span className="literacy-label">Auto-extract</span>
+                    <span className="literacy-desc">
+                      Detect physician name from report text
+                    </span>
+                  </div>
+                </label>
+                <label
+                  className={`literacy-option ${physicianNameSource === "custom" ? "literacy-option--selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="physician_name_source"
+                    value="custom"
+                    checked={physicianNameSource === "custom"}
+                    onChange={() => setPhysicianNameSource("custom")}
+                    className="literacy-radio"
+                  />
+                  <div className="literacy-content">
+                    <span className="literacy-label">Custom</span>
+                    <span className="literacy-desc">
+                      Use a specific physician name
+                    </span>
+                  </div>
+                </label>
+                <label
+                  className={`literacy-option ${physicianNameSource === "generic" ? "literacy-option--selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="physician_name_source"
+                    value="generic"
+                    checked={physicianNameSource === "generic"}
+                    onChange={() => setPhysicianNameSource("generic")}
+                    className="literacy-radio"
+                  />
+                  <div className="literacy-content">
+                    <span className="literacy-label">Generic</span>
+                    <span className="literacy-desc">
+                      Use generic phrasing ("your doctor")
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {physicianNameSource === "custom" && (
+              <div className="form-group">
+                <label className="form-label">Custom Physician Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Dr. Smith"
+                  value={customPhysicianName}
+                  onChange={(e) => setCustomPhysicianName(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                <input
+                  type="checkbox"
+                  checked={nameDrop}
+                  onChange={(e) => setNameDrop(e.target.checked)}
+                />
+                Include explicit attribution phrase (e.g., "Dr. X has reviewed your results")
+              </label>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* Short Comment Settings */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Short Comment Settings</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Set the character limit for short result comments. This does not affect long comments.
+        </p>
+        <div className="form-group">
+          <label className="form-label">
+            Character Limit
+            <span className="slider-value-label">
+              {shortCommentCharLimit === null ? "No Limit" : `${shortCommentCharLimit} chars`}
+            </span>
+          </label>
+          <div className="slider-container">
+            <span className="slider-label-left">500</span>
+            <input
+              type="range"
+              className="preference-slider"
+              min={500}
+              max={4000}
+              step={100}
+              value={shortCommentCharLimit ?? 4000}
+              disabled={shortCommentCharLimit === null}
+              onChange={(e) => setShortCommentCharLimit(Number(e.target.value))}
+            />
+            <span className="slider-label-right">4000</span>
+          </div>
+          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginTop: "var(--space-sm)" }}>
+            <input
+              type="checkbox"
+              checked={shortCommentCharLimit === null}
+              onChange={(e) => setShortCommentCharLimit(e.target.checked ? null : 1000)}
+            />
+            No limit
+          </label>
+        </div>
+      </section>
+
+      {/* Quick Reasons for Testing */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Quick Reasons for Testing</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Add up to 20 common clinical reasons. These appear as quick-select buttons on the Import screen.
+          This allows personalization of results based on reason for testing.
+        </p>
+        <div className="list-input-row">
+          <input
+            type="text"
+            className="form-input"
+            placeholder="e.g. Chest pain"
+            value={newReason}
+            onChange={(e) => setNewReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newReason.trim() && quickReasons.length < 20) {
+                e.preventDefault();
+                if (!quickReasons.includes(newReason.trim())) {
+                  setQuickReasons([...quickReasons, newReason.trim()]);
+                }
+                setNewReason("");
+              }
+            }}
+          />
+          <button
+            className="list-add-btn"
+            disabled={!newReason.trim() || quickReasons.length >= 20 || quickReasons.includes(newReason.trim())}
+            onClick={() => {
+              if (newReason.trim() && quickReasons.length < 20 && !quickReasons.includes(newReason.trim())) {
+                setQuickReasons([...quickReasons, newReason.trim()]);
+                setNewReason("");
+              }
+            }}
+          >
+            Add
+          </button>
+        </div>
+        {quickReasons.length > 0 && (
+          <div className="list-items">
+            {quickReasons.map((reason, i) => (
+              <span key={i} className="list-item-chip">
+                {reason}
+                <button
+                  className="list-item-remove"
+                  onClick={() => setQuickReasons(quickReasons.filter((_, idx) => idx !== i))}
+                  aria-label={`Remove ${reason}`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <span className="list-count">{quickReasons.length}/20</span>
+      </section>
+
+      {/* Next Steps Options */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Next Steps Options</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Configure the checkboxes shown in the "Next Steps" box on the results screen.
+          "No comment" is always included. Edit or remove existing options, or add new ones.
+        </p>
+
+        <div className="next-steps-list">
+          {/* Codified "No comment" - always present, not editable */}
+          <div className="next-step-row next-step-row--codified">
+            <span className="next-step-text">No comment</span>
+            <span className="next-step-badge">Always included</span>
+          </div>
+
+          {/* Editable options */}
+          {nextStepsOptions.map((option, i) => (
+            <div key={i} className="next-step-row">
+              <input
+                type="text"
+                className="form-input next-step-edit-input"
+                value={option}
+                onChange={(e) => {
+                  const updated = [...nextStepsOptions];
+                  updated[i] = e.target.value;
+                  setNextStepsOptions(updated);
+                }}
+              />
+              <button
+                className="list-item-remove"
+                onClick={() => setNextStepsOptions(nextStepsOptions.filter((_, idx) => idx !== i))}
+                aria-label={`Remove ${option}`}
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="list-input-row" style={{ marginTop: "var(--space-sm)" }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="e.g. Please schedule a follow-up appointment"
+            value={newNextStep}
+            onChange={(e) => setNewNextStep(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newNextStep.trim()) {
+                e.preventDefault();
+                if (!nextStepsOptions.includes(newNextStep.trim())) {
+                  setNextStepsOptions([...nextStepsOptions, newNextStep.trim()]);
+                }
+                setNewNextStep("");
+              }
+            }}
+          />
+          <button
+            className="list-add-btn"
+            disabled={!newNextStep.trim() || nextStepsOptions.includes(newNextStep.trim())}
+            onClick={() => {
+              if (newNextStep.trim() && !nextStepsOptions.includes(newNextStep.trim())) {
+                setNextStepsOptions([...nextStepsOptions, newNextStep.trim()]);
+                setNewNextStep("");
+              }
+            }}
+          >
+            Add
+          </button>
         </div>
       </section>
 

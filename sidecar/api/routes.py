@@ -21,13 +21,21 @@ from api.history_models import (
     HistoryCreateRequest,
     HistoryDeleteResponse,
     HistoryDetailResponse,
+    HistoryLikeRequest,
+    HistoryLikeResponse,
     HistoryListItem,
     HistoryListResponse,
+)
+from api.letter_models import (
+    LetterDeleteResponse,
+    LetterGenerateRequest,
+    LetterListResponse,
+    LetterResponse,
 )
 from api.models import DetectionResult, ExtractionResult
 from api import settings_store
 from storage.database import get_db
-from extraction import ExtractionPipeline
+from extraction import ExtractionPipeline, extract_physician_name
 from extraction.detector import PDFDetector
 from llm.client import LLMClient, LLMProvider
 from llm.prompt_engine import LiteracyLevel, PromptEngine
@@ -44,7 +52,11 @@ pipeline = ExtractionPipeline()
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    try:
+        get_db()
+        return {"status": "ok"}
+    except Exception:
+        return {"status": "starting"}
 
 
 @router.post("/extract/pdf", response_model=ExtractionResult)
@@ -249,15 +261,33 @@ async def explain_report(request: ExplainRequest = Body(...)):
     # 5. PHI scrub
     scrub_result = scrub_phi(extraction_result.full_text)
 
+    # 5b. Resolve physician name based on settings
+    source = settings.physician_name_source.value
+    if source == "auto_extract":
+        physician_name = extract_physician_name(extraction_result.full_text)
+    elif source == "custom":
+        physician_name = settings.custom_physician_name
+    else:
+        physician_name = None
+
     # 6. Build prompts
     literacy_level = LiteracyLevel(request.literacy_level.value)
     prompt_engine = PromptEngine()
     prompt_context = handler.get_prompt_context()
     if settings.specialty and "specialty" not in prompt_context:
         prompt_context["specialty"] = settings.specialty
+    tone_pref = request.tone_preference if request.tone_preference is not None else settings.tone_preference
+    detail_pref = request.detail_preference if request.detail_preference is not None else settings.detail_preference
     system_prompt = prompt_engine.build_system_prompt(
         literacy_level=literacy_level,
         prompt_context=prompt_context,
+        tone_preference=tone_pref,
+        detail_preference=detail_pref,
+        physician_name=physician_name,
+        short_comment=bool(request.short_comment),
+        explanation_voice=settings.explanation_voice.value,
+        name_drop=settings.name_drop,
+        short_comment_char_limit=settings.short_comment_char_limit,
     )
     # 6b. Load template if specified
     template_tone = None
@@ -273,6 +303,12 @@ async def explain_report(request: ExplainRequest = Body(...)):
             if template_tone:
                 prompt_context["tone"] = template_tone
 
+    # 6c. Fetch liked examples for style guidance
+    liked_examples = get_db().get_liked_examples(
+        limit=2, test_type=test_type,
+        tone_preference=tone_pref, detail_preference=detail_pref,
+    )
+
     user_prompt = prompt_engine.build_user_prompt(
         parsed_report=parsed_report,
         reference_ranges=handler.get_reference_ranges(),
@@ -281,6 +317,9 @@ async def explain_report(request: ExplainRequest = Body(...)):
         clinical_context=request.clinical_context,
         template_instructions=template_instructions,
         closing_text=template_closing,
+        refinement_instruction=request.refinement_instruction,
+        liked_examples=liked_examples,
+        next_steps=request.next_steps,
     )
 
     # 7. Call LLM with retry
@@ -333,6 +372,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         parsed_report=parsed_report,
         validation_warnings=[issue.message for issue in issues],
         phi_categories_found=scrub_result.phi_found,
+        physician_name=physician_name,
         model_used=llm_response.model,
         input_tokens=llm_response.input_tokens,
         output_tokens=llm_response.output_tokens,
@@ -376,7 +416,7 @@ async def export_pdf(request: Request):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="verba-report.pdf"'},
+        headers={"Content-Disposition": 'attachment; filename="explify-report.pdf"'},
     )
 
 
@@ -464,10 +504,15 @@ async def list_history(
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     search: str | None = Query(None),
+    liked_only: bool = Query(False),
 ):
     """Return paginated history list, newest first."""
     db = get_db()
-    items, total = db.list_history(offset=offset, limit=limit, search=search)
+    items, total = db.list_history(
+        offset=offset, limit=limit, search=search, liked_only=liked_only,
+    )
+    for item in items:
+        item["liked"] = bool(item.get("liked", 0))
     return HistoryListResponse(
         items=[HistoryListItem(**item) for item in items],
         total=total,
@@ -483,6 +528,7 @@ async def get_history_detail(history_id: int):
     record = db.get_history(history_id)
     if not record:
         raise HTTPException(status_code=404, detail="History record not found.")
+    record["liked"] = bool(record.get("liked", 0))
     return HistoryDetailResponse(**record)
 
 
@@ -496,6 +542,8 @@ async def create_history(request: HistoryCreateRequest = Body(...)):
         summary=request.summary,
         full_response=request.full_response,
         filename=request.filename,
+        tone_preference=request.tone_preference,
+        detail_preference=request.detail_preference,
     )
     record = db.get_history(new_id)
     return HistoryDetailResponse(**record)  # type: ignore[arg-type]
@@ -509,6 +557,19 @@ async def delete_history(history_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail="History record not found.")
     return HistoryDeleteResponse(deleted=True, id=history_id)
+
+
+@router.patch("/history/{history_id}/like", response_model=HistoryLikeResponse)
+async def toggle_history_liked(
+    history_id: int,
+    request: HistoryLikeRequest = Body(...),
+):
+    """Toggle the liked status of a history record."""
+    db = get_db()
+    updated = db.update_history_liked(history_id, request.liked)
+    if not updated:
+        raise HTTPException(status_code=404, detail="History record not found.")
+    return HistoryLikeResponse(id=history_id, liked=request.liked)
 
 
 # --- Consent Endpoints ---
@@ -528,3 +589,94 @@ async def grant_consent():
     db = get_db()
     db.set_setting("privacy_consent_given", "true")
     return ConsentStatusResponse(consent_given=True)
+
+
+# --- Letter Endpoints ---
+
+
+@router.post("/letters/generate", response_model=LetterResponse, status_code=201)
+async def generate_letter(request: LetterGenerateRequest = Body(...)):
+    """Generate a patient-facing letter/explanation from free-text input."""
+    settings = settings_store.get_settings()
+    provider_str = settings.llm_provider.value
+    api_key = settings_store.get_api_key_for_provider(provider_str)
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No API key configured for provider '{provider_str}'. Set it in Settings.",
+        )
+
+    system_prompt = (
+        "You are a medical communication assistant. Your job is to help physicians "
+        "create clear, empathetic, patient-facing content.\n\n"
+        "## Rules\n"
+        "1. Write in plain, compassionate language appropriate for patients.\n"
+        "2. Do NOT include any patient-identifying information.\n"
+        "3. Use hedging language (may, appears to, could suggest) to reflect medical uncertainty.\n"
+        "4. Be thorough but concise.\n"
+        "5. Structure the response clearly with paragraphs or sections as appropriate.\n"
+        "6. Return ONLY the letter/explanation text. No preamble or meta-commentary."
+    )
+
+    llm_provider = LLMProvider(provider_str)
+    model_override = (
+        settings.claude_model if provider_str == "claude" else settings.openai_model
+    )
+    client = LLMClient(
+        provider=llm_provider,
+        api_key=api_key,
+        model=model_override,
+    )
+
+    try:
+        llm_response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=request.prompt,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM API call failed: {e}",
+        )
+
+    content = llm_response.text_content
+
+    db = get_db()
+    letter_id = db.save_letter(
+        prompt=request.prompt,
+        content=content,
+        letter_type=request.letter_type,
+    )
+    record = db.get_letter(letter_id)
+    return LetterResponse(**record)  # type: ignore[arg-type]
+
+
+@router.get("/letters", response_model=LetterListResponse)
+async def list_letters():
+    """Return all generated letters, newest first."""
+    db = get_db()
+    items, total = db.list_letters()
+    return LetterListResponse(
+        items=[LetterResponse(**item) for item in items],
+        total=total,
+    )
+
+
+@router.get("/letters/{letter_id}", response_model=LetterResponse)
+async def get_letter(letter_id: int):
+    """Return a single letter."""
+    db = get_db()
+    record = db.get_letter(letter_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Letter not found.")
+    return LetterResponse(**record)
+
+
+@router.delete("/letters/{letter_id}", response_model=LetterDeleteResponse)
+async def delete_letter(letter_id: int):
+    """Delete a letter."""
+    db = get_db()
+    deleted = db.delete_letter(letter_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Letter not found.")
+    return LetterDeleteResponse(deleted=True, id=letter_id)

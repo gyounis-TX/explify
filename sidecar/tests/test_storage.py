@@ -117,6 +117,69 @@ class TestHistory:
         assert record is not None
         assert record["filename"] == "test.pdf"
 
+    def test_liked_default_is_false(self, db: Database):
+        record_id = self._make_record(db)
+        record = db.get_history(record_id)
+        assert record is not None
+        assert record["liked"] == 0
+
+    def test_update_liked_to_true(self, db: Database):
+        record_id = self._make_record(db)
+        assert db.update_history_liked(record_id, True) is True
+        record = db.get_history(record_id)
+        assert record is not None
+        assert record["liked"] == 1
+
+    def test_update_liked_to_false(self, db: Database):
+        record_id = self._make_record(db)
+        db.update_history_liked(record_id, True)
+        assert db.update_history_liked(record_id, False) is True
+        record = db.get_history(record_id)
+        assert record is not None
+        assert record["liked"] == 0
+
+    def test_update_liked_nonexistent(self, db: Database):
+        assert db.update_history_liked(9999, True) is False
+
+    def test_get_liked_examples_empty(self, db: Database):
+        assert db.get_liked_examples() == []
+
+    def test_get_liked_examples_returns_liked_only(self, db: Database):
+        id1 = self._make_record(db, summary="First")
+        id2 = self._make_record(db, summary="Second")
+        db.update_history_liked(id1, True)
+        examples = db.get_liked_examples()
+        assert len(examples) == 1
+        assert examples[0]["overall_summary"] == "All good."
+
+    def test_get_liked_examples_respects_limit(self, db: Database):
+        for i in range(5):
+            rid = self._make_record(db, summary=f"Record {i}")
+            db.update_history_liked(rid, True)
+        examples = db.get_liked_examples(limit=2)
+        assert len(examples) == 2
+
+    def test_get_liked_examples_filters_by_test_type(self, db: Database):
+        id1 = self._make_record(db, test_type="echo", summary="Echo rec")
+        id2 = self._make_record(db, test_type="cbc", summary="CBC rec")
+        db.update_history_liked(id1, True)
+        db.update_history_liked(id2, True)
+        examples = db.get_liked_examples(test_type="echo")
+        assert len(examples) == 1
+
+    def test_list_history_includes_liked_field(self, db: Database):
+        self._make_record(db)
+        items, total = db.list_history()
+        assert "liked" in items[0]
+
+    def test_list_history_liked_only_filter(self, db: Database):
+        id1 = self._make_record(db, summary="Not liked")
+        id2 = self._make_record(db, summary="Liked one")
+        db.update_history_liked(id2, True)
+        items, total = db.list_history(liked_only=True)
+        assert total == 1
+        assert items[0]["id"] == id2
+
 
 # --- Templates ---
 

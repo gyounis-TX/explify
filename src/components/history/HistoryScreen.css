@@ -39,6 +39,43 @@
   color: var(--color-gray-400);
 }
 
+/* Filters */
+.history-filters {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.history-filter-btn {
+  padding: var(--space-xs) var(--space-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.history-filter-btn:hover {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.history-filter-btn--active {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* Liked Badge */
+.history-liked-badge {
+  color: #dc2626;
+  font-size: var(--font-size-sm);
+}
+
 /* Cards */
 .history-list {
   display: flex;
@@ -122,6 +159,26 @@
 }
 
 .history-delete-btn:hover {
+  color: #dc2626;
+}
+
+/* Like Action */
+.history-like-action {
+  padding: var(--space-xs) var(--space-sm);
+  background: none;
+  border: none;
+  color: var(--color-gray-400);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease;
+}
+
+.history-like-action:hover {
+  color: #dc2626;
+}
+
+.history-like-action--active {
   color: #dc2626;
 }
 

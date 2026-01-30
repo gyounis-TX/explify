@@ -14,17 +14,19 @@ export function HistoryScreen() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [likedOnly, setLikedOnly] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const limit = 20;
 
   const fetchHistory = useCallback(
-    async (searchTerm: string, newOffset: number) => {
+    async (searchTerm: string, newOffset: number, filterLiked: boolean) => {
       setLoading(true);
       try {
         const res = await sidecarApi.listHistory(
           newOffset,
           limit,
           searchTerm || undefined,
+          filterLiked || undefined,
         );
         if (newOffset === 0) {
           setItems(res.items);
@@ -42,13 +44,13 @@ export function HistoryScreen() {
   );
 
   useEffect(() => {
-    fetchHistory("", 0);
+    fetchHistory("", 0, likedOnly);
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [fetchHistory]);
+  }, [fetchHistory, likedOnly]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -57,21 +59,26 @@ export function HistoryScreen() {
     }
     debounceRef.current = setTimeout(() => {
       setOffset(0);
-      fetchHistory(value, 0);
+      fetchHistory(value, 0, likedOnly);
     }, 300);
   };
 
   const handleLoadMore = () => {
     const newOffset = offset + limit;
     setOffset(newOffset);
-    fetchHistory(search, newOffset);
+    fetchHistory(search, newOffset, likedOnly);
   };
 
   const handleCardClick = async (id: number) => {
     try {
       const detail = await sidecarApi.getHistoryDetail(id);
       navigate("/results", {
-        state: { explainResponse: detail.full_response, fromHistory: true },
+        state: {
+          explainResponse: detail.full_response,
+          fromHistory: true,
+          historyId: detail.id,
+          historyLiked: detail.liked,
+        },
       });
     } catch {
       showToast("error", "Failed to load analysis details.");
@@ -88,6 +95,26 @@ export function HistoryScreen() {
       showToast("error", "Failed to delete record.");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleToggleLikedFilter = () => {
+    setLikedOnly((prev) => !prev);
+    setOffset(0);
+  };
+
+  const handleToggleLike = async (id: number, currentLiked: boolean) => {
+    try {
+      const newLiked = !currentLiked;
+      await sidecarApi.toggleHistoryLiked(id, newLiked);
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, liked: newLiked } : item,
+        ),
+      );
+      showToast("success", newLiked ? "Liked!" : "Like removed.");
+    } catch {
+      showToast("error", "Failed to update like status.");
     }
   };
 
@@ -118,6 +145,15 @@ export function HistoryScreen() {
         />
       </div>
 
+      <div className="history-filters">
+        <button
+          className={`history-filter-btn${likedOnly ? " history-filter-btn--active" : ""}`}
+          onClick={handleToggleLikedFilter}
+        >
+          {likedOnly ? "\u2665 Liked Only" : "\u2661 Liked Only"}
+        </button>
+      </div>
+
       {!loading && items.length === 0 && (
         <div className="history-empty">
           {search ? (
@@ -145,6 +181,9 @@ export function HistoryScreen() {
                 <span className="history-type-badge">
                   {item.test_type_display}
                 </span>
+                {item.liked && (
+                  <span className="history-liked-badge">{"\u2665"}</span>
+                )}
               </div>
               {item.filename && (
                 <span className="history-filename">{item.filename}</span>
@@ -152,6 +191,12 @@ export function HistoryScreen() {
               <p className="history-summary">{item.summary}</p>
             </div>
             <div className="history-card-actions">
+              <button
+                className={`history-like-action${item.liked ? " history-like-action--active" : ""}`}
+                onClick={() => handleToggleLike(item.id, item.liked)}
+              >
+                {item.liked ? "\u2665 Liked" : "\u2661 Like"}
+              </button>
               {deletingId === item.id ? (
                 <div className="history-confirm-bar">
                   <span>Delete this record?</span>

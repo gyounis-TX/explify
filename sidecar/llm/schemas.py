@@ -13,15 +13,16 @@ EXPLANATION_TOOL_SCHEMA: dict = {
         "overall_summary",
         "measurements",
         "key_findings",
-        "questions_for_doctor",
-        "disclaimer",
     ],
     "properties": {
         "overall_summary": {
             "type": "string",
             "description": (
-                "A 2-4 sentence plain-language summary of what the report shows. "
-                "Written at the requested literacy level. Must not invent data."
+                "A 4-6 sentence plain-language summary providing a comprehensive "
+                "overview of what the report shows. Lead with positive or normal "
+                "findings. Use a warm, reassuring tone and frame any concerning "
+                "findings gently. Written at the requested literacy level. "
+                "Must not invent data."
             ),
         },
         "measurements": {
@@ -105,22 +106,6 @@ EXPLANATION_TOOL_SCHEMA: dict = {
                     },
                 },
             },
-        },
-        "questions_for_doctor": {
-            "type": "array",
-            "description": (
-                "2-5 questions the patient might want to ask their doctor "
-                "based on these results."
-            ),
-            "items": {"type": "string"},
-        },
-        "disclaimer": {
-            "type": "string",
-            "description": (
-                "A brief disclaimer that this is an AI-generated explanation, "
-                "not medical advice, and that the patient should discuss results "
-                "with their healthcare provider."
-            ),
         },
     },
 }

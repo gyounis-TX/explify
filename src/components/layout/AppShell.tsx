@@ -85,6 +85,13 @@ export function AppShell() {
                 >
                   Go to Settings
                 </button>
+                <button
+                  className="setup-banner-dismiss"
+                  onClick={() => setShowSetupBanner(false)}
+                  aria-label="Dismiss"
+                >
+                  &times;
+                </button>
               </div>
             )}
             <Outlet />
