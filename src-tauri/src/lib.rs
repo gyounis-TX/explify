@@ -10,6 +10,12 @@ use tauri::Manager;
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // Focus the existing window when a second instance is launched
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .manage(Mutex::new(SidecarState { port: None }))
         .manage(Mutex::new(None::<Child>))
         .invoke_handler(tauri::generate_handler![get_sidecar_port])
