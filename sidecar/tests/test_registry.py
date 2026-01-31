@@ -53,8 +53,14 @@ class TestRegistry:
         assert type_id == "echocardiogram"
         assert confidence >= 0.7
 
-    def test_detect_unrecognized(self):
+    def test_detect_lab_results(self):
         extraction = _make_extraction("Complete Blood Count results: WBC 7.2")
+        type_id, confidence = registry.detect(extraction)
+        assert type_id == "lab_results"
+        assert confidence >= 0.7
+
+    def test_detect_unrecognized(self):
+        extraction = _make_extraction("Patient visited the clinic for a routine checkup today.")
         type_id, confidence = registry.detect(extraction)
         assert confidence < 0.3
 
