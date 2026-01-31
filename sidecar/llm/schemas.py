@@ -18,11 +18,12 @@ EXPLANATION_TOOL_SCHEMA: dict = {
         "overall_summary": {
             "type": "string",
             "description": (
-                "A 4-6 sentence plain-language summary providing a comprehensive "
-                "overview of what the report shows. Lead with positive or normal "
-                "findings. Use a warm, reassuring tone and frame any concerning "
-                "findings gently. Written at the requested literacy level. "
-                "Must not invent data."
+                "A clinical interpretation of the report written as a specialist "
+                "would explain results to a patient. Organized into separate "
+                "paragraphs by topic with blank lines (\\n\\n) between them. "
+                "Follow the interpretation structure: bottom line, reassuring "
+                "findings, significant/abnormal findings, symptom connection, "
+                "next steps, safety guidance. Must not invent data."
             ),
         },
         "measurements": {

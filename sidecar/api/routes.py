@@ -102,6 +102,65 @@ async def extract_pdf(file: UploadFile = File(...)):
             os.unlink(tmp_path)
 
 
+@router.post("/extract/file", response_model=ExtractionResult)
+async def extract_file(file: UploadFile = File(...)):
+    """Accept PDF, image (jpg/jpeg/png), or text (.txt) files."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided.")
+
+    ext = os.path.splitext(file.filename.lower())[1]
+    supported = {".pdf", ".jpg", ".jpeg", ".png", ".txt"}
+    if ext not in supported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {ext}. Accepted: {', '.join(sorted(supported))}",
+        )
+
+    tmp_path = None
+    try:
+        content = await file.read()
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        if ext == ".pdf":
+            if not content[:4] == b"%PDF":
+                raise HTTPException(
+                    status_code=400,
+                    detail="File does not appear to be a valid PDF.",
+                )
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            result = pipeline.extract_from_pdf(tmp_path)
+            result.filename = file.filename
+            return result
+
+        elif ext in (".jpg", ".jpeg", ".png"):
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            result = pipeline.extract_from_image(tmp_path)
+            result.filename = file.filename
+            return result
+
+        else:  # .txt
+            text = content.decode("utf-8", errors="replace")
+            result = pipeline.extract_from_text(text)
+            result.filename = file.filename
+            return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to extract text from file: {str(e)}",
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 @router.post("/extract/text", response_model=ExtractionResult)
 async def extract_text(body: dict = Body(...)):
     text = body.get("text", "")
@@ -245,7 +304,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
 
     # 4. Resolve API key
     settings = settings_store.get_settings()
-    provider_str = request.provider.value
+    provider_str = request.provider.value if request.provider else settings.llm_provider.value
     api_key = request.api_key or settings_store.get_api_key_for_provider(
         provider_str
     )
@@ -285,6 +344,8 @@ async def explain_report(request: ExplainRequest = Body(...)):
         prompt_context["specialty"] = settings.specialty
     tone_pref = request.tone_preference if request.tone_preference is not None else settings.tone_preference
     detail_pref = request.detail_preference if request.detail_preference is not None else settings.detail_preference
+    inc_findings = request.include_key_findings if request.include_key_findings is not None else settings.include_key_findings
+    inc_measurements = request.include_measurements if request.include_measurements is not None else settings.include_measurements
     system_prompt = prompt_engine.build_system_prompt(
         literacy_level=literacy_level,
         prompt_context=prompt_context,
@@ -295,6 +356,8 @@ async def explain_report(request: ExplainRequest = Body(...)):
         explanation_voice=voice,
         name_drop=name_drop,
         short_comment_char_limit=settings.short_comment_char_limit,
+        include_key_findings=inc_findings,
+        include_measurements=inc_measurements,
     )
     # 6b. Load template if specified
     template_tone = None
@@ -316,6 +379,9 @@ async def explain_report(request: ExplainRequest = Body(...)):
         tone_preference=tone_pref, detail_preference=detail_pref,
     )
 
+    # 6d. Fetch teaching points
+    teaching_points = get_db().list_teaching_points(test_type=test_type)
+
     user_prompt = prompt_engine.build_user_prompt(
         parsed_report=parsed_report,
         reference_ranges=handler.get_reference_ranges(),
@@ -327,6 +393,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         refinement_instruction=request.refinement_instruction,
         liked_examples=liked_examples,
         next_steps=request.next_steps,
+        teaching_points=teaching_points,
     )
 
     # 7. Call LLM with retry
@@ -599,6 +666,38 @@ async def grant_consent():
 
 
 # --- Letter Endpoints ---
+
+
+# --- Teaching Points Endpoints ---
+
+
+@router.get("/teaching-points")
+async def list_teaching_points(test_type: str | None = Query(None)):
+    """Return teaching points (global + test-type-specific)."""
+    db = get_db()
+    points = db.list_teaching_points(test_type=test_type)
+    return points
+
+
+@router.post("/teaching-points", status_code=201)
+async def create_teaching_point(body: dict = Body(...)):
+    """Create a new teaching point."""
+    text = body.get("text", "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Teaching point text is required.")
+    test_type = body.get("test_type")
+    db = get_db()
+    return db.create_teaching_point(text=text, test_type=test_type)
+
+
+@router.delete("/teaching-points/{point_id}")
+async def delete_teaching_point(point_id: int):
+    """Delete a teaching point."""
+    db = get_db()
+    deleted = db.delete_teaching_point(point_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Teaching point not found.")
+    return {"deleted": True, "id": point_id}
 
 
 @router.post("/letters/generate", response_model=LetterResponse, status_code=201)

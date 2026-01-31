@@ -127,7 +127,7 @@ class TestPromptEngine:
         prompt = engine.build_system_prompt(
             LiteracyLevel.CLINICAL, MOCK_PROMPT_CONTEXT
         )
-        assert "clinical level" in prompt
+        assert "Physician-level" in prompt
         assert "medical terminology" in prompt
 
     def test_user_prompt_contains_clinical_context(self):
@@ -215,7 +215,7 @@ class TestPromptEngine:
         prompt = engine.build_system_prompt(
             LiteracyLevel.GRADE_6, MOCK_PROMPT_CONTEXT
         )
-        assert "## Tone and Language Style" in prompt
+        assert "## Tone Rules" in prompt
         assert "hedging" in prompt.lower()
         assert "appears to" in prompt
         assert "may" in prompt

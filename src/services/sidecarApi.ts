@@ -24,6 +24,7 @@ import type {
   LetterResponse,
   LetterListResponse,
   LetterDeleteResponse,
+  TeachingPoint,
 } from "../types/sidecar";
 
 class SidecarApi {
@@ -101,6 +102,23 @@ class SidecarApi {
     formData.append("file", file);
 
     const response = await fetch(`${baseUrl}/extract/pdf`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return response.json();
+  }
+
+  async extractFile(file: File): Promise<ExtractionResult> {
+    const baseUrl = await this.ensureInitialized();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${baseUrl}/extract/file`, {
       method: "POST",
       body: formData,
     });
@@ -468,6 +486,51 @@ class SidecarApi {
       await this.handleErrorResponse(response);
     }
     return response.json();
+  }
+
+  // --- Teaching Points ---
+
+  async listTeachingPoints(testType?: string): Promise<TeachingPoint[]> {
+    const baseUrl = await this.ensureInitialized();
+    const params = new URLSearchParams();
+    if (testType) {
+      params.set("test_type", testType);
+    }
+    const qs = params.toString();
+    const response = await fetch(
+      `${baseUrl}/teaching-points${qs ? `?${qs}` : ""}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async createTeachingPoint(request: {
+    text: string;
+    test_type?: string;
+  }): Promise<TeachingPoint> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/teaching-points`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async deleteTeachingPoint(id: number): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/teaching-points/${id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
   }
 }
 

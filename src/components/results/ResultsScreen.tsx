@@ -8,6 +8,8 @@ import type {
   ParsedMeasurement,
   LiteracyLevel,
   ExplanationVoice,
+  FooterType,
+  TeachingPoint,
 } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
@@ -76,14 +78,6 @@ function buildCopyText(
   nextSteps?: string[],
 ): string {
   const parts: string[] = [];
-  if (nextSteps && nextSteps.length > 0 && !(nextSteps.length === 1 && nextSteps[0] === "No comment")) {
-    parts.push("NEXT STEPS");
-    for (const step of nextSteps) {
-      parts.push(`- ${step}`);
-    }
-    parts.push("");
-  }
-  parts.push("SUMMARY");
   parts.push(summary);
   if (includeKeyFindings && findings.length > 0) {
     parts.push("");
@@ -100,8 +94,17 @@ function buildCopyText(
       parts.push(`- ${m.abbreviation}: ${m.value} ${m.unit} (${m.plain_language})`);
     }
   }
-  parts.push("");
-  parts.push(footer);
+  if (nextSteps && nextSteps.length > 0 && !(nextSteps.length === 1 && nextSteps[0] === "No comment")) {
+    parts.push("");
+    parts.push("NEXT STEPS");
+    for (const step of nextSteps) {
+      parts.push(`- ${step}`);
+    }
+  }
+  if (footer) {
+    parts.push("");
+    parts.push(footer);
+  }
   return parts.join("\n");
 }
 
@@ -132,6 +135,7 @@ export function ResultsScreen() {
     templateId?: number;
     historyId?: number;
     historyLiked?: boolean;
+    clinicalContext?: string;
   } | null;
 
   // Restore from sessionStorage if location.state is empty (e.g. after Settings round-trip)
@@ -142,6 +146,7 @@ export function ResultsScreen() {
   const extractionResult = (locationState?.extractionResult
     ?? session?.extractionResult as ExtractionResult | undefined) ?? null;
   const templateId = locationState?.templateId ?? (session?.templateId as number | undefined);
+  const clinicalContext = locationState?.clinicalContext ?? (session?.clinicalContext as string | undefined);
 
   const { showToast } = useToast();
   const [currentResponse, setCurrentResponse] =
@@ -158,13 +163,15 @@ export function ResultsScreen() {
     include_key_findings: true,
     include_measurements: true,
     practice_name: null as string | null,
+    footer_type: "explify_branding" as FooterType,
+    custom_footer_text: null as string | null,
   });
   const [toneSlider, setToneSlider] = useState(3);
   const [detailSlider, setDetailSlider] = useState(3);
   const [isSpanish, setIsSpanish] = useState(false);
 
   // Comment panel state
-  const [commentMode, setCommentMode] = useState<"long" | "short">("short");
+  const [commentMode, setCommentMode] = useState<"long" | "short">("long");
   const [shortCommentText, setShortCommentText] = useState<string | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
 
@@ -193,6 +200,10 @@ export function ResultsScreen() {
   >([]);
   const [isDirty, setIsDirty] = useState(false);
 
+  // Teaching points state
+  const [teachingPoints, setTeachingPoints] = useState<TeachingPoint[]>([]);
+  const [newTeachingPoint, setNewTeachingPoint] = useState("");
+
   // Sync edit state when response changes
   useEffect(() => {
     if (!currentResponse) return;
@@ -220,6 +231,15 @@ export function ResultsScreen() {
   }, [currentResponse, showToast]);
 
   useEffect(() => {
+    if (!currentResponse) return;
+    const testType = currentResponse.parsed_report.test_type;
+    sidecarApi
+      .listTeachingPoints(testType)
+      .then((pts) => setTeachingPoints(pts))
+      .catch(() => {});
+  }, [currentResponse]);
+
+  useEffect(() => {
     sidecarApi
       .getSettings()
       .then((s) => {
@@ -227,6 +247,8 @@ export function ResultsScreen() {
           include_key_findings: s.include_key_findings,
           include_measurements: s.include_measurements,
           practice_name: s.practice_name,
+          footer_type: s.footer_type ?? "explify_branding",
+          custom_footer_text: s.custom_footer_text,
         });
         setToneSlider(s.tone_preference);
         setDetailSlider(s.detail_preference);
@@ -249,8 +271,9 @@ export function ResultsScreen() {
       templateId,
       historyId,
       historyLiked: isLiked,
+      clinicalContext,
     });
-  }, [currentResponse, fromHistory, extractionResult, templateId, historyId, isLiked]);
+  }, [currentResponse, fromHistory, extractionResult, templateId, historyId, isLiked, clinicalContext]);
 
   const canRefine = !fromHistory && extractionResult != null;
 
@@ -264,12 +287,15 @@ export function ResultsScreen() {
         test_type: currentResponse?.parsed_report.test_type,
         literacy_level: selectedLiteracy,
         template_id: templateId,
+        clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
         next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
         explanation_voice: explanationVoice,
         name_drop: nameDrop,
         physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
+        include_key_findings: sectionSettings.include_key_findings,
+        include_measurements: sectionSettings.include_measurements,
       });
       setCurrentResponse(response);
       showToast("success", "Explanation regenerated.");
@@ -278,7 +304,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, showToast]);
 
   const handleTranslateToggle = useCallback(async () => {
     if (!extractionResult) return;
@@ -290,12 +316,15 @@ export function ResultsScreen() {
         test_type: currentResponse?.parsed_report.test_type,
         literacy_level: selectedLiteracy,
         template_id: templateId,
+        clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
         next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
         explanation_voice: explanationVoice,
         name_drop: nameDrop,
         physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
+        include_key_findings: sectionSettings.include_key_findings,
+        include_measurements: sectionSettings.include_measurements,
         refinement_instruction: translatingToSpanish
           ? "Translate the entire explanation into Spanish. Keep all medical values and units in their original form. Use simple, patient-friendly Spanish."
           : undefined,
@@ -331,9 +360,20 @@ export function ResultsScreen() {
     }
   }, [currentResponse, showToast]);
 
-  const brandingFooter = sectionSettings.practice_name
-    ? `Powered by Explify, refined by ${sectionSettings.practice_name}.`
-    : "Powered by Explify.";
+  const computedFooter = (() => {
+    switch (sectionSettings.footer_type) {
+      case "explify_branding":
+        return sectionSettings.practice_name
+          ? `Powered by Explify, refined by ${sectionSettings.practice_name}.`
+          : "Powered by Explify.";
+      case "ai_disclaimer":
+        return "This summary was generated with AI assistance and reviewed by your healthcare provider. It is intended for informational purposes only and does not replace professional medical advice.";
+      case "custom":
+        return sectionSettings.custom_footer_text ?? "";
+      case "none":
+        return "";
+    }
+  })();
 
   const handleCopy = useCallback(async () => {
     if (!currentResponse) return;
@@ -351,7 +391,7 @@ export function ResultsScreen() {
       summary,
       findings,
       expl.measurements,
-      brandingFooter,
+      computedFooter,
       sectionSettings.include_key_findings,
       sectionSettings.include_measurements,
       [...checkedNextSteps],
@@ -368,7 +408,7 @@ export function ResultsScreen() {
     isDirty,
     editedSummary,
     editedFindings,
-    brandingFooter,
+    computedFooter,
     sectionSettings,
     checkedNextSteps,
     showToast,
@@ -427,6 +467,7 @@ export function ResultsScreen() {
         test_type: currentResponse.parsed_report.test_type,
         literacy_level: selectedLiteracy,
         template_id: templateId,
+        clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
         next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
@@ -434,6 +475,8 @@ export function ResultsScreen() {
         explanation_voice: explanationVoice,
         name_drop: nameDrop,
         physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
+        include_key_findings: sectionSettings.include_key_findings,
+        include_measurements: sectionSettings.include_measurements,
       });
       setShortCommentText(response.explanation.overall_summary);
     } catch {
@@ -441,24 +484,28 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingComment(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, showToast]);
 
-  // Auto-generate short comment when switching to short mode
+  // Pre-generate short comment in background as soon as results are available
   useEffect(() => {
-    if (commentMode === "short" && shortCommentText === null && extractionResult) {
+    if (shortCommentText === null && extractionResult && currentResponse) {
       generateShortComment();
     }
-  }, [commentMode, shortCommentText, extractionResult, generateShortComment]);
+  }, [shortCommentText, extractionResult, currentResponse, generateShortComment]);
 
   // Cache invalidation: clear short comment when response or settings change
   useEffect(() => {
     setShortCommentText(null);
-  }, [currentResponse, selectedLiteracy, toneSlider, detailSlider, explanationVoice, nameDrop, physicianOverride, checkedNextSteps]);
+  }, [currentResponse, selectedLiteracy, toneSlider, detailSlider, explanationVoice, nameDrop, physicianOverride, checkedNextSteps, sectionSettings]);
 
   // Compute preview text for comment panel
   const commentPreviewText = (() => {
     if (commentMode === "short") {
-      return shortCommentText ?? "";
+      const base = shortCommentText ?? "";
+      if (computedFooter) {
+        return base + "\n\n" + computedFooter;
+      }
+      return base;
     }
     if (!currentResponse) return "";
     const physician = physicianOverride ?? currentResponse.physician_name;
@@ -475,7 +522,7 @@ export function ResultsScreen() {
       summary,
       findings,
       expl.measurements,
-      brandingFooter,
+      computedFooter,
       sectionSettings.include_key_findings,
       sectionSettings.include_measurements,
       [...checkedNextSteps],
@@ -532,7 +579,7 @@ export function ResultsScreen() {
   }
 
   return (
-    <div className="results-screen">
+    <div className={`results-screen${!canRefine ? " results-screen--single-column" : ""}`}>
       <div className="results-main-panel">
       <header className="results-header">
         <h2 className="results-title">Report Explanation</h2>
@@ -543,29 +590,6 @@ export function ResultsScreen() {
           <span className="results-from-history">Viewed from history</span>
         )}
       </header>
-
-      {/* Export Toolbar */}
-      <div className="export-toolbar">
-        <button
-          className="export-btn"
-          onClick={handleExportPdf}
-          disabled={isExporting}
-        >
-          {isExporting ? "Exporting\u2026" : "Export PDF"}
-        </button>
-        <button className="export-btn" onClick={() => window.print()}>
-          Print
-        </button>
-        <button className="export-btn" onClick={handleCopy}>
-          Copy Explanation
-        </button>
-        <button
-          className={`like-btn${isLiked ? " like-btn--active" : ""}`}
-          onClick={handleToggleLike}
-        >
-          {isLiked ? "\u2665 Liked" : "\u2661 Like"}
-        </button>
-      </div>
 
       {/* Refine Toolbar */}
       {canRefine && (
@@ -587,10 +611,32 @@ export function ResultsScreen() {
         </div>
       )}
 
-      {/* Overall Summary */}
-      <section className="results-section">
-        <h3 className="section-heading">Summary</h3>
-        {isEditing ? (
+      {/* Comment Panel */}
+      <div className="results-comment-panel">
+        <div className="comment-panel-header">
+          <h3>Result Comment</h3>
+          <button
+            className={`like-btn${isLiked ? " like-btn--active" : ""}`}
+            onClick={handleToggleLike}
+          >
+            {isLiked ? "\u2665 Liked" : "\u2661 Like"}
+          </button>
+        </div>
+        <div className="comment-type-toggle">
+          <button
+            className={`comment-type-btn${commentMode === "short" ? " comment-type-btn--active" : ""}`}
+            onClick={() => setCommentMode("short")}
+          >
+            Short Comment
+          </button>
+          <button
+            className={`comment-type-btn${commentMode === "long" ? " comment-type-btn--active" : ""}`}
+            onClick={() => setCommentMode("long")}
+          >
+            Long Comment
+          </button>
+        </div>
+        {isEditing && (
           <textarea
             className="summary-textarea"
             value={editedSummary}
@@ -600,12 +646,29 @@ export function ResultsScreen() {
             }}
             rows={6}
           />
-        ) : (
-          <p className="summary-text">
-            <GlossaryTooltip text={displaySummary} glossary={glossary} />
-          </p>
         )}
-      </section>
+        {isGeneratingComment && commentMode === "short" ? (
+          <div className="comment-generating">Generating short comment...</div>
+        ) : (
+          <div className="comment-preview">{commentPreviewText}</div>
+        )}
+        <span className="comment-char-count">{commentPreviewText.length} chars</span>
+        <button className="comment-copy-btn" onClick={handleCopyComment}>
+          Copy to Clipboard
+        </button>
+        <div className="comment-export-row">
+          <button
+            className="comment-export-btn"
+            onClick={handleExportPdf}
+            disabled={isExporting}
+          >
+            {isExporting ? "Exporting\u2026" : "Export PDF"}
+          </button>
+          <button className="comment-export-btn" onClick={() => window.print()}>
+            Print
+          </button>
+        </div>
+      </div>
 
       {/* Key Findings */}
       {sectionSettings.include_key_findings && displayFindings.length > 0 && (
@@ -762,11 +825,6 @@ export function ResultsScreen() {
         </details>
       )}
 
-      {/* Branding Footer */}
-      <section className="results-disclaimer">
-        <p>{brandingFooter}</p>
-      </section>
-
       {/* Metadata */}
       <footer className="results-footer">
         <span className="results-meta">
@@ -789,6 +847,91 @@ export function ResultsScreen() {
         )}
       </footer>
 
+      {/* Teaching Points */}
+      <details className="teaching-points-panel teaching-points-collapsible">
+        <summary className="teaching-points-header">
+          <h3>Teaching Points</h3>
+          {teachingPoints.length > 0 && (
+            <span className="teaching-points-count">{teachingPoints.length}</span>
+          )}
+        </summary>
+        <div className="teaching-points-body">
+          <p className="teaching-points-desc">
+            Add personalized instructions that customize how AI interprets and explains results.
+            These points can be stylistic or clinical.
+          </p>
+          {teachingPoints.length > 0 && (
+            <div className="teaching-points-list">
+              {teachingPoints.map((tp) => (
+                <div key={tp.id} className="teaching-point-chip">
+                  <span className="teaching-point-text">{tp.text}</span>
+                  {tp.test_type && (
+                    <span className="teaching-point-type">{tp.test_type}</span>
+                  )}
+                  <button
+                    className="teaching-point-remove"
+                    onClick={async () => {
+                      try {
+                        await sidecarApi.deleteTeachingPoint(tp.id);
+                        setTeachingPoints((prev) => prev.filter((p) => p.id !== tp.id));
+                      } catch {
+                        showToast("error", "Failed to delete teaching point.");
+                      }
+                    }}
+                    aria-label="Remove"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="teaching-point-input-row">
+            <textarea
+              className="teaching-point-input"
+              placeholder="e.g. Always mention diastolic dysfunction grading"
+              value={newTeachingPoint}
+              onChange={(e) => setNewTeachingPoint(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter" && !e.shiftKey && newTeachingPoint.trim()) {
+                  e.preventDefault();
+                  try {
+                    const tp = await sidecarApi.createTeachingPoint({
+                      text: newTeachingPoint.trim(),
+                      test_type: currentResponse?.parsed_report.test_type,
+                    });
+                    setTeachingPoints((prev) => [tp, ...prev]);
+                    setNewTeachingPoint("");
+                  } catch {
+                    showToast("error", "Failed to save teaching point.");
+                  }
+                }
+              }}
+              rows={3}
+            />
+            <button
+              className="teaching-point-save-btn"
+              disabled={!newTeachingPoint.trim()}
+              onClick={async () => {
+                if (!newTeachingPoint.trim()) return;
+                try {
+                  const tp = await sidecarApi.createTeachingPoint({
+                    text: newTeachingPoint.trim(),
+                    test_type: currentResponse?.parsed_report.test_type,
+                  });
+                  setTeachingPoints((prev) => [tp, ...prev]);
+                  setNewTeachingPoint("");
+                } catch {
+                  showToast("error", "Failed to save teaching point.");
+                }
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </details>
+
       <button
         className="results-back-btn"
         onClick={() => {
@@ -802,9 +945,9 @@ export function ResultsScreen() {
       </button>
       </div>
 
+      {canRefine && (
       <div className="results-right-column">
       {/* Result Settings Panel */}
-      {canRefine && (
         <div className="results-settings-panel">
           <h3>Result Settings</h3>
 
@@ -1008,36 +1151,8 @@ export function ResultsScreen() {
             </button>
           </div>
         </div>
+      </div>
       )}
-
-      {/* Comment Panel */}
-      <div className="results-comment-panel">
-        <h3>Result Comment</h3>
-        <div className="comment-type-toggle">
-          <button
-            className={`comment-type-btn${commentMode === "short" ? " comment-type-btn--active" : ""}`}
-            onClick={() => setCommentMode("short")}
-          >
-            Short Comment
-          </button>
-          <button
-            className={`comment-type-btn${commentMode === "long" ? " comment-type-btn--active" : ""}`}
-            onClick={() => setCommentMode("long")}
-          >
-            Long Comment
-          </button>
-        </div>
-        {isGeneratingComment && commentMode === "short" ? (
-          <div className="comment-generating">Generating short comment...</div>
-        ) : (
-          <div className="comment-preview">{commentPreviewText}</div>
-        )}
-        <span className="comment-char-count">{commentPreviewText.length} chars</span>
-        <button className="comment-copy-btn" onClick={handleCopyComment}>
-          Copy to Clipboard
-        </button>
-      </div>
-      </div>
     </div>
   );
 }

@@ -3,6 +3,9 @@ Prompt construction for medical report explanation.
 
 Builds a system prompt (role, rules, anti-hallucination constraints)
 and a user prompt (parsed report data, reference ranges, glossary).
+
+Clinical Voice Rule: All outputs follow "Doctor Interpretation Mode" —
+structured around clinical reasoning, not neutral summaries.
 """
 
 from __future__ import annotations
@@ -22,27 +25,29 @@ class LiteracyLevel(str, Enum):
 
 _LITERACY_DESCRIPTIONS: dict[LiteracyLevel, str] = {
     LiteracyLevel.GRADE_4: (
-        "Write at a 4th-grade reading level. Use very simple words and short "
-        "sentences. Avoid all medical jargon. Use analogies a child could "
-        "understand."
+        "4th-grade level. Very simple words, short sentences. "
+        "No medical jargon — use everyday analogies. "
+        "The clinical interpretation structure stays the same."
     ),
     LiteracyLevel.GRADE_6: (
-        "Write at a 6th-grade reading level. Use simple, clear language. "
-        "Briefly define medical terms when you must use them. Keep sentences "
-        "short."
+        "6th-grade level. Simple, clear language. Short sentences. "
+        "Briefly define any medical term you must use. "
+        "The clinical interpretation structure stays the same."
     ),
     LiteracyLevel.GRADE_8: (
-        "Write at an 8th-grade reading level. Use clear language, briefly "
-        "defining technical terms. Moderate sentence complexity is acceptable."
+        "8th-grade level. Clear language with brief definitions of "
+        "technical terms. Moderate sentence complexity is acceptable. "
+        "The clinical interpretation structure stays the same."
     ),
     LiteracyLevel.GRADE_12: (
-        "Write at a 12th-grade reading level. Use natural adult language "
-        "with medical terms introduced in context. Assume a well-educated "
-        "reader who is not a medical professional."
+        "12th-grade / college level. Natural adult language with medical "
+        "terms introduced in context and briefly explained. "
+        "The clinical interpretation structure stays the same."
     ),
     LiteracyLevel.CLINICAL: (
-        "Write at a clinical level suitable for a healthcare professional. "
-        "Use standard medical terminology. Be precise and concise."
+        "Physician-level. Standard medical terminology allowed. "
+        "Be precise and concise. Still patient-facing in tone. "
+        "The clinical interpretation structure stays the same."
     ),
 }
 
@@ -76,32 +81,184 @@ _TONE_DESCRIPTIONS: dict[int, str] = {
 _DETAIL_DESCRIPTIONS: dict[int, str] = {
     1: (
         "Be extremely brief. Provide only the most essential information. "
-        "Use short summaries of 1-2 sentences. Omit background and context."
+        "1-2 sentences per section. Omit background and context."
     ),
     2: (
         "Be concise. Cover key points only with short explanations. "
-        "Summaries should be 2-3 sentences. Minimal background detail."
+        "2-3 sentences per section. Minimal background detail."
     ),
     3: (
-        "Provide a standard level of detail. Summaries of 4-6 sentences. "
+        "Provide a standard level of detail. 3-5 sentences per section. "
         "Include enough context to understand each finding."
     ),
     4: (
         "Be thorough. Include additional context, background information, "
         "and expanded explanations for each finding and measurement. "
-        "Summaries of 5-8 sentences."
+        "4-6 sentences per section."
     ),
     5: (
         "Be very comprehensive. Provide detailed explanations with full "
         "clinical context for every finding. Include background on what "
-        "each measurement means and why it matters. Summaries of 6-10 "
-        "sentences."
+        "each measurement means and why it matters. 5-8 sentences per section."
     ),
 }
+
+# ---------------------------------------------------------------------------
+# Clinical Voice Rule — shared across all output modes
+# ---------------------------------------------------------------------------
+
+_CLINICAL_VOICE_RULE = """\
+## CLINICAL VOICE RULE — "DOCTOR INTERPRETATION MODE"
+
+The explanation must sound like what a SPECIALIST in {specialty} would tell
+a patient during a results discussion, NOT like a report recap or neutral
+summary. Apply the clinical judgment, priorities, and interpretive lens of
+a {specialty} specialist. Highlight what a specialist in this field would
+consider most significant, and de-emphasize what they would consider
+incidental or clinically unimportant.
+
+Core Principle: Interpret, don't narrate.
+- BAD (narrative): "The echocardiogram was performed and showed that the \
+left ventricle was measured at 55%."
+- GOOD (interpretive): "Your heart's pumping strength (LVEF 55%) falls \
+within the normal range, which suggests your heart is pumping effectively."
+
+For every finding, answer the patient's implicit question: \
+"What does this mean for me?"
+
+"""
+
+_INTERPRETATION_STRUCTURE = """\
+## Required Interpretation Structure
+
+Organize the overall_summary into these sections IN ORDER, each as its own
+paragraph separated by a blank line (\\n\\n). Use the section labels as
+mental structure — do NOT print the labels as headers in the output.
+
+1. BOTTOM LINE — 1-2 sentences stating what matters most and whether the
+   findings are overall reassuring or concerning.
+
+2. WHAT IS REASSURING — Normal or stable findings that reduce immediate
+   concern. Start with LV size and function.
+
+3. WHAT IS MOST IMPORTANT / ABNORMAL — The key medical issues that need
+   attention, prioritized by clinical significance:
+   a. Severe findings first, then moderate.
+   b. Mild STENOSIS is clinically noteworthy — include with context.
+   c. Mild REGURGITATION is very common and usually insignificant — mention
+      only briefly in passing (e.g. "trace/mild regurgitation, which is
+      common and typically not concerning"). Do NOT elevate it as an
+      important finding.
+
+4. HOW THIS RELATES TO YOUR SYMPTOMS — Tie findings directly to the
+   patient's complaint or clinical context when provided. If no clinical
+   context was given, omit this section.
+
+5. WHEN TO CONTACT US SOONER — Brief safety guidance for symptom changes
+   or urgent concerns. Keep to 1-2 sentences.
+
+6. WHAT HAPPENS NEXT — Describe follow-up, additional testing, or
+   monitoring using non-directive language (e.g. "your doctor may
+   recommend…"). Incorporate any physician-selected next steps naturally.
+   This section comes LAST.
+
+"""
+
+_TONE_RULES = """\
+## Tone Rules
+- Speak directly to the patient ("you," "your heart," "your doctor").
+- Calm, confident, and clinically grounded.
+- Reassuring when appropriate, but never dismissive.
+- Never alarmist.
+- Never speculative beyond the report.
+- Use hedging language: "may," "appears to," "could suggest,"
+  "seems to indicate."
+- Avoid: "proves," "confirms," "definitely."
+
+"""
+
+_SAFETY_RULES = """\
+## Safety & Scope Rules
+1. ONLY use data that appears in the report provided. NEVER invent, guess,
+   or assume measurements, findings, or diagnoses not explicitly stated.
+2. For each measurement, the app has already classified it against reference
+   ranges. You MUST use the status provided (normal, mildly_abnormal, etc.)
+   — do NOT re-classify.
+3. When explaining a measurement, state the patient's value, the normal
+   range, and interpret what the status means clinically.
+4. If a measurement has status "undetermined", say the value was noted but
+   cannot be classified without more context.
+5. Do NOT mention the patient by name or include any PHI.
+6. Do NOT introduce diagnoses, treatments, or prognoses not supported by
+   the source report.
+7. Do NOT provide medication advice.
+8. Use "may," "can," and "we will review" for next-step framing.
+9. Call the explain_report tool with your response. Do not produce any
+   output outside of this tool call.
+
+"""
+
+_CLINICAL_DOMAIN_KNOWLEDGE = """\
+## Clinical Domain Knowledge
+
+Apply these condition-specific interpretation rules:
+
+- HYPERTROPHIC CARDIOMYOPATHY (HCM): A supra-normal or hyperdynamic ejection
+  fraction (e.g. LVEF > 65-70%) is NOT reassuring in HCM. It may reflect
+  hypercontractility from a thickened, stiff ventricle. Do NOT describe it as
+  "strong" or "better than normal." Instead, note the EF value neutrally and
+  explain that in the context of HCM, an elevated EF can be part of the
+  disease pattern rather than a sign of good health.
+
+"""
+
+_CLINICAL_CONTEXT_RULE = """\
+## Clinical Context Integration
+
+When clinical context is provided (e.g. symptoms, reason for test):
+- You MUST connect at least one finding to the clinical context.
+- Tie findings directly to the clinical context by explaining how the
+  results relate to the patient's symptoms or reason for testing.
+- Use phrasing like "Given that this test was ordered for [reason]..."
+  or "These findings help explain your [symptom]..."
+- This applies to BOTH long-form and short comment outputs.
+- If no clinical context was provided, skip this requirement.
+
+"""
 
 
 class PromptEngine:
     """Constructs system and user prompts for report explanation."""
+
+    @staticmethod
+    def _short_comment_sections(
+        include_key_findings: bool, include_measurements: bool,
+    ) -> str:
+        n = 1
+        lines: list[str] = []
+        lines.append(
+            f"{n}. Condensed clinical interpretation. Start with LV function, "
+            f"then most significant findings by severity. Separate topics with "
+            f"line breaks. 2-4 sentences. Mild regurgitation is NOT a key finding."
+        )
+        n += 1
+        if include_key_findings:
+            lines.append(
+                f"{n}. KEY FINDINGS — Bullet list of clinically significant findings. "
+                f"Severe/moderate first. Do NOT list mild regurgitation. 2-4 items."
+            )
+            n += 1
+        if include_measurements:
+            lines.append(
+                f"{n}. MEASUREMENTS — Bullet list of key measurements with brief "
+                f"interpretation. 2-4 items."
+            )
+            n += 1
+        lines.append(
+            f"{n}. NEXT STEPS — Only if the user prompt includes next steps. "
+            f"List each as a bullet. If none provided, skip entirely."
+        )
+        return "\n".join(lines)
 
     def build_system_prompt(
         self,
@@ -114,6 +271,8 @@ class PromptEngine:
         explanation_voice: str = "third_person",
         name_drop: bool = True,
         short_comment_char_limit: int | None = 1000,
+        include_key_findings: bool = True,
+        include_measurements: bool = True,
     ) -> str:
         """Build the system prompt with role, rules, and constraints."""
         specialty = prompt_context.get("specialty", "general medicine")
@@ -154,7 +313,7 @@ class PromptEngine:
                     f"- Keep line width narrow (short lines, not long paragraphs).\n"
                 )
                 length_rule = (
-                    f"5. Keep the entire overall_summary under {hard_limit} characters."
+                    f"10. Keep the entire overall_summary under {hard_limit} characters."
                 )
             else:
                 length_constraint = (
@@ -162,40 +321,33 @@ class PromptEngine:
                     "- Keep line width narrow (short lines, not long paragraphs).\n"
                 )
                 length_rule = (
-                    "5. Keep the overall_summary concise but cover all relevant findings."
+                    "10. Keep the overall_summary concise but cover all relevant findings."
                 )
 
             return (
-                f"You are a medical report explanation assistant specializing "
-                f"in {specialty}.\n"
-                f"Your task is to produce a patient-facing Epic Results Comment "
-                f"optimized for Epic's narrow, mobile-first display.\n\n"
+                f"You are a {specialty} specialist explaining results to a patient.\n\n"
+                f"{_CLINICAL_VOICE_RULE.format(specialty=specialty)}"
+                f"{_CLINICAL_CONTEXT_RULE}"
+                f"{_CLINICAL_DOMAIN_KNOWLEDGE}"
+                f"## Short Comment Mode\n"
+                f"Produce a condensed Results Comment using the same clinical "
+                f"interpretation voice. The overall_summary should follow the "
+                f"interpretation structure below but in abbreviated form.\n\n"
                 f"## Output Constraints\n"
                 f"{length_constraint}"
-                f"- Plain text ONLY — no markdown, no emojis, no rich text, no special formatting.\n"
+                f"- Plain text ONLY — no markdown, no emojis, no rich text.\n"
                 f"- Avoid nested bullets or indentation.\n\n"
                 f"## Formatting Rules\n"
-                f"- Headers: ALL CAPS. No bold, no symbols, no separators other than line breaks.\n"
-                f"- Paragraphs: Maximum 2-3 short sentences per block. One blank line between sections.\n"
-                f"- Lists: Prefer short labeled lines over bullet lists.\n"
-                f"  Example:\n"
-                f"  Key numbers:\n"
-                f"  LVEF 50%\n\n"
-                f"## Required Sections (in this order)\n"
-                f"1. HEADER — One-line test type summary, e.g. HEART ULTRASOUND SUMMARY\n"
-                f"2. REASSURANCE BLOCK — 1-2 sentences covering: pumping function, "
-                f"right heart status, pericardial fluid (if relevant).\n"
-                f"3. MAIN FINDINGS BLOCK — 2-3 sentences covering: primary abnormality "
-                f"(e.g. valve disease), symptom connection, chamber changes if relevant.\n"
-                f"4. KEY NUMBERS BLOCK — 1-2 lines only. No parentheticals or long explanations.\n"
-                f"5. NEXT STEPS BLOCK — 1-2 sentences. Clear action or follow-up.\n"
-                f"6. FOOTER (optional) — Brief sign-off if space allows.\n\n"
+                f"- Section headers: ALL CAPS on their own line. No bold, no symbols.\n"
+                f"- One blank line between sections.\n"
+                f"- Bullet items start with \"- \" (hyphen space).\n\n"
+                f"## Required Sections (in this exact order)\n"
+                f"{self._short_comment_sections(include_key_findings, include_measurements)}\n"
+                f"## Literacy Level\n"
+                f"{_LITERACY_DESCRIPTIONS[literacy_level]}\n\n"
                 f"{physician_section}"
-                f"## Critical Rules\n"
-                f"1. ONLY use data from the report. NEVER invent findings.\n"
-                f"2. Use the status provided (normal, mildly_abnormal, etc.) — do NOT re-classify.\n"
-                f"3. Do NOT mention the patient by name or include PHI.\n"
-                f"4. Call the explain_report tool. Put the short comment in overall_summary.\n"
+                f"{_TONE_RULES}"
+                f"{_SAFETY_RULES}"
                 f"{length_rule}"
             )
 
@@ -204,54 +356,34 @@ class PromptEngine:
         explanation_style = prompt_context.get("explanation_style", "")
         tone = prompt_context.get("tone", "")
 
-        tone_section = f"## Tone\n{tone}\n\n" if tone else ""
+        tone_section = f"## Template Tone\n{tone}\n\n" if tone else ""
 
         tone_pref = _TONE_DESCRIPTIONS.get(tone_preference, _TONE_DESCRIPTIONS[3])
         detail_pref = _DETAIL_DESCRIPTIONS.get(detail_preference, _DETAIL_DESCRIPTIONS[3])
 
+        style_section = (
+            f"## Explanation Style\n{explanation_style}\n\n" if explanation_style else ""
+        )
+
         return (
-            f"You are a medical report explanation assistant specializing "
-            f"in {specialty}.\n"
-            f"Your task is to explain a medical report to a patient in "
-            f"plain language.\n\n"
+            f"You are a {specialty} specialist explaining results to a patient.\n\n"
+            f"{_CLINICAL_VOICE_RULE.format(specialty=specialty)}"
+            f"{_CLINICAL_CONTEXT_RULE}"
+            f"{_CLINICAL_DOMAIN_KNOWLEDGE}"
+            f"{_INTERPRETATION_STRUCTURE}"
             f"## Literacy Level\n{literacy_desc}\n\n"
             f"## Clinical Guidelines\n"
             f"Base your interpretations on: {guidelines}\n\n"
-            f"## Explanation Style\n{explanation_style}\n\n"
+            f"{style_section}"
             f"{tone_section}"
             f"## Tone Preference\n{tone_pref}\n\n"
             f"## Detail Level\n{detail_pref}\n\n"
             f"{physician_section}"
-            f"## Tone and Language Style\n"
-            f"Use hedging language "
-            f"throughout to reflect the inherent uncertainty in medical "
-            f"interpretation.\n"
-            f"- Use: \"may\", \"appears to\", \"could suggest\", "
-            f"\"seems to indicate\"\n"
-            f"- Avoid: \"is\", \"shows\", \"proves\", \"confirms\"\n"
-            f"- Example: \"Your heart appears to be functioning normally\" "
-            f"not \"Your heart is normal\"\n"
-            f"- Frame abnormalities gently, e.g. \"something your doctor "
-            f"may want to look into further\"\n\n"
-            f"## Critical Rules\n"
-            f"1. ONLY use data that appears in the report provided. "
-            f"NEVER invent, guess, or assume measurements, findings, or "
-            f"diagnoses that are not explicitly stated.\n"
-            f"2. For each measurement, the app has already classified it "
-            f"against reference ranges. You MUST use the status provided "
-            f"(normal, mildly_abnormal, etc.) -- do NOT re-classify.\n"
-            f"3. When explaining a measurement, always mention the patient's "
-            f"value, the normal range, and what the status means.\n"
-            f"4. If a measurement has status \"undetermined\", say the value "
-            f"was noted but cannot be classified without more context.\n"
-            f"5. Do NOT mention the patient by name or include any personally "
-            f"identifying information.\n"
-            f"6. Call the explain_report tool with your response. Do not "
-            f"produce any output outside of this tool call.\n"
-            f"7. Provide comprehensive, reassuring summaries of 4-6 sentences. "
-            f"Lead with positive or normal findings. Frame any concerning "
-            f"findings gently, emphasizing that a doctor will provide proper "
-            f"interpretation and next steps."
+            f"{_TONE_RULES}"
+            f"{_SAFETY_RULES}"
+            f"## Validation Rule\n"
+            f"If the output reads like a neutral summary or report recap rather "
+            f"than a clinical interpretation, regenerate.\n"
         )
 
     def build_user_prompt(
@@ -266,6 +398,7 @@ class PromptEngine:
         refinement_instruction: str | None = None,
         liked_examples: list[dict] | None = None,
         next_steps: list[str] | None = None,
+        teaching_points: list[dict] | None = None,
     ) -> str:
         """Build the user prompt with report data, ranges, and glossary."""
         sections: list[str] = []
@@ -286,8 +419,8 @@ class PromptEngine:
         if next_steps and any(s != "No comment" for s in next_steps):
             sections.append("\n## Next Steps to Include")
             sections.append(
-                "The physician has selected these next steps for the patient. Naturally weave\n"
-                "them into your overall_summary where appropriate:"
+                "The physician has selected these next steps for the patient. Include them\n"
+                "in the WHAT HAPPENS NEXT section at the end of the overall_summary:"
             )
             for step in next_steps:
                 if step != "No comment":
@@ -321,6 +454,16 @@ class PromptEngine:
                         finding = kf.get("finding", "")
                         explanation = kf.get("explanation", "")
                         sections.append(f"- {finding}: {explanation}")
+
+        # 1f. Teaching points (personalized instructions)
+        if teaching_points:
+            sections.append("\n## Teaching Points")
+            sections.append(
+                "The user has provided the following personalized instructions for how to\n"
+                "interpret and explain results. Follow these guidelines:"
+            )
+            for tp in teaching_points:
+                sections.append(f"- {tp['text']}")
 
         # 2. Parsed measurements with reference ranges
         sections.append("\n## Parsed Measurements")
@@ -375,9 +518,10 @@ class PromptEngine:
         # 7. Instructions
         sections.append(
             "\n## Instructions\n"
-            "Using ONLY the data above, generate a structured explanation by "
-            "calling the explain_report tool. Include all measurements listed "
-            "above. Do not add measurements or findings not present in the data."
+            "Using ONLY the data above, generate a structured clinical "
+            "interpretation by calling the explain_report tool. Include all "
+            "measurements listed above. Do not add measurements or findings "
+            "not present in the data."
         )
 
         return "\n".join(sections)

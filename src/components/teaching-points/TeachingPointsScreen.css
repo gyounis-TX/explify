@@ -1,0 +1,216 @@
+.tp-screen {
+  max-width: 700px;
+}
+
+.tp-header {
+  margin-bottom: var(--space-xl);
+}
+
+.tp-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-xs);
+}
+
+.tp-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+/* Sections */
+.tp-section {
+  margin-bottom: var(--space-xl);
+}
+
+.tp-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tp-section-desc {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  margin-bottom: var(--space-md);
+}
+
+/* Data Entry */
+.tp-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.tp-entry-textarea {
+  width: 100%;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  color: var(--color-text);
+  resize: vertical;
+  min-height: 100px;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tp-entry-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.tp-entry-textarea::placeholder {
+  color: var(--color-gray-400);
+}
+
+.tp-entry-btn {
+  align-self: flex-start;
+  padding: var(--space-sm) var(--space-lg);
+  background-color: var(--color-primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tp-entry-btn:hover:not(:disabled) {
+  background-color: var(--color-primary-700);
+}
+
+.tp-entry-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Library */
+.tp-library-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-xs);
+  background-color: var(--color-gray-100);
+  color: var(--color-text-secondary);
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tp-empty {
+  padding: var(--space-xl);
+  text-align: center;
+  background-color: var(--color-gray-50);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+}
+
+.tp-empty p {
+  margin: 0 0 var(--space-xs) 0;
+}
+
+.tp-empty-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-400);
+}
+
+.tp-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Card */
+.tp-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tp-card:hover {
+  border-color: var(--color-gray-300);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.tp-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tp-card-text {
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  color: var(--color-text);
+  margin: 0 0 var(--space-sm) 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tp-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tp-card-type {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-primary-600);
+  background-color: var(--color-primary-50);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.tp-card-type--global {
+  color: var(--color-text-secondary);
+  background-color: var(--color-gray-100);
+}
+
+.tp-card-date {
+  font-size: 0.75rem;
+  color: var(--color-gray-400);
+}
+
+.tp-card-delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-gray-400);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tp-card-delete:hover {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}

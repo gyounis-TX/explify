@@ -54,7 +54,7 @@ class LLMClient:
     def _default_model(self) -> str:
         if self.provider == LLMProvider.CLAUDE:
             return "claude-sonnet-4-20250514"
-        return "gpt-4o"
+        return "gpt-4.1-mini"
 
     async def call(
         self,

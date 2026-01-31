@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
-import type { LiteracyLevel, ExplanationVoice, PhysicianNameSource } from "../../types/sidecar";
+import type { LiteracyLevel, ExplanationVoice, PhysicianNameSource, FooterType } from "../../types/sidecar";
 import "./SettingsScreen.css";
 
 const SPECIALTY_OPTIONS = [
@@ -78,6 +78,8 @@ export function SettingsScreen() {
   const [practiceProviders, setPracticeProviders] = useState<string[]>([]);
   const [newProvider, setNewProvider] = useState("");
   const [shortCommentCharLimit, setShortCommentCharLimit] = useState<number | null>(1000);
+  const [footerType, setFooterType] = useState<FooterType>("explify_branding");
+  const [customFooterText, setCustomFooterText] = useState("");
 
   useEffect(() => {
     async function loadSettings() {
@@ -101,6 +103,8 @@ export function SettingsScreen() {
         setCustomPhysicianName(s.custom_physician_name ?? "");
         setPracticeProviders(s.practice_providers ?? []);
         setShortCommentCharLimit(s.short_comment_char_limit ?? 1000);
+        setFooterType(s.footer_type ?? "explify_branding");
+        setCustomFooterText(s.custom_footer_text ?? "");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to load settings";
         setError(msg);
@@ -134,6 +138,8 @@ export function SettingsScreen() {
         custom_physician_name: customPhysicianName.trim() || null,
         practice_providers: practiceProviders,
         short_comment_char_limit: shortCommentCharLimit,
+        footer_type: footerType,
+        custom_footer_text: customFooterText.trim() || null,
       };
 
       await sidecarApi.updateSettings(update);
@@ -147,7 +153,7 @@ export function SettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, showToast]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, footerType, customFooterText, showToast]);
 
   if (loading) {
     return (
@@ -669,6 +675,103 @@ export function SettingsScreen() {
             Add
           </button>
         </div>
+      </section>
+
+      {/* Comment Footer */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Comment Footer</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Choose what appears at the bottom of copied result comments.
+        </p>
+        <div className="form-group">
+          <div className="literacy-options">
+            <label
+              className={`literacy-option ${footerType === "explify_branding" ? "literacy-option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="footer_type"
+                value="explify_branding"
+                checked={footerType === "explify_branding"}
+                onChange={() => setFooterType("explify_branding")}
+                className="literacy-radio"
+              />
+              <div className="literacy-content">
+                <span className="literacy-label">Powered by Explify</span>
+                <span className="literacy-desc">
+                  "Summary powered by Explify, refined by [practice name]."
+                </span>
+              </div>
+            </label>
+            <label
+              className={`literacy-option ${footerType === "ai_disclaimer" ? "literacy-option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="footer_type"
+                value="ai_disclaimer"
+                checked={footerType === "ai_disclaimer"}
+                onChange={() => setFooterType("ai_disclaimer")}
+                className="literacy-radio"
+              />
+              <div className="literacy-content">
+                <span className="literacy-label">AI Disclaimer</span>
+                <span className="literacy-desc">
+                  "This summary was generated with AI assistance and reviewed by your healthcare provider. It is intended for informational purposes only and does not replace professional medical advice."
+                </span>
+              </div>
+            </label>
+            <label
+              className={`literacy-option ${footerType === "custom" ? "literacy-option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="footer_type"
+                value="custom"
+                checked={footerType === "custom"}
+                onChange={() => setFooterType("custom")}
+                className="literacy-radio"
+              />
+              <div className="literacy-content">
+                <span className="literacy-label">Custom</span>
+                <span className="literacy-desc">
+                  Enter your own footer text below.
+                </span>
+              </div>
+            </label>
+            <label
+              className={`literacy-option ${footerType === "none" ? "literacy-option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="footer_type"
+                value="none"
+                checked={footerType === "none"}
+                onChange={() => setFooterType("none")}
+                className="literacy-radio"
+              />
+              <div className="literacy-content">
+                <span className="literacy-label">None</span>
+                <span className="literacy-desc">
+                  No footer will be appended to comments.
+                </span>
+              </div>
+            </label>
+          </div>
+        </div>
+        {footerType === "custom" && (
+          <div className="form-group">
+            <label className="form-label">Custom Footer Text</label>
+            <textarea
+              className="form-input"
+              rows={3}
+              placeholder="Enter your custom footer text..."
+              value={customFooterText}
+              onChange={(e) => setCustomFooterText(e.target.value)}
+              style={{ resize: "vertical" }}
+            />
+          </div>
+        )}
       </section>
 
       {/* Save */}

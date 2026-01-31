@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS letters (
     letter_type TEXT NOT NULL DEFAULT 'general'
 );
 CREATE INDEX IF NOT EXISTS idx_letters_created_at ON letters(created_at);
+
+CREATE TABLE IF NOT EXISTS teaching_points (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    test_type TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_teaching_points_test_type ON teaching_points(test_type);
 """
 
 
@@ -79,6 +87,7 @@ class Database:
                 "ALTER TABLE history ADD COLUMN liked INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE history ADD COLUMN tone_preference INTEGER",
                 "ALTER TABLE history ADD COLUMN detail_preference INTEGER",
+                "CREATE TABLE IF NOT EXISTS teaching_points (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, test_type TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))",
             ]
             for migration in migrations:
                 try:
@@ -420,6 +429,55 @@ class Database:
         try:
             cursor = conn.execute(
                 "DELETE FROM letters WHERE id = ?", (letter_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    # --- Teaching Points ---
+
+    def create_teaching_point(
+        self, text: str, test_type: str | None = None,
+    ) -> dict[str, Any]:
+        conn = self._get_conn()
+        try:
+            cursor = conn.execute(
+                "INSERT INTO teaching_points (text, test_type) VALUES (?, ?)",
+                (text, test_type),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT * FROM teaching_points WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+            return dict(row)
+        finally:
+            conn.close()
+
+    def list_teaching_points(
+        self, test_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        conn = self._get_conn()
+        try:
+            if test_type:
+                rows = conn.execute(
+                    "SELECT * FROM teaching_points WHERE test_type IS NULL OR test_type = ? ORDER BY created_at DESC",
+                    (test_type,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM teaching_points ORDER BY created_at DESC",
+                ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def delete_teaching_point(self, point_id: int) -> bool:
+        conn = self._get_conn()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM teaching_points WHERE id = ?", (point_id,),
             )
             conn.commit()
             return cursor.rowcount > 0

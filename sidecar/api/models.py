@@ -15,6 +15,7 @@ class PageType(str, Enum):
 class InputMode(str, Enum):
     PDF = "pdf"
     TEXT = "text"
+    IMAGE = "image"
 
 
 class PageDetection(BaseModel):

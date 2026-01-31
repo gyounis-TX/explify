@@ -3,7 +3,7 @@ export interface HealthResponse {
 }
 
 export type PageType = "text" | "scanned" | "mixed";
-export type InputMode = "pdf" | "text";
+export type InputMode = "pdf" | "text" | "image";
 
 export interface PageDetection {
   page_number: number;
@@ -111,6 +111,7 @@ export type LLMProvider = "claude" | "openai";
 export type LiteracyLevel = "grade_4" | "grade_6" | "grade_8" | "grade_12" | "clinical";
 export type ExplanationVoice = "first_person" | "third_person";
 export type PhysicianNameSource = "auto_extract" | "custom" | "generic";
+export type FooterType = "explify_branding" | "ai_disclaimer" | "custom" | "none";
 
 export interface MeasurementExplanation {
   abbreviation: string;
@@ -150,6 +151,8 @@ export interface ExplainRequest {
   explanation_voice?: ExplanationVoice;
   name_drop?: boolean;
   physician_name_override?: string;
+  include_key_findings?: boolean;
+  include_measurements?: boolean;
 }
 
 export interface ExplainResponse {
@@ -189,6 +192,8 @@ export interface AppSettings {
   custom_physician_name: string | null;
   practice_providers: string[];
   short_comment_char_limit: number | null;
+  footer_type: FooterType;
+  custom_footer_text: string | null;
 }
 
 export interface SettingsUpdate {
@@ -212,6 +217,8 @@ export interface SettingsUpdate {
   custom_physician_name?: string;
   practice_providers?: string[];
   short_comment_char_limit?: number | null;
+  footer_type?: FooterType;
+  custom_footer_text?: string | null;
 }
 
 // --- Template Types ---
@@ -322,4 +329,13 @@ export interface LetterListResponse {
 export interface LetterDeleteResponse {
   deleted: boolean;
   id: number;
+}
+
+// --- Teaching Points Types ---
+
+export interface TeachingPoint {
+  id: number;
+  text: string;
+  test_type: string | null;
+  created_at: string;
 }

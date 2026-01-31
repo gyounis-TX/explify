@@ -106,8 +106,11 @@ export function ImportScreen() {
   );
 
   const validateFile = (file: File): string | null => {
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      return `"${file.name}": Only PDF files are accepted.`;
+    const name = file.name.toLowerCase();
+    const validExts = [".pdf", ".jpg", ".jpeg", ".png", ".txt"];
+    const hasValidExt = validExts.some((ext) => name.endsWith(ext));
+    if (!hasValidExt) {
+      return `"${file.name}": Unsupported file type. Accepted: PDF, JPG, PNG, TXT.`;
     }
     if (file.size === 0) {
       return `"${file.name}": File is empty.`;
@@ -217,7 +220,7 @@ export function ImportScreen() {
           setExtractionResults(new Map(results));
 
           try {
-            const extractionResult = await sidecarApi.extractPdf(file);
+            const extractionResult = await sidecarApi.extractFile(file);
             results.set(key, {
               status: "success",
               result: extractionResult,
@@ -304,7 +307,8 @@ export function ImportScreen() {
       });
       setHelpMeStatus("success");
       setHelpMeText("");
-      showToast("success", "Letter generated. View it in the Letters section.");
+      showToast("success", "Letter generated.");
+      navigate("/letters");
     } catch {
       setHelpMeStatus("error");
       showToast("error", "Failed to generate letter. Check your API key in Settings.");
@@ -331,7 +335,7 @@ export function ImportScreen() {
       <header className="import-header">
         <h2 className="import-title">Import Report</h2>
         <p className="import-description">
-          Upload PDF reports or paste text from your EMR system.
+          Upload files (PDF, images, text) or paste text from your EMR system.
         </p>
       </header>
 
@@ -401,7 +405,7 @@ export function ImportScreen() {
               className={`mode-toggle-btn ${mode === "pdf" ? "mode-toggle-btn--active" : ""}`}
               onClick={() => handleModeChange("pdf")}
             >
-              Upload PDF
+              Upload File
             </button>
             <button
               className={`mode-toggle-btn ${mode === "text" ? "mode-toggle-btn--active" : ""}`}
@@ -423,7 +427,7 @@ export function ImportScreen() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,application/pdf"
+                  accept=".pdf,.jpg,.jpeg,.png,.txt,application/pdf,image/jpeg,image/png,text/plain"
                   multiple
                   onChange={handleInputChange}
                   className="drop-zone-input"
@@ -440,10 +444,10 @@ export function ImportScreen() {
                 ) : (
                   <div className="drop-zone-prompt">
                     <p className="drop-zone-primary">
-                      Drag and drop PDFs here, or click to browse
+                      Drag and drop files here, or click to browse
                     </p>
                     <p className="drop-zone-secondary">
-                      PDF files up to 50 MB each. Multiple files supported.
+                      PDF, JPG, PNG, or TXT files up to 50 MB each. Multiple files supported.
                     </p>
                   </div>
                 )}

@@ -34,6 +34,13 @@ class PhysicianNameSourceEnum(str, Enum):
     GENERIC = "generic"
 
 
+class FooterTypeEnum(str, Enum):
+    EXPLIFY_BRANDING = "explify_branding"
+    AI_DISCLAIMER = "ai_disclaimer"
+    CUSTOM = "custom"
+    NONE = "none"
+
+
 # --- Request ---
 
 
@@ -43,7 +50,7 @@ class ExplainRequest(BaseModel):
     extraction_result: dict
     test_type: Optional[str] = None
     literacy_level: LiteracyLevelEnum = LiteracyLevelEnum.GRADE_8
-    provider: LLMProviderEnum = LLMProviderEnum.CLAUDE
+    provider: Optional[LLMProviderEnum] = None
     api_key: Optional[str] = None
     clinical_context: Optional[str] = None
     template_id: Optional[int] = None
@@ -55,6 +62,8 @@ class ExplainRequest(BaseModel):
     explanation_voice: Optional[ExplanationVoiceEnum] = None
     name_drop: Optional[bool] = None
     physician_name_override: Optional[str] = None
+    include_key_findings: Optional[bool] = None
+    include_measurements: Optional[bool] = None
 
 
 # --- Response sub-models ---
@@ -129,6 +138,8 @@ class AppSettings(BaseModel):
     custom_physician_name: Optional[str] = None
     practice_providers: list[str] = Field(default_factory=list)
     short_comment_char_limit: Optional[int] = Field(default=1000, ge=500, le=4000)
+    footer_type: FooterTypeEnum = FooterTypeEnum.EXPLIFY_BRANDING
+    custom_footer_text: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -154,3 +165,5 @@ class SettingsUpdate(BaseModel):
     custom_physician_name: Optional[str] = None
     practice_providers: Optional[list[str]] = None
     short_comment_char_limit: Optional[int] = Field(default=None, ge=500, le=4000)
+    footer_type: Optional[FooterTypeEnum] = None
+    custom_footer_text: Optional[str] = None

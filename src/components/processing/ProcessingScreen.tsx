@@ -162,6 +162,7 @@ export function ProcessingScreen() {
             explainResponse: response,
             extractionResult,
             templateId,
+            clinicalContext,
           },
         });
       }, 600);
