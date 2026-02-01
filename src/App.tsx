@@ -3,7 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { ImportScreen } from "./components/import/ImportScreen";
 import { TemplatesScreen } from "./components/templates/TemplatesScreen";
 import { SettingsScreen } from "./components/settings/SettingsScreen";
-import { AIModelScreen } from "./components/ai-model/AIModelScreen";
+import { AdminScreen } from "./components/admin/AdminScreen";
 import { ProcessingScreen } from "./components/processing/ProcessingScreen";
 import { ResultsScreen } from "./components/results/ResultsScreen";
 import { HistoryScreen } from "./components/history/HistoryScreen";
@@ -26,7 +26,7 @@ function App() {
         <Route path="/teaching-points" element={<TeachingPointsScreen />} />
         <Route path="/templates" element={<TemplatesScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
-        <Route path="/ai-model" element={<AIModelScreen />} />
+        <Route path="/admin" element={<AdminScreen />} />
         <Route path="/processing" element={<ProcessingScreen />} />
         <Route path="/results" element={<ResultsScreen />} />
         <Route path="/auth" element={<AuthRoute />} />

@@ -347,17 +347,20 @@ async def explain_report(request: ExplainRequest = Body(...)):
     patient_age = request.patient_age if request.patient_age is not None else demographics.age
     patient_gender = request.patient_gender if request.patient_gender is not None else demographics.gender
 
-    # 5b. Resolve physician name — request override takes priority
+    # 5b. Always extract physician name from report text (for the UI)
+    extracted_physician = extract_physician_name(extraction_result.full_text)
+
+    # Resolve which physician name to use in the LLM prompt
     if request.physician_name_override is not None:
-        physician_name = request.physician_name_override or None
+        active_physician = request.physician_name_override or None
     else:
         source = settings.physician_name_source.value
         if source == "auto_extract":
-            physician_name = extract_physician_name(extraction_result.full_text)
+            active_physician = extracted_physician
         elif source == "custom":
-            physician_name = settings.custom_physician_name
+            active_physician = settings.custom_physician_name
         else:
-            physician_name = None
+            active_physician = None
 
     # 5c. Resolve voice & name_drop — request override takes priority
     voice = request.explanation_voice.value if request.explanation_voice is not None else settings.explanation_voice.value
@@ -373,12 +376,13 @@ async def explain_report(request: ExplainRequest = Body(...)):
     detail_pref = request.detail_preference if request.detail_preference is not None else settings.detail_preference
     inc_findings = request.include_key_findings if request.include_key_findings is not None else settings.include_key_findings
     inc_measurements = request.include_measurements if request.include_measurements is not None else settings.include_measurements
+    is_sms = bool(request.sms_summary)
     system_prompt = prompt_engine.build_system_prompt(
         literacy_level=literacy_level,
         prompt_context=prompt_context,
         tone_preference=tone_pref,
         detail_preference=detail_pref,
-        physician_name=physician_name,
+        physician_name=active_physician,
         short_comment=bool(request.short_comment),
         explanation_voice=voice,
         name_drop=name_drop,
@@ -387,6 +391,8 @@ async def explain_report(request: ExplainRequest = Body(...)):
         include_measurements=inc_measurements,
         patient_age=patient_age,
         patient_gender=patient_gender,
+        sms_summary=is_sms,
+        sms_summary_char_limit=settings.sms_summary_char_limit,
     )
     # 6b. Load template if specified
     template_tone = None
@@ -423,15 +429,15 @@ async def explain_report(request: ExplainRequest = Body(...)):
         liked_examples=liked_examples,
         next_steps=request.next_steps,
         teaching_points=teaching_points,
-        short_comment=bool(request.short_comment),
+        short_comment=bool(request.short_comment) or is_sms,
     )
 
     # Log prompt sizes for debugging token issues
     import logging
     _logger = logging.getLogger(__name__)
     _logger.warning(
-        "Prompt sizes — system: %d chars, user: %d chars, short_comment: %s",
-        len(system_prompt), len(user_prompt), bool(request.short_comment),
+        "Prompt sizes — system: %d chars, user: %d chars, short_comment: %s, sms: %s",
+        len(system_prompt), len(user_prompt), bool(request.short_comment), is_sms,
     )
 
     # 7. Call LLM with retry
@@ -447,8 +453,13 @@ async def explain_report(request: ExplainRequest = Body(...)):
         model=model_override,
     )
 
-    # Short comments need far fewer output tokens
-    max_tokens = 1024 if request.short_comment else 4096
+    # SMS/short comments need far fewer output tokens
+    if is_sms:
+        max_tokens = 512
+    elif request.short_comment:
+        max_tokens = 1024
+    else:
+        max_tokens = 4096
 
     try:
         llm_response = await with_retry(
@@ -488,7 +499,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         parsed_report=parsed_report,
         validation_warnings=[issue.message for issue in issues],
         phi_categories_found=scrub_result.phi_found,
-        physician_name=physician_name,
+        physician_name=extracted_physician,
         model_used=llm_response.model,
         input_tokens=llm_response.input_tokens,
         output_tokens=llm_response.output_tokens,
@@ -701,6 +712,15 @@ async def mark_history_copied(history_id: int):
 # --- Consent Endpoints ---
 
 
+@router.get("/settings/raw-key/{provider}")
+async def get_raw_key(provider: str):
+    """Return the unmasked API key for a provider. Safe because sidecar is local-only."""
+    key = settings_store.get_api_key_for_provider(provider)
+    if not key:
+        raise HTTPException(status_code=404, detail=f"No key configured for {provider}")
+    return {"provider": provider, "key": key}
+
+
 @router.get("/consent", response_model=ConsentStatusResponse)
 async def get_consent():
     """Check whether the user has given privacy consent."""
@@ -715,6 +735,25 @@ async def grant_consent():
     db = get_db()
     db.set_setting("privacy_consent_given", "true")
     return ConsentStatusResponse(consent_given=True)
+
+
+# --- Onboarding Endpoints ---
+
+
+@router.get("/onboarding")
+async def get_onboarding():
+    """Check whether the user has completed onboarding."""
+    db = get_db()
+    value = db.get_setting("onboarding_completed")
+    return {"onboarding_completed": value == "true"}
+
+
+@router.post("/onboarding")
+async def complete_onboarding():
+    """Record that the user has completed onboarding."""
+    db = get_db()
+    db.set_setting("onboarding_completed", "true")
+    return {"onboarding_completed": True}
 
 
 # --- Letter Endpoints ---

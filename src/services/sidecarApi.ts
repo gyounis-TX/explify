@@ -250,6 +250,8 @@ class SidecarApi {
     if (request.next_steps != null) body.next_steps = request.next_steps;
     if (request.short_comment != null)
       body.short_comment = request.short_comment;
+    if (request.sms_summary != null)
+      body.sms_summary = request.sms_summary;
 
     const response = await fetch(`${baseUrl}/analyze/explain`, {
       method: "POST",
@@ -466,6 +468,41 @@ class SidecarApi {
   async grantConsent(): Promise<ConsentStatusResponse> {
     const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/consent`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async getRawApiKey(
+    provider: string,
+  ): Promise<{ provider: string; key: string }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/settings/raw-key/${provider}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async getOnboarding(): Promise<{ onboarding_completed: boolean }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/onboarding`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async completeOnboarding(): Promise<{ onboarding_completed: boolean }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/onboarding`, {
       method: "POST",
     });
     if (!response.ok) {

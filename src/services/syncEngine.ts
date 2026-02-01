@@ -7,6 +7,7 @@
 
 import { getSupabase, getSession } from "./supabase";
 import { sidecarApi } from "./sidecarApi";
+import { pullSharedConfig } from "./sharedConfig";
 
 type SyncTable = "settings" | "history" | "templates" | "letters" | "teaching_points";
 
@@ -77,6 +78,18 @@ export async function pullRemoteData(): Promise<void> {
       console.error(`Sync pull failed for ${table}:`, err);
     }
   }
+
+  // Pull shared config (admin-deployed API keys)
+  try {
+    const sharedConfig = await pullSharedConfig();
+    if (sharedConfig.claude_api_key) {
+      await sidecarApi.updateSettings({
+        claude_api_key: sharedConfig.claude_api_key,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to pull shared config:", err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -137,9 +150,8 @@ async function pushQueuedChanges(): Promise<void> {
   for (const item of batch) {
     try {
       if (item.operation === "upsert") {
-        const row = { ...item.data, user_id: userId };
-        // Strip local-only id
-        delete row.id;
+        const { id: _localId, ...rest } = item.data as Record<string, unknown>;
+        const row = { ...rest, user_id: userId };
 
         if (item.table === "settings") {
           const { error } = await supabase
@@ -228,8 +240,8 @@ export async function pushAllLocal(): Promise<void> {
           return true;
         })
         .map((row) => {
-          const cleaned = { ...row, user_id: userId };
-          delete cleaned.id;
+          const { id: _localId, ...rest } = row as Record<string, unknown>;
+          const cleaned: Record<string, unknown> = { ...rest, user_id: userId };
           // Coerce SQLite booleans
           if ("liked" in cleaned) cleaned.liked = Boolean(cleaned.liked);
           if ("copied" in cleaned) cleaned.copied = Boolean(cleaned.copied);

@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { getSession, signOut, onAuthStateChange } from "../../services/supabase";
 import { isSupabaseConfigured, fullSync } from "../../services/syncEngine";
+import { isAdmin } from "../../services/adminAuth";
 import "./Sidebar.css";
 
-const navItems = [
+const baseNavItems = [
   { path: "/", label: "Import" },
   { path: "/results", label: "Report Explanation" },
   { path: "/letters", label: "Letters" },
@@ -12,8 +13,14 @@ const navItems = [
   { path: "/teaching-points", label: "Teaching Points" },
   { path: "/templates", label: "Templates" },
   { path: "/settings", label: "Settings" },
-  { path: "/ai-model", label: "AI Model" },
 ];
+
+function getNavItems(userEmail: string | null) {
+  if (isAdmin(userEmail)) {
+    return [...baseNavItems, { path: "/admin", label: "Admin" }];
+  }
+  return baseNavItems;
+}
 
 interface UpdateInfo {
   version: string;
@@ -81,10 +88,13 @@ export function Sidebar() {
     }
   }, []);
 
+  const navItems = useMemo(() => getNavItems(userEmail), [userEmail]);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
         <h1 className="sidebar-title">Explify</h1>
+        <span className="sidebar-descriptor">Explain Better</span>
       </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
