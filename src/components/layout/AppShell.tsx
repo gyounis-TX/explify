@@ -5,8 +5,10 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { Sidebar } from "./Sidebar";
 import { useSidecar } from "../../hooks/useSidecar";
 import { sidecarApi } from "../../services/sidecarApi";
+import { getSession, onAuthStateChange } from "../../services/supabase";
 import { ConsentDialog } from "../shared/ConsentDialog";
 import { OnboardingWizard } from "../onboarding/OnboardingWizard";
+import { AuthScreen } from "../auth/AuthScreen";
 import "./AppShell.css";
 
 export function AppShell() {
@@ -21,6 +23,22 @@ export function AppShell() {
   const [updateAvailable, setUpdateAvailable] = useState<Update | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const prevPathRef = useRef(location.pathname);
+
+  // Auth gate state
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Check existing session and listen for auth changes
+  useEffect(() => {
+    getSession().then((session) => {
+      setIsAuthenticated(!!session);
+      setAuthChecked(true);
+    });
+    const unsubscribe = onAuthStateChange((session) => {
+      setIsAuthenticated(!!session);
+    });
+    return () => unsubscribe?.();
+  }, []);
 
   const checkSpecialty = useCallback(() => {
     if (!isReady || !consentGiven) return;
@@ -120,6 +138,12 @@ export function AppShell() {
           </div>
         ) : !consentGiven ? (
           <ConsentDialog onConsent={handleConsent} />
+        ) : !authChecked ? (
+          <div className="sidecar-loading">
+            <p>Loading...</p>
+          </div>
+        ) : !isAuthenticated ? (
+          <AuthScreen onAuthSuccess={() => setIsAuthenticated(true)} />
         ) : !onboardingChecked ? (
           <div className="sidecar-loading">
             <p>Loading...</p>
