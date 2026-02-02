@@ -31,11 +31,19 @@ pub fn run() {
                 .expect("Failed to get project root from CARGO_MANIFEST_DIR")
                 .to_path_buf();
 
-            let python_path = project_root
-                .join("sidecar")
-                .join(".venv")
-                .join("bin")
-                .join("python3");
+            let python_path = if cfg!(target_os = "windows") {
+                project_root
+                    .join("sidecar")
+                    .join(".venv")
+                    .join("Scripts")
+                    .join("python.exe")
+            } else {
+                project_root
+                    .join("sidecar")
+                    .join(".venv")
+                    .join("bin")
+                    .join("python3")
+            };
 
             let sidecar_dir = project_root.join("sidecar");
 
