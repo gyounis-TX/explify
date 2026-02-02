@@ -12,6 +12,7 @@ import type {
   TeachingPoint,
 } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
+import { logUsage } from "../../services/usageTracker";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
 import { GlossaryTooltip } from "./GlossaryTooltip";
@@ -341,6 +342,13 @@ export function ResultsScreen() {
         setLongExplanationResponse(response);
       }
       setCurrentResponse(response);
+      logUsage({
+        model_used: response.model_used,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+        request_type: "explain",
+        deep_analysis: deepAnalysis,
+      });
       showToast("success", "Explanation regenerated.");
     } catch {
       showToast("error", "Failed to regenerate explanation.");
@@ -374,6 +382,13 @@ export function ResultsScreen() {
         deep_analysis: deepAnalysis || undefined,
       });
       setCurrentResponse(response);
+      logUsage({
+        model_used: response.model_used,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+        request_type: "explain",
+        deep_analysis: deepAnalysis,
+      });
       setIsSpanish(translatingToSpanish);
       showToast("success", translatingToSpanish ? "Translated to Spanish." : "Translated to English.");
     } catch {
@@ -381,7 +396,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, isSpanish, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, isSpanish, explanationVoice, nameDrop, physicianOverride, sectionSettings, deepAnalysis, showToast]);
 
   const handleExportPdf = useCallback(async () => {
     if (!currentResponse) return;
@@ -488,6 +503,13 @@ export function ResultsScreen() {
         deep_analysis: deepAnalysis || undefined,
       });
       setShortCommentText(response.explanation.overall_summary);
+      logUsage({
+        model_used: response.model_used,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+        request_type: "explain",
+        deep_analysis: deepAnalysis,
+      });
     } catch {
       showToast("error", "Failed to generate short comment.");
     } finally {
@@ -519,6 +541,13 @@ export function ResultsScreen() {
         deep_analysis: deepAnalysis || undefined,
       });
       setLongExplanationResponse(response);
+      logUsage({
+        model_used: response.model_used,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+        request_type: "explain",
+        deep_analysis: deepAnalysis,
+      });
     } catch {
       showToast("error", "Failed to generate detailed explanation.");
     } finally {
@@ -549,6 +578,13 @@ export function ResultsScreen() {
         deep_analysis: deepAnalysis || undefined,
       });
       setSmsText(response.explanation.overall_summary);
+      logUsage({
+        model_used: response.model_used,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+        request_type: "explain",
+        deep_analysis: deepAnalysis,
+      });
     } catch {
       setSmsText("");
       showToast("error", "Failed to generate SMS summary.");

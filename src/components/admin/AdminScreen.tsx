@@ -1,10 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { deploySharedKey } from "../../services/sharedConfig";
+import {
+  fetchUsageSummary,
+  fetchAllUsers,
+  type UserUsageSummary,
+  type RegisteredUser,
+} from "../../services/adminUsageQueries";
 import { useToast } from "../shared/Toast";
 import type { AppSettings, LLMProvider } from "../../types/sidecar";
 import "../settings/SettingsScreen.css";
 import "./AdminScreen.css";
+
+type TimeRange = "7d" | "30d" | "all";
+
+function sinceDate(range: TimeRange): Date {
+  if (range === "all") return new Date("2000-01-01");
+  const d = new Date();
+  d.setDate(d.getDate() - (range === "7d" ? 7 : 30));
+  return d;
+}
 
 export function AdminScreen() {
   const { showToast } = useToast();
@@ -20,6 +35,13 @@ export function AdminScreen() {
   const [openaiKey, setOpenaiKey] = useState("");
   const [claudeModel, setClaudeModel] = useState("");
   const [openaiModel, setOpenaiModel] = useState("");
+
+  // Dashboard state
+  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [usageSummary, setUsageSummary] = useState<UserUsageSummary[]>([]);
+  const [allUsers, setAllUsers] = useState<RegisteredUser[]>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -40,6 +62,32 @@ export function AdminScreen() {
     }
     loadSettings();
   }, [showToast]);
+
+  // Load dashboard data
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDashboard() {
+      setDashboardLoading(true);
+      setDashboardError(null);
+      try {
+        const [users, usage] = await Promise.all([
+          fetchAllUsers(),
+          fetchUsageSummary(sinceDate(timeRange)),
+        ]);
+        if (cancelled) return;
+        setAllUsers(users);
+        setUsageSummary(usage);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : "Failed to load dashboard data";
+        setDashboardError(msg);
+      } finally {
+        if (!cancelled) setDashboardLoading(false);
+      }
+    }
+    loadDashboard();
+    return () => { cancelled = true; };
+  }, [timeRange]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -226,6 +274,133 @@ export function AdminScreen() {
             ? "Deploying..."
             : "Deploy Claude Key to All Users"}
         </button>
+      </section>
+
+      {/* Usage Dashboard */}
+      <section className="settings-section admin-dashboard-section">
+        <h3 className="settings-section-title">Usage Dashboard</h3>
+
+        <div className="dashboard-controls">
+          <label className="form-label" htmlFor="time-range">
+            Time Range
+          </label>
+          <select
+            id="time-range"
+            className="form-input"
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+
+        {dashboardLoading ? (
+          <p className="settings-description">Loading dashboard...</p>
+        ) : dashboardError ? (
+          <p className="save-error">{dashboardError}</p>
+        ) : (
+          <>
+            {/* Summary stat cards */}
+            <div className="stats-grid">
+              <div className="stat-card">
+                <span className="stat-label">Total Users</span>
+                <span className="stat-value">
+                  {allUsers.length.toLocaleString()}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Total Queries</span>
+                <span className="stat-value">
+                  {usageSummary
+                    .reduce((s, u) => s + u.total_queries, 0)
+                    .toLocaleString()}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Total Tokens</span>
+                <span className="stat-value">
+                  {usageSummary
+                    .reduce(
+                      (s, u) => s + u.total_input_tokens + u.total_output_tokens,
+                      0,
+                    )
+                    .toLocaleString()}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Deep Analysis</span>
+                <span className="stat-value">
+                  {usageSummary
+                    .reduce((s, u) => s + u.deep_analysis_count, 0)
+                    .toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Per-user table */}
+            <div className="usage-table-wrapper">
+              <table className="usage-table">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Signed Up</th>
+                    <th>Queries</th>
+                    <th>Sonnet Tokens</th>
+                    <th>Opus Tokens</th>
+                    <th>Deep Analysis</th>
+                    <th>Last Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allUsers.map((user) => {
+                    const usage = usageSummary.find(
+                      (u) => u.user_id === user.user_id,
+                    );
+                    return (
+                      <tr key={user.user_id}>
+                        <td>{user.email}</td>
+                        <td>
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        {usage ? (
+                          <>
+                            <td>{usage.total_queries.toLocaleString()}</td>
+                            <td>
+                              {(
+                                usage.sonnet_input_tokens +
+                                usage.sonnet_output_tokens
+                              ).toLocaleString()}
+                            </td>
+                            <td>
+                              {(
+                                usage.opus_input_tokens +
+                                usage.opus_output_tokens
+                              ).toLocaleString()}
+                            </td>
+                            <td>
+                              {usage.deep_analysis_count.toLocaleString()}
+                            </td>
+                            <td>
+                              {new Date(usage.last_active).toLocaleDateString()}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td colSpan={5} className="no-usage">
+                              No usage data
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

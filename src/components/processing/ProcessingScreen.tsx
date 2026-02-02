@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { sidecarApi } from "../../services/sidecarApi";
+import { logUsage } from "../../services/usageTracker";
 import { useToast } from "../shared/Toast";
 import type { ExtractionResult, ExplainResponse } from "../../types/sidecar";
 import "./ProcessingScreen.css";
@@ -128,6 +129,14 @@ export function ProcessingScreen() {
         clinical_context: clinicalContext,
         short_comment: true,
         deep_analysis: deepAnalysis || undefined,
+      });
+
+      logUsage({
+        model_used: response.model_used,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+        request_type: "explain",
+        deep_analysis: deepAnalysis,
       });
 
       // Save to history

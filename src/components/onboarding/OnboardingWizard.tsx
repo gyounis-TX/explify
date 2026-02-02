@@ -16,7 +16,7 @@ const steps = [
   },
   {
     title: "AI-Powered Explanations",
-    body: "Get plain-language explanations of medical reports powered by Claude or OpenAI. Patient-identifying information is scrubbed before being sent to the AI provider.",
+    body: "Get plain-language explanations of medical reports powered by Claude or OpenAI. Patient-identifying information is scrubbed before being sent to the AI provider. You can add clinical context when importing a report to refine the explanation for each patient.",
   },
   {
     title: "History, Templates & Letters",
@@ -24,7 +24,7 @@ const steps = [
   },
   {
     title: "Customize Your Settings",
-    body: "Set your specialty, preferred tone, detail level, and more in Settings. Your preferences are synced across devices when signed in.",
+    body: "Set your specialty, preferred tone, detail level, and more in Settings. You can also provide Teaching Points to instruct the AI how to analyze data in your own style. Your preferences are synced across devices when signed in.",
   },
 ];
 
