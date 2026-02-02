@@ -48,8 +48,7 @@ jobs:
           cd ..
           # Tauri expects the binary name with target triple suffix
           TRIPLE=$(rustc -vV | grep host | awk '{print $2}')
-          mv src-tauri/binaries/sidecar/sidecar "src-tauri/binaries/sidecar-${TRIPLE}"
-          rm -rf src-tauri/binaries/sidecar
+          mv src-tauri/binaries/sidecar "src-tauri/binaries/sidecar-${TRIPLE}"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -105,8 +104,7 @@ jobs:
           cd ..
           # Tauri expects the binary name with target triple suffix
           TRIPLE=$(rustc -vV | grep host | awk '{print $2}')
-          mv "src-tauri/binaries/sidecar/sidecar.exe" "src-tauri/binaries/sidecar-${TRIPLE}.exe"
-          rm -rf src-tauri/binaries/sidecar
+          mv "src-tauri/binaries/sidecar.exe" "src-tauri/binaries/sidecar-${TRIPLE}.exe"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

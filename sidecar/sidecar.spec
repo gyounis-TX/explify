@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the Explify sidecar."""
+"""PyInstaller spec for the Explify sidecar (onefile mode)."""
 
 import sys
 from pathlib import Path
@@ -88,26 +88,19 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Single-file executable — everything bundled into one binary.
+# Tauri externalBin expects a single file, not a directory.
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='sidecar',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=True,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='sidecar',
 )

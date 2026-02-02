@@ -18,6 +18,8 @@ src-tauri/target/
 # Python sidecar
 sidecar/__pycache__/
 sidecar/.venv/
+sidecar/build/
+sidecar/dist/
 *.pyc
 
 # Editor directories and files
