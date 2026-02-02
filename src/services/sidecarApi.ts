@@ -252,6 +252,8 @@ class SidecarApi {
       body.short_comment = request.short_comment;
     if (request.sms_summary != null)
       body.sms_summary = request.sms_summary;
+    if (request.deep_analysis != null)
+      body.deep_analysis = request.deep_analysis;
 
     const response = await fetch(`${baseUrl}/analyze/explain`, {
       method: "POST",

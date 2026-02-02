@@ -15,6 +15,8 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+CLAUDE_DEEP_MODEL = "claude-opus-4-20250514"
+
 
 class LLMProvider(str, Enum):
     CLAUDE = "claude"

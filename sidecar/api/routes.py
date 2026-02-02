@@ -447,6 +447,9 @@ async def explain_report(request: ExplainRequest = Body(...)):
         if provider_str == "claude"
         else settings.openai_model
     )
+    if request.deep_analysis and provider_str == "claude":
+        from llm.client import CLAUDE_DEEP_MODEL
+        model_override = CLAUDE_DEEP_MODEL
     client = LLMClient(
         provider=llm_provider,
         api_key=api_key,
@@ -454,7 +457,9 @@ async def explain_report(request: ExplainRequest = Body(...)):
     )
 
     # SMS/short comments need far fewer output tokens
-    if is_sms:
+    if request.deep_analysis:
+        max_tokens = 8192
+    elif is_sms:
         max_tokens = 512
     elif request.short_comment:
         max_tokens = 1024

@@ -60,6 +60,11 @@ export type SeverityStatus =
 
 export type AbnormalityDirection = "normal" | "above_normal" | "below_normal";
 
+export interface PriorValue {
+  value: number;
+  time_label: string;
+}
+
 export interface ParsedMeasurement {
   name: string;
   abbreviation: string;
@@ -68,6 +73,7 @@ export interface ParsedMeasurement {
   status: SeverityStatus;
   direction: AbnormalityDirection;
   reference_range: string | null;
+  prior_values: PriorValue[];
   raw_text: string;
   page_number: number | null;
 }
@@ -148,6 +154,7 @@ export interface ExplainRequest {
   detail_preference?: number;
   next_steps?: string[];
   short_comment?: boolean;
+  sms_summary?: boolean;
   explanation_voice?: ExplanationVoice;
   name_drop?: boolean;
   physician_name_override?: string;
@@ -155,6 +162,7 @@ export interface ExplainRequest {
   include_measurements?: boolean;
   patient_age?: number;
   patient_gender?: string;
+  deep_analysis?: boolean;
 }
 
 export interface ExplainResponse {
@@ -194,6 +202,8 @@ export interface AppSettings {
   custom_physician_name: string | null;
   practice_providers: string[];
   short_comment_char_limit: number | null;
+  sms_summary_enabled: boolean;
+  sms_summary_char_limit: number;
   footer_type: FooterType;
   custom_footer_text: string | null;
 }
@@ -219,6 +229,8 @@ export interface SettingsUpdate {
   custom_physician_name?: string;
   practice_providers?: string[];
   short_comment_char_limit?: number | null;
+  sms_summary_enabled?: boolean;
+  sms_summary_char_limit?: number;
   footer_type?: FooterType;
   custom_footer_text?: string | null;
 }

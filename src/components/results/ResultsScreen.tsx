@@ -173,13 +173,21 @@ export function ResultsScreen() {
   const [isSpanish, setIsSpanish] = useState(false);
 
   // Comment panel state — default to short since that's what we generate first
-  const [commentMode, setCommentMode] = useState<"long" | "short">("short");
+  const [commentMode, setCommentMode] = useState<"long" | "short" | "sms">("short");
   const [shortCommentText, setShortCommentText] = useState<string | null>(
     initialResponse?.explanation?.overall_summary ?? null,
   );
   const [longExplanationResponse, setLongExplanationResponse] = useState<ExplainResponse | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   const [isGeneratingLong, setIsGeneratingLong] = useState(false);
+
+  // SMS summary state
+  const [smsText, setSmsText] = useState<string | null>(null);
+  const [isGeneratingSms, setIsGeneratingSms] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+
+  // Deep analysis state
+  const [deepAnalysis, setDeepAnalysis] = useState(false);
 
   // Physician voice & attribution state
   const [explanationVoice, setExplanationVoice] = useState<ExplanationVoice>("third_person");
@@ -206,6 +214,12 @@ export function ResultsScreen() {
     { finding: string; explanation: string }[]
   >([]);
   const [isDirty, setIsDirty] = useState(false);
+
+  // Settings loaded flag — gate footer rendering until we have real values
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Extracted text state
+  const [showExtractedText, setShowExtractedText] = useState(false);
 
   // Teaching points state
   const [teachingPoints, setTeachingPoints] = useState<TeachingPoint[]>([]);
@@ -264,8 +278,18 @@ export function ResultsScreen() {
         setExplanationVoice(s.explanation_voice ?? "third_person");
         setNameDrop(s.name_drop ?? true);
         setPracticeProviders(s.practice_providers ?? []);
+        setSmsEnabled(s.sms_summary_enabled ?? false);
+        const src = s.physician_name_source ?? "auto_extract";
+        if (src === "custom" && s.custom_physician_name) {
+          setPhysicianOverride(s.custom_physician_name);
+        } else if (src === "generic") {
+          setPhysicianOverride("");
+        }
+        setSettingsLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setSettingsLoaded(true);
+      });
   }, []);
 
   // Persist state to sessionStorage so it survives Settings round-trips
@@ -288,6 +312,7 @@ export function ResultsScreen() {
     if (!extractionResult) return;
     setIsRegenerating(true);
     const isShort = commentMode === "short";
+    const isSms = commentMode === "sms";
     try {
       const response = await sidecarApi.explainReport({
         extraction_result: extractionResult,
@@ -299,14 +324,18 @@ export function ResultsScreen() {
         detail_preference: detailSlider,
         next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
         short_comment: isShort,
+        sms_summary: isSms,
         explanation_voice: explanationVoice,
         name_drop: nameDrop,
         physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
-        include_key_findings: sectionSettings.include_key_findings,
-        include_measurements: sectionSettings.include_measurements,
+        include_key_findings: (isShort || isSms) ? true : sectionSettings.include_key_findings,
+        include_measurements: (isShort || isSms) ? true : sectionSettings.include_measurements,
         refinement_instruction: refinementInstruction.trim() || undefined,
+        deep_analysis: deepAnalysis || undefined,
       });
-      if (isShort) {
+      if (isSms) {
+        setSmsText(response.explanation.overall_summary);
+      } else if (isShort) {
         setShortCommentText(response.explanation.overall_summary);
       } else {
         setLongExplanationResponse(response);
@@ -318,7 +347,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, commentMode, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, deepAnalysis, showToast]);
 
   const handleTranslateToggle = useCallback(async () => {
     if (!extractionResult) return;
@@ -342,6 +371,7 @@ export function ResultsScreen() {
         refinement_instruction: translatingToSpanish
           ? "Translate the entire explanation into Spanish. Keep all medical values and units in their original form. Use simple, patient-friendly Spanish."
           : undefined,
+        deep_analysis: deepAnalysis || undefined,
       });
       setCurrentResponse(response);
       setIsSpanish(translatingToSpanish);
@@ -375,6 +405,7 @@ export function ResultsScreen() {
   }, [currentResponse, showToast]);
 
   const computedFooter = (() => {
+    if (!settingsLoaded) return "";
     switch (sectionSettings.footer_type) {
       case "explify_branding":
         return sectionSettings.practice_name
@@ -388,52 +419,6 @@ export function ResultsScreen() {
         return "";
     }
   })();
-
-  const handleCopy = useCallback(async () => {
-    if (!currentResponse) return;
-    const physician = physicianOverride ?? currentResponse.physician_name;
-    const expl = currentResponse.explanation;
-    const summary = replacePhysician(
-      isDirty ? editedSummary : expl.overall_summary,
-      physician,
-    );
-    const findings = (isDirty ? editedFindings : expl.key_findings).map((f) => ({
-      finding: f.finding,
-      explanation: replacePhysician(f.explanation, physician),
-    }));
-    const text = buildCopyText(
-      summary,
-      findings,
-      expl.measurements,
-      computedFooter,
-      sectionSettings.include_key_findings,
-      sectionSettings.include_measurements,
-      [...checkedNextSteps],
-    );
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast("success", "Copied to clipboard.");
-      // Fire-and-forget: record copy as lightweight positive signal
-      if (historyId) {
-        sidecarApi.markHistoryCopied(historyId).then(() => {
-          queueUpsertAfterMutation("history", historyId).catch(() => {});
-        }).catch(() => {});
-      }
-    } catch {
-      showToast("error", "Failed to copy to clipboard.");
-    }
-  }, [
-    currentResponse,
-    physicianOverride,
-    historyId,
-    isDirty,
-    editedSummary,
-    editedFindings,
-    computedFooter,
-    sectionSettings,
-    checkedNextSteps,
-    showToast,
-  ]);
 
   const handleToggleLike = useCallback(async () => {
     if (!currentResponse) return;
@@ -498,8 +483,9 @@ export function ResultsScreen() {
         explanation_voice: explanationVoice,
         name_drop: nameDrop,
         physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
-        include_key_findings: sectionSettings.include_key_findings,
-        include_measurements: sectionSettings.include_measurements,
+        include_key_findings: true,
+        include_measurements: true,
+        deep_analysis: deepAnalysis || undefined,
       });
       setShortCommentText(response.explanation.overall_summary);
     } catch {
@@ -530,6 +516,7 @@ export function ResultsScreen() {
         include_key_findings: sectionSettings.include_key_findings,
         include_measurements: sectionSettings.include_measurements,
         refinement_instruction: refinementInstruction.trim() || undefined,
+        deep_analysis: deepAnalysis || undefined,
       });
       setLongExplanationResponse(response);
     } catch {
@@ -538,6 +525,37 @@ export function ResultsScreen() {
       setIsGeneratingLong(false);
     }
   }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, showToast]);
+
+  // Generate SMS summary on demand
+  const generateSmsText = useCallback(async () => {
+    if (!extractionResult || !currentResponse) return;
+    setIsGeneratingSms(true);
+    try {
+      const response = await sidecarApi.explainReport({
+        extraction_result: extractionResult,
+        test_type: currentResponse.parsed_report.test_type,
+        literacy_level: selectedLiteracy,
+        template_id: templateId,
+        clinical_context: clinicalContext,
+        tone_preference: toneSlider,
+        detail_preference: detailSlider,
+        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+        sms_summary: true,
+        explanation_voice: explanationVoice,
+        name_drop: nameDrop,
+        physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
+        include_key_findings: true,
+        include_measurements: true,
+        deep_analysis: deepAnalysis || undefined,
+      });
+      setSmsText(response.explanation.overall_summary);
+    } catch {
+      setSmsText("");
+      showToast("error", "Failed to generate SMS summary.");
+    } finally {
+      setIsGeneratingSms(false);
+    }
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, showToast]);
 
   // Generate on-demand when user switches tabs and content isn't cached
   useEffect(() => {
@@ -552,9 +570,17 @@ export function ResultsScreen() {
     }
   }, [commentMode, longExplanationResponse, extractionResult, currentResponse, isGeneratingLong, generateLongExplanation]);
 
+  useEffect(() => {
+    if (commentMode === "sms" && smsText === null && extractionResult && currentResponse && !isGeneratingSms) {
+      generateSmsText();
+    }
+  }, [commentMode, smsText, extractionResult, currentResponse, isGeneratingSms, generateSmsText]);
 
   // Compute preview text for comment panel
   const commentPreviewText = (() => {
+    if (commentMode === "sms") {
+      return smsText ?? "";
+    }
     if (commentMode === "short") {
       const base = shortCommentText ?? "";
       if (computedFooter) {
@@ -614,9 +640,7 @@ export function ResultsScreen() {
   }
 
   const { explanation, parsed_report } = currentResponse;
-  const rawSummary = isDirty ? editedSummary : explanation.overall_summary;
   const activePhysician = physicianOverride ?? currentResponse?.physician_name;
-  const displaySummary = replacePhysician(rawSummary, activePhysician);
   const rawFindings = isDirty
     ? editedFindings.map((f, i) => ({
         ...(explanation.key_findings[i] ?? { severity: "informational" }),
@@ -692,6 +716,14 @@ export function ResultsScreen() {
           >
             Long Comment
           </button>
+          {smsEnabled && (
+            <button
+              className={`comment-type-btn${commentMode === "sms" ? " comment-type-btn--active" : ""}`}
+              onClick={() => setCommentMode("sms")}
+            >
+              SMS
+            </button>
+          )}
         </div>
         {isEditing && (
           <textarea
@@ -704,9 +736,9 @@ export function ResultsScreen() {
             rows={6}
           />
         )}
-        {(isGeneratingComment && commentMode === "short") || (isGeneratingLong && commentMode === "long") ? (
+        {(isGeneratingComment && commentMode === "short") || (isGeneratingLong && commentMode === "long") || (isGeneratingSms && commentMode === "sms") ? (
           <div className="comment-generating">
-            {commentMode === "short" ? "Generating short comment..." : "Generating detailed explanation..."}
+            {commentMode === "sms" ? "Generating SMS summary..." : commentMode === "short" ? "Generating short comment..." : "Generating detailed explanation..."}
           </div>
         ) : (
           <div className="comment-preview">{commentPreviewText}</div>
@@ -989,7 +1021,7 @@ export function ResultsScreen() {
       <div className="results-right-column">
       {/* Refine Panel */}
         <div className="results-refine-panel">
-          <h3>Refine</h3>
+          <h3>Refine Context</h3>
           <textarea
             className="refine-textarea"
             placeholder="e.g., Emphasize the elevated LDL given patient's cardiac history"
@@ -1059,33 +1091,48 @@ export function ResultsScreen() {
             </div>
           </div>
 
+          <div className="deep-analysis-setting">
+            <label className="quick-toggle">
+              <input
+                type="checkbox"
+                checked={deepAnalysis}
+                onChange={(e) => setDeepAnalysis(e.target.checked)}
+              />
+              <span>Deep Analysis</span>
+            </label>
+            <span className="deep-analysis-subtext">For complex cases only</span>
+          </div>
+
           <div className="quick-toggles">
-            <label className="quick-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.include_key_findings}
-                onChange={(e) =>
-                  setSectionSettings((prev) => ({
-                    ...prev,
-                    include_key_findings: e.target.checked,
-                  }))
-                }
-              />
-              <span>Include Key Findings</span>
-            </label>
-            <label className="quick-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.include_measurements}
-                onChange={(e) =>
-                  setSectionSettings((prev) => ({
-                    ...prev,
-                    include_measurements: e.target.checked,
-                  }))
-                }
-              />
-              <span>Include Measurements</span>
-            </label>
+            <span className="quick-actions-label">Long comment settings:</span>
+            <div className="quick-toggles-row">
+              <label className="quick-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.include_key_findings}
+                  onChange={(e) =>
+                    setSectionSettings((prev) => ({
+                      ...prev,
+                      include_key_findings: e.target.checked,
+                    }))
+                  }
+                />
+                <span>Include Key Findings</span>
+              </label>
+              <label className="quick-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.include_measurements}
+                  onChange={(e) =>
+                    setSectionSettings((prev) => ({
+                      ...prev,
+                      include_measurements: e.target.checked,
+                    }))
+                  }
+                />
+                <span>Include Measurements</span>
+              </label>
+            </div>
           </div>
 
           {/* Voice */}
@@ -1202,6 +1249,22 @@ export function ResultsScreen() {
               {isSpanish ? "Translate to English" : "Translate to Spanish"}
             </button>
           </div>
+
+          {extractionResult?.full_text && (
+            <div className="extracted-text-section">
+              <button
+                className="extracted-text-toggle"
+                onClick={() => setShowExtractedText((prev) => !prev)}
+              >
+                {showExtractedText ? "Hide Extracted Text" : "View Extracted Text"}
+              </button>
+              {showExtractedText && (
+                <div className="extracted-text-container">
+                  <pre className="extracted-text">{extractionResult.full_text}</pre>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       )}

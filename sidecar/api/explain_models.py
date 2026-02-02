@@ -59,11 +59,15 @@ class ExplainRequest(BaseModel):
     detail_preference: Optional[int] = Field(default=None, ge=1, le=5)
     next_steps: Optional[list[str]] = None
     short_comment: Optional[bool] = None
+    sms_summary: Optional[bool] = None
     explanation_voice: Optional[ExplanationVoiceEnum] = None
     name_drop: Optional[bool] = None
     physician_name_override: Optional[str] = None
     include_key_findings: Optional[bool] = None
     include_measurements: Optional[bool] = None
+    patient_age: Optional[int] = None
+    patient_gender: Optional[str] = None
+    deep_analysis: Optional[bool] = None
 
 
 # --- Response sub-models ---
@@ -138,6 +142,8 @@ class AppSettings(BaseModel):
     custom_physician_name: Optional[str] = None
     practice_providers: list[str] = Field(default_factory=list)
     short_comment_char_limit: Optional[int] = Field(default=1000, ge=500, le=4000)
+    sms_summary_enabled: bool = False
+    sms_summary_char_limit: int = Field(default=300, ge=100, le=500)
     footer_type: FooterTypeEnum = FooterTypeEnum.EXPLIFY_BRANDING
     custom_footer_text: Optional[str] = None
 
@@ -165,5 +171,7 @@ class SettingsUpdate(BaseModel):
     custom_physician_name: Optional[str] = None
     practice_providers: Optional[list[str]] = None
     short_comment_char_limit: Optional[int] = Field(default=None, ge=500, le=4000)
+    sms_summary_enabled: Optional[bool] = None
+    sms_summary_char_limit: Optional[int] = Field(default=None, ge=100, le=500)
     footer_type: Optional[FooterTypeEnum] = None
     custom_footer_text: Optional[str] = None

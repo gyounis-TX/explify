@@ -110,6 +110,7 @@ export function ProcessingScreen() {
   const [currentStep, setCurrentStep] =
     useState<ProcessingStep>("detecting");
   const [error, setError] = useState<CategorizedError | null>(null);
+  const [deepAnalysis, setDeepAnalysis] = useState(false);
 
   const runPipeline = useCallback(async () => {
     if (!extractionResult) {
@@ -119,26 +120,14 @@ export function ProcessingScreen() {
     }
 
     try {
-      // Step 1: Detect test type
-      setCurrentStep("detecting");
-      const detectResult =
-        await sidecarApi.detectTestType(extractionResult);
-      if (!detectResult.test_type) {
-        throw new Error("Could not determine the report type.");
-      }
-      const testType = detectResult.test_type;
-
-      // Step 2: Parse report (for progress display)
-      setCurrentStep("parsing");
-      await sidecarApi.parseReport(extractionResult, testType);
-
-      // Step 3: Call LLM explain
+      // Single step: the explain endpoint handles detect + parse + LLM internally
       setCurrentStep("explaining");
       const response: ExplainResponse = await sidecarApi.explainReport({
         extraction_result: extractionResult,
-        test_type: testType,
         template_id: templateId,
         clinical_context: clinicalContext,
+        short_comment: true,
+        deep_analysis: deepAnalysis || undefined,
       });
 
       // Save to history
@@ -154,24 +143,22 @@ export function ProcessingScreen() {
           showToast("error", "Analysis complete but failed to save to history.");
         });
 
-      // Done - navigate to results
+      // Done - navigate to results immediately
       setCurrentStep("done");
-      setTimeout(() => {
-        navigate("/results", {
-          state: {
-            explainResponse: response,
-            extractionResult,
-            templateId,
-            clinicalContext,
-          },
-        });
-      }, 600);
+      navigate("/results", {
+        state: {
+          explainResponse: response,
+          extractionResult,
+          templateId,
+          clinicalContext,
+        },
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Processing failed.";
       setError(categorizeError(msg));
       setCurrentStep("error");
     }
-  }, [extractionResult, templateId, clinicalContext, navigate, showToast]);
+  }, [extractionResult, templateId, clinicalContext, deepAnalysis, navigate, showToast]);
 
   useEffect(() => {
     runPipeline();
@@ -183,6 +170,15 @@ export function ProcessingScreen() {
     <div className="processing-screen">
       <header className="processing-header">
         <h2 className="processing-title">Analyzing Report</h2>
+        <label className="deep-analysis-toggle">
+          <input
+            type="checkbox"
+            checked={deepAnalysis}
+            onChange={(e) => setDeepAnalysis(e.target.checked)}
+          />
+          <span className="deep-analysis-label">Deep Analysis</span>
+          <span className="deep-analysis-subtext">For complex cases only</span>
+        </label>
       </header>
 
       <div className="processing-steps">
