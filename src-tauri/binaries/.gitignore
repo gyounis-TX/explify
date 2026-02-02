@@ -1,0 +1,4 @@
+# Ignore CI-built PyInstaller binaries (they are platform-specific)
+# Keep the dev-mode wrapper scripts
+sidecar-x86_64-*
+sidecar-i686-*

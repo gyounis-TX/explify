@@ -38,11 +38,18 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies and build sidecar
         run: |
           cd sidecar
           python -m venv .venv
           .venv/bin/pip install -r requirements.txt
+          .venv/bin/pip install pyinstaller
+          .venv/bin/pyinstaller sidecar.spec --distpath ../src-tauri/binaries
+          cd ..
+          # Tauri expects the binary name with target triple suffix
+          TRIPLE=$(rustc -vV | grep host | awk '{print $2}')
+          mv src-tauri/binaries/sidecar/sidecar "src-tauri/binaries/sidecar-${TRIPLE}"
+          rm -rf src-tauri/binaries/sidecar
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -87,11 +94,19 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies and build sidecar
+        shell: bash
         run: |
           cd sidecar
           python -m venv .venv
-          .venv\Scripts\pip install -r requirements.txt
+          .venv/Scripts/pip install -r requirements.txt
+          .venv/Scripts/pip install pyinstaller
+          .venv/Scripts/pyinstaller sidecar.spec --distpath ../src-tauri/binaries
+          cd ..
+          # Tauri expects the binary name with target triple suffix
+          TRIPLE=$(rustc -vV | grep host | awk '{print $2}')
+          mv "src-tauri/binaries/sidecar/sidecar.exe" "src-tauri/binaries/sidecar-${TRIPLE}.exe"
+          rm -rf src-tauri/binaries/sidecar
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

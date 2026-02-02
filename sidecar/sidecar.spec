@@ -1,0 +1,113 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller spec for the Explify sidecar."""
+
+import sys
+from pathlib import Path
+
+block_cipher = None
+
+sidecar_dir = Path(SPECPATH)
+
+a = Analysis(
+    ['main.py'],
+    pathex=[str(sidecar_dir)],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'uvicorn.logging',
+        'uvicorn.loops',
+        'uvicorn.loops.auto',
+        'uvicorn.protocols',
+        'uvicorn.protocols.http',
+        'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.websockets',
+        'uvicorn.protocols.websockets.auto',
+        'uvicorn.lifespan',
+        'uvicorn.lifespan.on',
+        'multipart',
+        'multipart.multipart',
+        'pdfplumber',
+        'fitz',
+        'pymupdf4llm',
+        'pytesseract',
+        'pdf2image',
+        'PIL',
+        'numpy',
+        'anthropic',
+        'openai',
+        'weasyprint',
+        'jinja2',
+        'keyring',
+        'keyring.backends',
+        'platformdirs',
+        'api',
+        'api.routes',
+        'api.middleware',
+        'api.models',
+        'api.analysis_models',
+        'extraction',
+        'llm',
+        'phi',
+        'report_gen',
+        'server',
+        'storage',
+        'test_types',
+        'test_types.registry',
+        'test_types.base',
+        'test_types.echo',
+        'test_types.labs',
+        'test_types.stress',
+        'test_types.carotid',
+        'test_types.arterial',
+        'test_types.venous',
+        'test_types.echo.handler',
+        'test_types.labs.handler',
+        'test_types.stress.handler',
+        'test_types.carotid.handler',
+        'test_types.carotid.measurements',
+        'test_types.carotid.reference_ranges',
+        'test_types.carotid.glossary',
+        'test_types.arterial.handler',
+        'test_types.arterial.measurements',
+        'test_types.arterial.reference_ranges',
+        'test_types.arterial.glossary',
+        'test_types.venous.handler',
+        'test_types.venous.measurements',
+        'test_types.venous.reference_ranges',
+        'test_types.venous.glossary',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='sidecar',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='sidecar',
+)
