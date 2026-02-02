@@ -20,6 +20,11 @@ class AbnormalityDirection(str, Enum):
     BELOW_NORMAL = "below_normal"
 
 
+class PriorValue(BaseModel):
+    value: float
+    time_label: str
+
+
 class ParsedMeasurement(BaseModel):
     name: str
     abbreviation: str
@@ -28,6 +33,7 @@ class ParsedMeasurement(BaseModel):
     status: SeverityStatus = SeverityStatus.UNDETERMINED
     direction: AbnormalityDirection = AbnormalityDirection.NORMAL
     reference_range: Optional[str] = None
+    prior_values: list[PriorValue] = Field(default_factory=list)
     raw_text: str = ""
     page_number: Optional[int] = None
 

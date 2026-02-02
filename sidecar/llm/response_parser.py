@@ -111,15 +111,9 @@ def parse_and_validate_response(
             )
         )
 
-    # 5. Warn about missing measurements
-    explained_abbrevs = {m.abbreviation for m in result.measurements}
-    for abbr in expected:
-        if abbr not in explained_abbrevs:
-            issues.append(
-                ValidationIssue(
-                    severity="warning",
-                    message=f"Measurement '{abbr}' was not explained by LLM.",
-                )
-            )
+    # 5. Missing measurements — not a warning. The LLM is instructed to
+    #    synthesize and interpret, not to produce a 1:1 listing of every
+    #    measurement. Normal/unremarkable values are typically grouped or
+    #    omitted in clinical communication, which is the correct behavior.
 
     return result, issues

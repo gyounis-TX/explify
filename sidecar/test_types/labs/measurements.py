@@ -19,6 +19,12 @@ from api.models import ExtractedTable, PageExtractionResult
 
 
 @dataclass
+class PriorValueRaw:
+    value: float
+    time_label: str
+
+
+@dataclass
 class RawMeasurement:
     name: str
     abbreviation: str
@@ -26,6 +32,7 @@ class RawMeasurement:
     unit: str
     raw_text: str
     page_number: Optional[int] = None
+    prior_values: list[PriorValueRaw] = field(default_factory=list)
 
 
 @dataclass
@@ -410,9 +417,11 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         abbreviation="LDL",
         unit="mg/dL",
         table_aliases=["ldl", "ldl cholesterol", "ldl-c", "ldl chol",
-                        "ldl calculated", "ldl calc"],
+                        "ldl calculated", "ldl calc",
+                        "ldl cholesterol calculated", "direct ldl",
+                        "ldl direct", "ldl cholesterol direct"],
         patterns=[
-            rf"(?i)LDL(?:\s+cholesterol|\s+chol\.?|-C|\s+calc(?:ulated)?)?{_SEP}{_NUM}\s*(?:mg\/dL)?",
+            rf"(?i)(?:direct\s+)?LDL(?:\s+cholesterol)?(?:\s+(?:calc(?:ulated)?|direct))?(?:\s+chol\.?|-C)?{_SEP}{_NUM}\s*(?:mg\/dL)?",
         ],
         value_min=10.0,
         value_max=400.0,
@@ -661,6 +670,34 @@ def _find_result_column(headers: list[str]) -> Optional[int]:
     return None
 
 
+# Patterns that identify a column header as a prior/historical value
+_TEMPORAL_HEADER_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"(?i)\d+\s*mo(?:nth)?s?\s*ago"),
+    re.compile(r"(?i)\d+\s*yr?s?\s*ago"),
+    re.compile(r"(?i)\d+\s*(?:week|wk)s?\s*ago"),
+    re.compile(r"(?i)\d+\s*days?\s*ago"),
+    re.compile(r"(?i)\bprevious\b"),
+    re.compile(r"(?i)\bprior\b"),
+    re.compile(r"(?i)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"),  # date formats
+    re.compile(r"(?i)(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}"),
+]
+
+
+def _find_prior_columns(headers: list[str]) -> list[tuple[int, str]]:
+    """Identify columns that contain prior/historical values.
+
+    Returns a list of (column_index, time_label) tuples.
+    """
+    prior_cols: list[tuple[int, str]] = []
+    for i, h in enumerate(headers):
+        hl = h.strip()
+        for pat in _TEMPORAL_HEADER_PATTERNS:
+            if pat.search(hl):
+                prior_cols.append((i, hl))
+                break
+    return prior_cols
+
+
 def _match_row_to_analyte(row_name: str) -> Optional[MeasurementDef]:
     """Match a table row name to a known analyte definition."""
     normalized = row_name.lower().strip().rstrip(":")
@@ -697,6 +734,8 @@ def _extract_from_tables(
             continue
 
         result_col = _find_result_column(table.headers)
+        prior_cols = _find_prior_columns(table.headers)
+        prior_col_indices = {idx for idx, _ in prior_cols}
 
         for row in table.rows:
             if not row:
@@ -713,13 +752,23 @@ def _extract_from_tables(
             if result_col is not None and result_col < len(row):
                 value = _extract_numeric(row[result_col])
             if value is None:
-                # Scan non-name columns for a numeric value
+                # Scan non-name, non-prior columns for a numeric value
                 for i in range(1, len(row)):
+                    if i in prior_col_indices:
+                        continue
                     value = _extract_numeric(row[i])
                     if value is not None:
                         break
 
             if value is not None and mdef.value_min <= value <= mdef.value_max:
+                # Extract prior values from temporal columns
+                priors: list[PriorValueRaw] = []
+                for col_idx, time_label in prior_cols:
+                    if col_idx < len(row):
+                        prior_val = _extract_numeric(row[col_idx])
+                        if prior_val is not None and mdef.value_min <= prior_val <= mdef.value_max:
+                            priors.append(PriorValueRaw(value=prior_val, time_label=time_label))
+
                 results.append(
                     RawMeasurement(
                         name=mdef.name,
@@ -728,6 +777,7 @@ def _extract_from_tables(
                         unit=mdef.unit,
                         raw_text=raw_text.strip(),
                         page_number=table.page_number,
+                        prior_values=priors,
                     )
                 )
                 seen.add(mdef.abbreviation)

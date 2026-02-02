@@ -4,13 +4,39 @@ from __future__ import annotations
 
 import re
 
-_PHYSICIAN_PATTERN = re.compile(
-    r"(?:Referred\s+by|Referring\s+Physician|Ordering\s+Physician|Ordered\s+by"
-    r"|Referring\s+Provider|Attending\s+Physician|Requesting\s+Physician"
-    r"|Primary\s+Care\s+Physician|Clinician)"
-    r"\s*[:\-]?\s*"
-    r"(?:Dr\.?\s*)?"
-    r"([A-Za-z][A-Za-z\s.\-']+)",
+# Labels that indicate the patient's referring/ordering physician.
+# Ordered by priority — "Referred by" is the strongest signal.
+_REFERRING_LABELS = (
+    r"Referred\s+by",
+    r"Referring\s+Physician",
+    r"Referring\s+Provider",
+    r"Ordering\s+Physician",
+    r"Ordered\s+by",
+    r"Requesting\s+Physician",
+    r"Primary\s+Care\s+Physician",
+)
+
+_SECONDARY_LABELS = (
+    r"Attending\s+Physician",
+    r"Clinician",
+)
+
+# Same-line pattern: label and name on one line.
+# [^\S\n] = whitespace excluding newline, so the capture stays on one line.
+_SAMELINE_RE = re.compile(
+    r"(?:{labels})"
+    r"[^\S\n]*[:\-]?[^\S\n]*"
+    r"(?:Dr\.?[^\S\n]*)?"
+    r"([A-Za-z][A-Za-z \t.\-']+)",
+    re.IGNORECASE,
+)
+
+# Next-line pattern: label on one line, name on the very next non-blank line.
+_NEXTLINE_RE = re.compile(
+    r"(?:{labels})"
+    r"[^\S\n]*[:\-]?[^\S\n]*\n[^\S\n]*"
+    r"(?:Dr\.?[^\S\n]*)?"
+    r"([A-Za-z][A-Za-z \t.\-']+)",
     re.IGNORECASE,
 )
 
@@ -27,16 +53,15 @@ _BOUNDARY_PATTERN = re.compile(
 )
 
 
-def extract_physician_name(text: str | None) -> str | None:
-    """Extract physician name from report text and return 'Dr. LastName' or None."""
-    if not text:
-        return None
+def _build_pattern(template: re.Pattern[str], labels: tuple[str, ...]) -> re.Pattern[str]:
+    """Compile *template* with the given label alternatives."""
+    joined = "|".join(labels)
+    return re.compile(template.pattern.format(labels=joined), template.flags)
 
-    match = _PHYSICIAN_PATTERN.search(text)
-    if not match:
-        return None
 
-    raw_name = match.group(1).strip()
+def _clean_match(raw_name: str) -> str | None:
+    """Validate and clean a captured name, returning 'Dr. LastName' or None."""
+    raw_name = raw_name.strip()
 
     # Truncate at boundary words (e.g. "Younis age 45" → "Younis")
     boundary = _BOUNDARY_PATTERN.search(raw_name)
@@ -62,3 +87,28 @@ def extract_physician_name(text: str | None) -> str | None:
     last_name = "-".join(part.capitalize() for part in last_name.split("-"))
 
     return f"Dr. {last_name}"
+
+
+def _try_patterns(text: str, labels: tuple[str, ...]) -> str | None:
+    """Try same-line then next-line patterns for the given labels."""
+    for template in (_SAMELINE_RE, _NEXTLINE_RE):
+        pattern = _build_pattern(template, labels)
+        for match in pattern.finditer(text):
+            result = _clean_match(match.group(1))
+            if result:
+                return result
+    return None
+
+
+def extract_physician_name(text: str | None) -> str | None:
+    """Extract physician name from report text and return 'Dr. LastName' or None."""
+    if not text:
+        return None
+
+    # First try referring/ordering labels (highest priority)
+    result = _try_patterns(text, _REFERRING_LABELS)
+    if result:
+        return result
+
+    # Fall back to secondary labels
+    return _try_patterns(text, _SECONDARY_LABELS)

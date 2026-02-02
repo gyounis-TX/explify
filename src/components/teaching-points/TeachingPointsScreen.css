@@ -214,3 +214,122 @@
   border-color: #fca5a5;
   color: #dc2626;
 }
+
+/* Edit button */
+.tp-card-edit-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-600);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tp-card-edit-btn:hover {
+  background-color: var(--color-primary-50);
+  border-color: var(--color-primary-200);
+}
+
+/* Edit form inside card */
+.tp-card-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.tp-edit-textarea {
+  width: 100%;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-primary-400);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.tp-edit-textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.tp-edit-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tp-edit-scope-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.tp-edit-scope-btn {
+  padding: 3px 10px;
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tp-edit-scope-btn:hover {
+  background-color: var(--color-gray-50);
+}
+
+.tp-edit-scope-btn--active {
+  background-color: var(--color-primary-50);
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-600);
+  font-weight: 500;
+}
+
+.tp-edit-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.tp-edit-save {
+  padding: 4px 14px;
+  background-color: var(--color-primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tp-edit-save:hover:not(:disabled) {
+  background-color: var(--color-primary-700);
+}
+
+.tp-edit-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tp-edit-cancel {
+  padding: 4px 14px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tp-edit-cancel:hover {
+  background-color: var(--color-gray-100);
+}

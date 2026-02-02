@@ -258,6 +258,8 @@ _SAFETY_RULES = """\
 7. Do NOT provide medication advice or treatment recommendations.
 8. Call the explain_report tool with your response. Do not produce any
    output outside of this tool call.
+9. When prior values are provided, briefly note the trend. Don't
+   over-interpret small fluctuations within normal range.
 
 """
 
@@ -278,14 +280,18 @@ Apply these condition-specific interpretation rules:
 _CLINICAL_CONTEXT_RULE = """\
 ## Clinical Context Integration
 
-When clinical context is provided (e.g. symptoms, reason for test):
+When clinical context is provided — either explicitly by the user OR
+extracted from report sections such as INDICATION, REASON FOR TEST,
+CLINICAL HISTORY, or CONCLUSION:
 - You MUST connect at least one finding to the clinical context.
 - Tie findings directly to the clinical context by explaining how the
   results relate to the patient's symptoms or reason for testing.
 - Use phrasing like "Given that this test was ordered for [reason]..."
   or "These findings help explain your [symptom]..."
+- Synthesize indication and conclusion data with the structured
+  measurements to provide a clinically coherent interpretation.
 - This applies to BOTH long-form and short comment outputs.
-- If no clinical context was provided, skip this requirement.
+- If no clinical context was provided or extracted, skip this requirement.
 
 """
 
@@ -353,9 +359,32 @@ class PromptEngine:
         include_measurements: bool = True,
         patient_age: int | None = None,
         patient_gender: str | None = None,
+        sms_summary: bool = False,
+        sms_summary_char_limit: int = 300,
     ) -> str:
         """Build the system prompt with role, rules, and constraints."""
         specialty = prompt_context.get("specialty", "general medicine")
+
+        if sms_summary:
+            target = int(sms_summary_char_limit * 0.9)
+            hard_limit = sms_summary_char_limit
+            return (
+                f"You are a clinical communicator writing an ultra-condensed "
+                f"SMS-length summary of lab/test results for a patient. "
+                f"Write as the physician or care team for a {specialty} practice.\n\n"
+                f"## Rules\n"
+                f"- 2-3 sentences MAX. Plain text only — no markdown, no bullets, "
+                f"no headers, no emojis.\n"
+                f"- Target {target} characters; NEVER exceed {hard_limit} characters.\n"
+                f"- Lead with the most important finding. Mention key abnormalities.\n"
+                f"- Use simple, patient-friendly language.\n"
+                f"- NEVER suggest treatments, future testing, or hypothetical actions.\n"
+                f"- ONLY use data from the report. Never invent findings.\n"
+                f"- Use the provided status (normal, mildly_abnormal, etc.) — "
+                f"do NOT reclassify.\n"
+                f"- Do NOT mention the patient by name.\n"
+                f"- Call the explain_report tool with your response.\n"
+            )
 
         demographics_section = ""
         if patient_age is not None or patient_gender is not None:
@@ -599,9 +628,17 @@ class PromptEngine:
                             f"{rr.get('unit', '')}"
                         )
 
+                prior_info = ""
+                if m.prior_values:
+                    prior_parts = [
+                        f"{pv.time_label}: {pv.value} {m.unit}"
+                        for pv in m.prior_values
+                    ]
+                    prior_info = " | " + " | ".join(prior_parts)
+
                 sections.append(
                     f"- {m.name} ({m.abbreviation}): {m.value} {m.unit} "
-                    f"[status: {m.status.value}]{ref_info}"
+                    f"[status: {m.status.value}]{prior_info}{ref_info}"
                 )
         else:
             sections.append("No structured measurements were extracted.")
@@ -612,12 +649,16 @@ class PromptEngine:
             for f in parsed_report.findings:
                 sections.append(f"- {f}")
 
-        # 4. Sections — only include the Findings/Conclusions section if present,
-        #    skip other raw sections (measurements + findings above are sufficient)
+        # 4. Sections — include clinical context sections (indication, reason,
+        #    findings, conclusions) to give the LLM richer context for interpretation
         if parsed_report.sections:
             for s in parsed_report.sections:
                 name_lower = s.name.lower()
-                if any(kw in name_lower for kw in ("finding", "conclusion", "impression")):
+                if any(kw in name_lower for kw in (
+                    "finding", "conclusion", "impression",
+                    "indication", "reason", "clinical history",
+                    "history", "referral",
+                )):
                     sections.append(f"\n## {s.name}")
                     sections.append(s.content)
 

@@ -27,7 +27,7 @@
   border-radius: var(--radius-lg);
 }
 
-.letters-list {
+.letter-single-view {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -38,11 +38,6 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
-  transition: border-color 0.15s ease;
-}
-
-.letter-card:hover {
-  border-color: var(--color-primary-300);
 }
 
 .letter-card-header {
@@ -82,20 +77,34 @@
   word-break: break-word;
 }
 
-.letter-content--collapsed {
-  max-height: 120px;
-  overflow: hidden;
-  position: relative;
+.letter-edit-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 
-.letter-content--collapsed::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 40px;
-  background: linear-gradient(transparent, var(--color-surface));
+.letter-edit-textarea {
+  width: 100%;
+  padding: var(--space-md);
+  border: 2px solid var(--color-primary-400);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-primary-50);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.letter-edit-textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.letter-edit-actions {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 .letter-actions {
@@ -122,10 +131,60 @@
   color: var(--color-text);
 }
 
+.letter-action-btn--primary {
+  background-color: var(--color-primary-600);
+  color: white;
+  border-color: var(--color-primary-600);
+}
+
+.letter-action-btn--primary:hover {
+  background-color: var(--color-primary-700);
+  color: white;
+}
+
 .letter-action-btn--danger:hover {
   background-color: #fef2f2;
   color: #dc2626;
   border-color: #fecaca;
+}
+
+.letter-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Like Button */
+.letter-like-btn {
+  padding: var(--space-xs) var(--space-md);
+  background-color: #fff;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.letter-like-btn:hover {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.letter-like-btn--active {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* Metadata footer */
+.letter-meta {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-gray-100);
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-400);
 }
 
 .letters-loading {

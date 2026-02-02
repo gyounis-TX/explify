@@ -21,14 +21,12 @@
 /* Two-Column Grid */
 .import-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(420px, 55%);
+  grid-template-columns: minmax(300px, 45%) 1fr;
   gap: var(--space-xl);
 }
 
-/* Left Panel — Clinical Context */
+/* Left Panel — Clinical Context + Extraction Preview */
 .import-left-panel {
-  position: sticky;
-  top: var(--space-lg);
   align-self: start;
   display: flex;
   flex-direction: column;
@@ -387,11 +385,36 @@
 }
 
 .preview-text-container {
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+/* Scrubbed Clinical Context Preview */
+.scrubbed-preview-box {
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-gray-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* PHI Notice */
+.phi-notice {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent-600);
+  font-style: italic;
+  margin-bottom: var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--color-accent-50);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
 }
 
 .preview-text {

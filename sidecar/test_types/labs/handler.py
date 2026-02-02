@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from api.models import ExtractionResult
-from api.analysis_models import ParsedMeasurement, ParsedReport, ReportSection
+from api.analysis_models import ParsedMeasurement, ParsedReport, PriorValue, ReportSection
 from test_types.base import BaseTestType
 from .glossary import LAB_GLOSSARY
 from .measurements import extract_measurements
@@ -154,6 +154,10 @@ class LabResultsHandler(BaseTestType):
                     status=classification.status,
                     direction=classification.direction,
                     reference_range=classification.reference_range_str,
+                    prior_values=[
+                        PriorValue(value=pv.value, time_label=pv.time_label)
+                        for pv in m.prior_values
+                    ],
                     raw_text=m.raw_text,
                     page_number=m.page_number,
                 )
@@ -204,12 +208,25 @@ class LabResultsHandler(BaseTestType):
                 "liver: AST+ALT+ALP+Bilirubin; blood sugar: Glucose+HbA1c). "
                 "Highlight abnormal values. For borderline values, note they may not "
                 "be clinically significant. When multiple related values are abnormal, "
-                "explain the pattern (e.g., low iron+low ferritin+high TIBC = iron deficiency)."
+                "explain the pattern (e.g., low iron+low ferritin+high TIBC = iron deficiency).\n\n"
+                "IMPORTANT: Ignore any pre-printed interpretations, suggestions, or "
+                "recommendations from the lab report PDF itself. The lab often prints "
+                "automated boilerplate like 'High LDL — consider lifestyle changes' or "
+                "'Desirable: <200'. Your interpretation must come solely from the "
+                "structured measurements and their statuses provided below, not from "
+                "the lab's own commentary."
             ),
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:
-        """Split report text into labeled sections."""
+        """Split report text into labeled sections.
+
+        NOTE: We deliberately exclude COMMENT / INTERPRETATION / NOTE /
+        IMPRESSION / ADVISED headers. Lab PDFs often print automated
+        interpretations and suggestions (e.g. "High LDL — consider lifestyle
+        changes") that should NOT be forwarded to the LLM. The physician
+        wants Explify's own clinical interpretation, not the lab's boilerplate.
+        """
         section_headers = [
             r"CHEMISTRY|CHEM\s+PANEL",
             r"HA?EMATOLOGY",
@@ -223,7 +240,11 @@ class LabResultsHandler(BaseTestType):
             r"URINALYSIS|UA\b",
             r"DIFFERENTIAL\s+LE[U]?COCYTE\s+COUNT",
             r"PERIPHERAL\s+SMEAR",
-            r"COMMENT|INTERPRETATION|NOTE|CLINICAL\s+NOTE|IMPRESSION|ADVISED",
+            # Clinical context sections — forwarded to LLM for richer interpretation
+            r"INDICATION(?:S)?(?:\s+FOR\s+(?:TEST|STUDY|PROCEDURE))?",
+            r"REASON\s+FOR\s+(?:TEST|STUDY|ORDER|REFERRAL)",
+            r"CLINICAL\s+(?:HISTORY|INDICATION|INFORMATION|CONTEXT)",
+            r"CONCLUSION(?:S)?",
         ]
 
         combined = "|".join(f"({p})" for p in section_headers)
@@ -250,20 +271,11 @@ class LabResultsHandler(BaseTestType):
 
         return sections
 
-    def _extract_findings(self, text: str) -> list[str]:
-        """Extract comment/interpretation/note lines."""
-        findings: list[str] = []
-        findings_re = re.compile(
-            r"(?:COMMENT|INTERPRETATION|NOTE|CLINICAL\s+NOTE|IMPRESSION|ADVISED)\s*[:\-]?\s*\n"
-            r"([\s\S]*?)(?:\n\s*\n|\Z)",
-            re.IGNORECASE,
-        )
-        for match in findings_re.finditer(text):
-            block = match.group(1).strip()
-            lines = re.split(r"\n\s*(?:\d+[\.\)]\s*|[-*]\s*)", block)
-            for line in lines:
-                line = line.strip()
-                if line and len(line) > 10:
-                    findings.append(line)
-
-        return findings
+    def _extract_findings(self, _text: str) -> list[str]:
+        """Lab PDFs often print automated interpretations and suggestions
+        (e.g. "High LDL — consider lifestyle changes"). These should NOT be
+        forwarded to the LLM — the physician wants Explify's own clinical
+        interpretation based on the structured measurements, not the lab's
+        boilerplate. Return empty list.
+        """
+        return []

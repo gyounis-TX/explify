@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { getVersion } from "@tauri-apps/api/app";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueSettingsUpsert } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
@@ -68,7 +71,6 @@ export function SettingsScreen() {
   const [quickReasons, setQuickReasons] = useState<string[]>([]);
   const [newReason, setNewReason] = useState("");
   const [nextStepsOptions, setNextStepsOptions] = useState<string[]>([
-    "Will follow this over time",
     "We will contact you to discuss next steps",
   ]);
   const [newNextStep, setNewNextStep] = useState("");
@@ -79,8 +81,20 @@ export function SettingsScreen() {
   const [practiceProviders, setPracticeProviders] = useState<string[]>([]);
   const [newProvider, setNewProvider] = useState("");
   const [shortCommentCharLimit, setShortCommentCharLimit] = useState<number | null>(1000);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [smsCharLimit, setSmsCharLimit] = useState(300);
   const [footerType, setFooterType] = useState<FooterType>("explify_branding");
   const [customFooterText, setCustomFooterText] = useState("");
+
+  // About / Update state
+  const [appVersion, setAppVersion] = useState("");
+  const [updateCheck, setUpdateCheck] = useState<Update | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "updating" | "up-to-date">("idle");
+
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   useEffect(() => {
     async function loadSettings() {
@@ -95,7 +109,6 @@ export function SettingsScreen() {
         setDetailPreference(s.detail_preference);
         setQuickReasons(s.quick_reasons ?? []);
         setNextStepsOptions(s.next_steps_options ?? [
-          "Will follow this over time",
           "We will contact you to discuss next steps",
         ]);
         setExplanationVoice(s.explanation_voice ?? "third_person");
@@ -104,6 +117,8 @@ export function SettingsScreen() {
         setCustomPhysicianName(s.custom_physician_name ?? "");
         setPracticeProviders(s.practice_providers ?? []);
         setShortCommentCharLimit(s.short_comment_char_limit ?? 1000);
+        setSmsEnabled(s.sms_summary_enabled ?? false);
+        setSmsCharLimit(s.sms_summary_char_limit ?? 300);
         setFooterType(s.footer_type ?? "explify_branding");
         setCustomFooterText(s.custom_footer_text ?? "");
       } catch (err) {
@@ -139,6 +154,8 @@ export function SettingsScreen() {
         custom_physician_name: customPhysicianName.trim() || null,
         practice_providers: practiceProviders,
         short_comment_char_limit: shortCommentCharLimit,
+        sms_summary_enabled: smsEnabled,
+        sms_summary_char_limit: smsCharLimit,
         footer_type: footerType,
         custom_footer_text: customFooterText.trim() || null,
       };
@@ -163,7 +180,36 @@ export function SettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, footerType, customFooterText, showToast]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, showToast]);
+
+  const handleCheckForUpdates = async () => {
+    setUpdateStatus("checking");
+    setUpdateCheck(null);
+    try {
+      const update = await check();
+      if (update?.available) {
+        setUpdateCheck(update);
+        setUpdateStatus("idle");
+      } else {
+        setUpdateStatus("up-to-date");
+      }
+    } catch {
+      setUpdateStatus("idle");
+      showToast("error", "Failed to check for updates.");
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    if (!updateCheck) return;
+    setUpdateStatus("updating");
+    try {
+      await updateCheck.downloadAndInstall();
+      await relaunch();
+    } catch {
+      setUpdateStatus("idle");
+      showToast("error", "Update failed.");
+    }
+  };
 
   if (loading) {
     return (
@@ -560,6 +606,47 @@ export function SettingsScreen() {
         </div>
       </section>
 
+      {/* SMS Summary Settings */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">SMS Summary</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Enable an ultra-short SMS-length summary tab on the results screen.
+        </p>
+        <div className="form-group">
+          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+            <input
+              type="checkbox"
+              checked={smsEnabled}
+              onChange={(e) => setSmsEnabled(e.target.checked)}
+            />
+            Enable SMS-length summary
+          </label>
+        </div>
+        {smsEnabled && (
+          <div className="form-group">
+            <label className="form-label">
+              Character Limit
+              <span className="slider-value-label">
+                {smsCharLimit} chars
+              </span>
+            </label>
+            <div className="slider-container">
+              <span className="slider-label-left">100</span>
+              <input
+                type="range"
+                className="preference-slider"
+                min={100}
+                max={500}
+                step={10}
+                value={smsCharLimit}
+                onChange={(e) => setSmsCharLimit(Number(e.target.value))}
+              />
+              <span className="slider-label-right">500</span>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Quick Reasons for Testing */}
       <section className="settings-section">
         <h3 className="settings-section-title">Quick Reasons for Testing</h3>
@@ -798,6 +885,38 @@ export function SettingsScreen() {
         )}
         {error && <span className="save-error">{error}</span>}
       </div>
+
+      {/* About */}
+      <section className="settings-section about-section">
+        <h3 className="settings-section-title">About</h3>
+        <p className="settings-description">
+          Explify v{appVersion || "..."}
+        </p>
+        <div className="about-update-row">
+          {updateCheck ? (
+            <button
+              className="save-btn"
+              onClick={handleApplyUpdate}
+              disabled={updateStatus === "updating"}
+            >
+              {updateStatus === "updating"
+                ? "Updating..."
+                : `Update to v${updateCheck.version}`}
+            </button>
+          ) : (
+            <button
+              className="save-btn about-check-btn"
+              onClick={handleCheckForUpdates}
+              disabled={updateStatus === "checking"}
+            >
+              {updateStatus === "checking" ? "Checking..." : "Check for Updates"}
+            </button>
+          )}
+          {updateStatus === "up-to-date" && (
+            <span className="save-success">You're on the latest version.</span>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

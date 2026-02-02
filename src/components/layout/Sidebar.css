@@ -21,6 +21,14 @@
   letter-spacing: -0.02em;
 }
 
+.sidebar-descriptor {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -49,4 +57,80 @@
 .sidebar-link--active {
   background-color: var(--color-primary-50);
   color: var(--color-primary-700);
+}
+
+/* Auth Section */
+.sidebar-auth {
+  margin-top: auto;
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.auth-user-email {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-signin-btn,
+.auth-signout-btn {
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.auth-signin-btn:hover,
+.auth-signout-btn:hover {
+  background-color: var(--color-gray-50);
+  color: var(--color-text);
+}
+
+/* Update Banner */
+.sidebar-update-banner {
+  margin-top: auto;
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-primary-50);
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.update-text {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-primary-700);
+}
+
+.update-install-btn {
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--color-primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.update-install-btn:hover:not(:disabled) {
+  background-color: var(--color-primary-700);
+}
+
+.update-install-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
