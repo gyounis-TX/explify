@@ -71,13 +71,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
-          # Auto-detect key format: if it doesn't start with "untrusted comment:",
-          # it's likely base64-encoded (matching pubkey format) — decode it first
+          # Minisign keys require an "untrusted comment:" header line.
+          # If the secret was stored without it, prepend the standard header.
           if echo "$TAURI_SIGNING_PRIVATE_KEY_RAW" | head -1 | grep -q "^untrusted comment:"; then
             export TAURI_SIGNING_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY_RAW"
           else
-            echo "Key appears base64-encoded, decoding..."
-            export TAURI_SIGNING_PRIVATE_KEY=$(echo "$TAURI_SIGNING_PRIVATE_KEY_RAW" | base64 --decode)
+            echo "Prepending minisign comment header to key..."
+            TAURI_SIGNING_PRIVATE_KEY="$(printf 'untrusted comment: minisign encrypted secret key\n%s' "$TAURI_SIGNING_PRIVATE_KEY_RAW")"
+            export TAURI_SIGNING_PRIVATE_KEY
           fi
           npx tauri build
 
@@ -161,13 +162,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
-          # Auto-detect key format: if it doesn't start with "untrusted comment:",
-          # it's likely base64-encoded (matching pubkey format) — decode it first
+          # Minisign keys require an "untrusted comment:" header line.
+          # If the secret was stored without it, prepend the standard header.
           if echo "$TAURI_SIGNING_PRIVATE_KEY_RAW" | head -1 | grep -q "^untrusted comment:"; then
             export TAURI_SIGNING_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY_RAW"
           else
-            echo "Key appears base64-encoded, decoding..."
-            export TAURI_SIGNING_PRIVATE_KEY=$(echo "$TAURI_SIGNING_PRIVATE_KEY_RAW" | base64 --decode)
+            echo "Prepending minisign comment header to key..."
+            TAURI_SIGNING_PRIVATE_KEY="$(printf 'untrusted comment: minisign encrypted secret key\n%s' "$TAURI_SIGNING_PRIVATE_KEY_RAW")"
+            export TAURI_SIGNING_PRIVATE_KEY
           fi
           npx tauri build
 
