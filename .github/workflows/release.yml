@@ -166,7 +166,7 @@ jobs:
           ls -la src-tauri/target/release/bundle/nsis/ 2>/dev/null || echo "No nsis bundle dir"
 
       - name: Upload release artifacts
-        shell: bash
+        shell: bash {0}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -180,8 +180,8 @@ jobs:
               if gh release upload "$TAG" "$file" --clobber --repo "$REPO"; then
                 return 0
               fi
-              echo "Attempt $attempt failed, retrying in 5s..."
-              sleep 5
+              echo "Attempt $attempt failed, retrying in 10s..."
+              sleep 10
             done
             echo "ERROR: Failed to upload $file after 3 attempts"
             return 1
@@ -191,7 +191,9 @@ jobs:
           for f in src-tauri/target/release/bundle/nsis/*-setup.exe \
                    src-tauri/target/release/bundle/nsis/*.nsis.zip \
                    src-tauri/target/release/bundle/nsis/*.nsis.zip.sig; do
-            [ -f "$f" ] && upload_with_retry "$f" || FAILED=1
+            if [ -f "$f" ]; then
+              upload_with_retry "$f" || FAILED=1
+            fi
           done
           exit $FAILED
 
