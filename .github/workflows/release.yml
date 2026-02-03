@@ -65,18 +65,19 @@ jobs:
           releaseDraft: false
           prerelease: false
 
-      - name: Upload updater signature
+      - name: Sign and upload updater artifact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          echo "Listing bundle contents:"
-          ls -R src-tauri/target/release/bundle/ || true
-          for sig in src-tauri/target/release/bundle/macos/*.sig; do
-            if [ -f "$sig" ]; then
-              echo "Uploading $sig"
-              gh release upload "${{ github.ref_name }}" "$sig" --clobber
-            fi
-          done
+          TARGZ=$(ls src-tauri/target/release/bundle/macos/*.app.tar.gz 2>/dev/null | head -1)
+          if [ -n "$TARGZ" ]; then
+            echo "Signing $TARGZ"
+            npx tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$TARGZ"
+            echo "Uploading ${TARGZ}.sig"
+            gh release upload "${{ github.ref_name }}" "${TARGZ}.sig" --clobber
+          fi
 
   build-windows:
     runs-on: windows-latest
@@ -135,19 +136,24 @@ jobs:
           releaseDraft: false
           prerelease: false
 
-      - name: Upload updater bundle and signature
+      - name: Create and upload updater bundle
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          echo "Listing bundle contents:"
-          ls -R src-tauri/target/release/bundle/ || true
-          for f in src-tauri/target/release/bundle/nsis/*.nsis.zip src-tauri/target/release/bundle/nsis/*.nsis.zip.sig; do
-            if [ -f "$f" ]; then
-              echo "Uploading $f"
-              gh release upload "${{ github.ref_name }}" "$f" --clobber
-            fi
-          done
+          EXE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe 2>/dev/null | head -1)
+          if [ -n "$EXE" ]; then
+            NSIS_ZIP="${EXE%.exe}.nsis.zip"
+            echo "Creating $NSIS_ZIP"
+            powershell.exe -Command "Compress-Archive -Path '$EXE' -DestinationPath '$NSIS_ZIP'"
+            echo "Signing $NSIS_ZIP"
+            npx tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$NSIS_ZIP"
+            echo "Uploading $NSIS_ZIP and ${NSIS_ZIP}.sig"
+            gh release upload "${{ github.ref_name }}" "$NSIS_ZIP" --clobber
+            gh release upload "${{ github.ref_name }}" "${NSIS_ZIP}.sig" --clobber
+          fi
 
   create-updater-json:
     needs: [build-macos, build-windows]
