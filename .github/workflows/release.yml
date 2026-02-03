@@ -164,6 +164,8 @@ jobs:
         run: |
           echo "=== nsis bundle ==="
           ls -la src-tauri/target/release/bundle/nsis/ 2>/dev/null || echo "No nsis bundle dir"
+          echo "=== msi bundle ==="
+          ls -la src-tauri/target/release/bundle/msi/ 2>/dev/null || echo "No msi bundle dir"
 
       - name: Upload release artifacts
         shell: bash {0}
@@ -188,9 +190,9 @@ jobs:
           }
 
           FAILED=0
+          # Upload NSIS installer and its updater signature
           for f in src-tauri/target/release/bundle/nsis/*-setup.exe \
-                   src-tauri/target/release/bundle/nsis/*.nsis.zip \
-                   src-tauri/target/release/bundle/nsis/*.nsis.zip.sig; do
+                   src-tauri/target/release/bundle/nsis/*-setup.exe.sig; do
             if [ -f "$f" ]; then
               upload_with_retry "$f" || FAILED=1
             fi
@@ -241,8 +243,8 @@ jobs:
           fi
 
           # Windows (windows-x86_64)
-          WINDOWS_ASSET=$(echo "$ASSETS" | grep '\.nsis\.zip$' | head -1)
-          WINDOWS_SIG_FILE=$(ls sigs/*.nsis.zip.sig 2>/dev/null | head -1)
+          WINDOWS_ASSET=$(echo "$ASSETS" | grep '\-setup\.exe$' | head -1)
+          WINDOWS_SIG_FILE=$(ls sigs/*-setup.exe.sig 2>/dev/null | head -1)
           if [ -n "$WINDOWS_ASSET" ] && [ -n "$WINDOWS_SIG_FILE" ]; then
             WINDOWS_SIG=$(cat "$WINDOWS_SIG_FILE")
             PLATFORMS=$(echo "$PLATFORMS" | jq \
