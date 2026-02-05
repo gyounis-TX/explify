@@ -54,6 +54,7 @@ class ExplainRequest(BaseModel):
     api_key: Optional[str] = None
     clinical_context: Optional[str] = None
     template_id: Optional[int] = None
+    shared_template_sync_id: Optional[str] = None
     refinement_instruction: Optional[str] = None
     tone_preference: Optional[int] = Field(default=None, ge=1, le=5)
     detail_preference: Optional[int] = Field(default=None, ge=1, le=5)

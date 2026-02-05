@@ -104,6 +104,8 @@ export interface DetectTypeResponse {
   test_type: string | null;
   confidence: number;
   available_types: TestTypeInfo[];
+  detection_method: "keyword" | "llm" | "none";
+  llm_attempted: boolean;
 }
 
 export interface ParseRequest {
@@ -149,6 +151,7 @@ export interface ExplainRequest {
   api_key?: string;
   clinical_context?: string;
   template_id?: number;
+  shared_template_sync_id?: string;
   refinement_instruction?: string;
   tone_preference?: number;
   detail_preference?: number;
@@ -364,4 +367,31 @@ export interface TeachingPoint {
   created_at: string;
   sync_id?: string;
   updated_at?: string;
+}
+
+// --- Shared Content Types ---
+
+export interface SharedTeachingPoint {
+  id: number;
+  sync_id: string;
+  text: string;
+  test_type: string | null;
+  sharer_user_id: string;
+  sharer_email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SharedTemplate {
+  id: number;
+  sync_id: string;
+  name: string;
+  test_type: string | null;
+  tone: string | null;
+  structure_instructions: string | null;
+  closing_text: string | null;
+  sharer_user_id: string;
+  sharer_email: string;
+  created_at: string;
+  updated_at: string;
 }

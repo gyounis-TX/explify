@@ -67,6 +67,31 @@ CREATE TABLE IF NOT EXISTS teaching_points (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_teaching_points_test_type ON teaching_points(test_type);
+
+CREATE TABLE IF NOT EXISTS shared_teaching_points (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_id TEXT NOT NULL UNIQUE,
+    text TEXT NOT NULL,
+    test_type TEXT,
+    sharer_user_id TEXT NOT NULL,
+    sharer_email TEXT NOT NULL,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS shared_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    test_type TEXT,
+    tone TEXT,
+    structure_instructions TEXT,
+    closing_text TEXT,
+    sharer_user_id TEXT NOT NULL,
+    sharer_email TEXT NOT NULL,
+    created_at TEXT,
+    updated_at TEXT
+);
 """
 
 
@@ -678,6 +703,122 @@ class Database:
         finally:
             conn.close()
 
+
+    # --- Shared Teaching Points ---
+
+    def replace_shared_teaching_points(self, rows: list[dict]) -> int:
+        """Full-replace: delete all cached shared teaching points, re-insert from sync."""
+        conn = self._get_conn()
+        try:
+            conn.execute("DELETE FROM shared_teaching_points")
+            count = 0
+            for row in rows:
+                conn.execute(
+                    """INSERT INTO shared_teaching_points
+                       (sync_id, text, test_type, sharer_user_id, sharer_email, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        row.get("sync_id", ""),
+                        row.get("text", ""),
+                        row.get("test_type"),
+                        row.get("sharer_user_id", ""),
+                        row.get("sharer_email", ""),
+                        row.get("created_at"),
+                        row.get("updated_at"),
+                    ),
+                )
+                count += 1
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def list_shared_teaching_points(
+        self, test_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return shared teaching points, optionally filtered by test_type (includes global)."""
+        conn = self._get_conn()
+        try:
+            if test_type:
+                rows = conn.execute(
+                    "SELECT * FROM shared_teaching_points WHERE test_type IS NULL OR test_type = ? ORDER BY created_at DESC",
+                    (test_type,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM shared_teaching_points ORDER BY created_at DESC",
+                ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def list_all_teaching_points_for_prompt(
+        self, test_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Union of own + shared teaching points. Each dict has 'source' field ('own' or sharer email)."""
+        own = self.list_teaching_points(test_type=test_type)
+        for tp in own:
+            tp["source"] = "own"
+        shared = self.list_shared_teaching_points(test_type=test_type)
+        for tp in shared:
+            tp["source"] = tp.get("sharer_email", "shared")
+        return own + shared
+
+    # --- Shared Templates ---
+
+    def replace_shared_templates(self, rows: list[dict]) -> int:
+        """Full-replace: delete all cached shared templates, re-insert from sync."""
+        conn = self._get_conn()
+        try:
+            conn.execute("DELETE FROM shared_templates")
+            count = 0
+            for row in rows:
+                conn.execute(
+                    """INSERT INTO shared_templates
+                       (sync_id, name, test_type, tone, structure_instructions, closing_text,
+                        sharer_user_id, sharer_email, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        row.get("sync_id", ""),
+                        row.get("name", ""),
+                        row.get("test_type"),
+                        row.get("tone"),
+                        row.get("structure_instructions"),
+                        row.get("closing_text"),
+                        row.get("sharer_user_id", ""),
+                        row.get("sharer_email", ""),
+                        row.get("created_at"),
+                        row.get("updated_at"),
+                    ),
+                )
+                count += 1
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
+    def get_shared_template_by_sync_id(self, sync_id: str) -> dict[str, Any] | None:
+        """Look up a single shared template by its sync_id."""
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM shared_templates WHERE sync_id = ?",
+                (sync_id,),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def list_shared_templates(self) -> list[dict[str, Any]]:
+        """Return all cached shared templates."""
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM shared_templates ORDER BY created_at DESC",
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
 
     # --- Sync Helpers ---
 

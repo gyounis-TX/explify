@@ -2,13 +2,14 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
-import type { ExtractionResult, Template } from "../../types/sidecar";
+import type { ExtractionResult, Template, SharedTemplate, DetectTypeResponse } from "../../types/sidecar";
 import "./ImportScreen.css";
 
 type HelpMeStatus = "idle" | "generating" | "success" | "error";
 
 type ImportMode = "pdf" | "text";
 type ImportStatus = "idle" | "extracting" | "success" | "error";
+type DetectionStatus = "idle" | "detecting" | "success" | "low_confidence" | "failed" | "error";
 
 interface FileExtractionEntry {
   result?: ExtractionResult;
@@ -33,14 +34,18 @@ interface ImportStateCache {
   selectedResultKey: string | null;
   clinicalContext: string;
   selectedReasons: Set<string>;
-  selectedTemplateId: number | undefined;
+  selectedTemplateValue: string;
   scrubbedText: string | null;
   scrubbedClinicalContext: string | null;
+  testTypeHint: string;
+  detectionStatus: DetectionStatus;
+  detectionResult: DetectTypeResponse | null;
+  manualTestType: string | null;
 }
 
 function freshCache(): ImportStateCache {
   return {
-    mode: "pdf",
+    mode: "text",
     selectedFiles: [],
     pastedText: "",
     status: "idle",
@@ -50,9 +55,13 @@ function freshCache(): ImportStateCache {
     selectedResultKey: null,
     clinicalContext: "",
     selectedReasons: new Set(),
-    selectedTemplateId: undefined,
+    selectedTemplateValue: "",
     scrubbedText: null,
     scrubbedClinicalContext: null,
+    testTypeHint: "",
+    detectionStatus: "idle",
+    detectionResult: null,
+    manualTestType: null,
   };
 }
 
@@ -71,9 +80,10 @@ export function ImportScreen() {
   const [error, setError] = useState<string | null>(_cache.error);
   const [isDragOver, setIsDragOver] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<
-    number | undefined
-  >(_cache.selectedTemplateId);
+  const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
+  const [selectedTemplateValue, setSelectedTemplateValue] = useState(
+    _cache.selectedTemplateValue,
+  );
 
   // Clinical context state
   const [clinicalContext, setClinicalContext] = useState(_cache.clinicalContext);
@@ -97,13 +107,20 @@ export function ImportScreen() {
   const [scrubbedClinicalContext, setScrubbedClinicalContext] = useState<string | null>(_cache.scrubbedClinicalContext);
   const [isScrubbing, setIsScrubbing] = useState(false);
 
+  // Test type detection state
+  const [testTypeHint, setTestTypeHint] = useState(_cache.testTypeHint);
+  const [detectionStatus, setDetectionStatus] = useState<DetectionStatus>(_cache.detectionStatus);
+  const [detectionResult, setDetectionResult] = useState<DetectTypeResponse | null>(_cache.detectionResult);
+  const [manualTestType, setManualTestType] = useState<string | null>(_cache.manualTestType);
+
   // Sync component state → module-level cache so it survives navigation
   useEffect(() => {
     _cache = {
       mode, selectedFiles, pastedText, status, result, error,
       extractionResults, selectedResultKey, clinicalContext,
-      selectedReasons, selectedTemplateId, scrubbedText,
-      scrubbedClinicalContext,
+      selectedReasons, selectedTemplateValue, scrubbedText,
+      scrubbedClinicalContext, testTypeHint, detectionStatus,
+      detectionResult, manualTestType,
     };
   });
 
@@ -112,8 +129,14 @@ export function ImportScreen() {
     async function loadTemplates(attempts = 5, backoffMs = 1000) {
       for (let i = 0; i < attempts; i++) {
         try {
-          const res = await sidecarApi.listTemplates();
-          if (!cancelled) setTemplates(res.items);
+          const [res, shared] = await Promise.all([
+            sidecarApi.listTemplates(),
+            sidecarApi.listSharedTemplates().catch(() => [] as SharedTemplate[]),
+          ]);
+          if (!cancelled) {
+            setTemplates(res.items);
+            setSharedTemplates(shared);
+          }
           return;
         } catch {
           if (i < attempts - 1) {
@@ -151,6 +174,9 @@ export function ImportScreen() {
     setSelectedResultKey(null);
     setScrubbedText(null);
     setScrubbedClinicalContext(null);
+    setDetectionStatus("idle");
+    setDetectionResult(null);
+    setManualTestType(null);
     _cache = freshCache();
     // Clear stale results so ResultsScreen doesn't restore a prior analysis.
     try { sessionStorage.removeItem("explify_results_state"); } catch { /* ignore */ }
@@ -180,6 +206,58 @@ export function ImportScreen() {
       });
     return () => { cancelled = true; };
   }, [result, clinicalContext]);
+
+  // Auto-detect test type when extraction succeeds
+  useEffect(() => {
+    if (!result) return;
+    let cancelled = false;
+    setDetectionStatus("detecting");
+    setManualTestType(null);
+    sidecarApi
+      .detectTestType(result, testTypeHint || undefined)
+      .then((res) => {
+        if (cancelled) return;
+        setDetectionResult(res);
+        if (res.confidence >= 0.4 && res.test_type != null) {
+          setDetectionStatus("success");
+        } else if (res.confidence > 0 && res.test_type != null) {
+          setDetectionStatus("low_confidence");
+        } else {
+          setDetectionStatus("failed");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDetectionStatus("error");
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  const handleRedetect = useCallback(() => {
+    if (!result) return;
+    setDetectionStatus("detecting");
+    setManualTestType(null);
+    sidecarApi
+      .detectTestType(result, testTypeHint || undefined)
+      .then((res) => {
+        setDetectionResult(res);
+        if (res.confidence >= 0.4 && res.test_type != null) {
+          setDetectionStatus("success");
+        } else if (res.confidence > 0 && res.test_type != null) {
+          setDetectionStatus("low_confidence");
+        } else {
+          setDetectionStatus("failed");
+        }
+      })
+      .catch(() => {
+        setDetectionStatus("error");
+      });
+  }, [result, testTypeHint]);
+
+  const resolvedTestType =
+    (manualTestType != null && manualTestType.trim() !== "" ? manualTestType.trim() : null) ??
+    (testTypeHint.trim() || null) ??
+    (detectionStatus === "success" ? detectionResult?.test_type ?? undefined : undefined);
 
   const handleModeChange = useCallback(
     (newMode: ImportMode) => {
@@ -346,17 +424,21 @@ export function ImportScreen() {
   }, [mode, selectedFiles, pastedText, showToast]);
 
   const handleProceed = useCallback(() => {
-    if (result) {
+    if (result && resolvedTestType) {
       _cache = freshCache();
-      navigate("/processing", {
-        state: {
-          extractionResult: result,
-          templateId: selectedTemplateId,
-          clinicalContext: clinicalContext.trim() || undefined,
-        },
-      });
+      const state: Record<string, unknown> = {
+        extractionResult: result,
+        clinicalContext: clinicalContext.trim() || undefined,
+        testType: resolvedTestType,
+      };
+      if (selectedTemplateValue.startsWith("own:")) {
+        state.templateId = Number(selectedTemplateValue.slice(4));
+      } else if (selectedTemplateValue.startsWith("shared:")) {
+        state.sharedTemplateSyncId = selectedTemplateValue.slice(7);
+      }
+      navigate("/processing", { state });
     }
-  }, [navigate, result, selectedTemplateId, clinicalContext]);
+  }, [navigate, result, selectedTemplateValue, clinicalContext, resolvedTestType]);
 
   const handleHelpMe = useCallback(async () => {
     if (!helpMeText.trim()) return;
@@ -399,26 +481,35 @@ export function ImportScreen() {
       <div className="import-grid">
         {/* Left Column — Clinical Context */}
         <div className="import-left-panel">
-          {templates.length > 0 && (
+          {(templates.length > 0 || sharedTemplates.length > 0) && (
             <div className="import-field">
               <label className="import-field-label">Template</label>
               <span className="import-field-subtitle">Optional</span>
               <select
                 className="import-field-select"
-                value={selectedTemplateId ?? ""}
-                onChange={(e) =>
-                  setSelectedTemplateId(
-                    e.target.value ? Number(e.target.value) : undefined,
-                  )
-                }
+                value={selectedTemplateValue}
+                onChange={(e) => setSelectedTemplateValue(e.target.value)}
               >
                 <option value="">No template</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                    {t.test_type ? ` (${t.test_type})` : ""}
-                  </option>
-                ))}
+                {templates.length > 0 && (
+                  <optgroup label="My Templates">
+                    {templates.map((t) => (
+                      <option key={t.id} value={`own:${t.id}`}>
+                        {t.name}
+                        {t.test_type ? ` (${t.test_type})` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {sharedTemplates.length > 0 && (
+                  <optgroup label="Shared Templates">
+                    {sharedTemplates.map((t) => (
+                      <option key={t.sync_id} value={`shared:${t.sync_id}`}>
+                        {t.name} — Shared by {t.sharer_email}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
           )}
@@ -474,6 +565,33 @@ export function ImportScreen() {
             </div>
           )}
 
+          {/* Test Type Hint */}
+          <div className="import-field">
+            <label className="import-field-label">Test Type Hint</label>
+            <span className="import-field-subtitle">
+              Optional — helps identify the report type
+            </span>
+            <div className="test-type-hint-row">
+              <input
+                type="text"
+                className="import-field-textarea"
+                style={{ resize: "none", minHeight: "auto" }}
+                placeholder='e.g., "echocardiogram", "lipid panel", "stress test"'
+                value={testTypeHint}
+                onChange={(e) => setTestTypeHint(e.target.value)}
+              />
+              {status === "success" && result && testTypeHint.trim() && (
+                <button
+                  className="redetect-btn"
+                  onClick={handleRedetect}
+                  disabled={detectionStatus === "detecting"}
+                >
+                  Re-detect
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Extraction Preview (moved to left column) */}
           {status === "success" && result && (
             <div className="extraction-preview">
@@ -506,6 +624,83 @@ export function ImportScreen() {
                 )}
               </div>
 
+              {/* Detection Status */}
+              <div className="detection-status">
+                {detectionStatus === "detecting" && (
+                  <div className="detection-detecting">
+                    <div className="spinner" />
+                    <span>Detecting report type...</span>
+                  </div>
+                )}
+                {detectionStatus === "success" && detectionResult && (
+                  <div className="detection-success">
+                    {manualTestType == null ? (
+                      <>
+                        <span className="detection-badge--success">
+                          {detectionResult.available_types.find(
+                            (t) => t.test_type_id === detectionResult.test_type,
+                          )?.display_name ?? detectionResult.test_type}
+                        </span>
+                        <span className="detection-confidence">
+                          {Math.round(detectionResult.confidence * 100)}% confidence
+                          {detectionResult.detection_method === "llm" && " (AI-assisted)"}
+                        </span>
+                        <button
+                          className="redetect-btn"
+                          onClick={() => setManualTestType("")}
+                        >
+                          Change
+                        </button>
+                      </>
+                    ) : (
+                      <div className="detection-override">
+                        <input
+                          type="text"
+                          className="import-field-textarea"
+                          style={{ resize: "none", minHeight: "auto" }}
+                          placeholder='e.g., "calcium score", "stress test"'
+                          value={manualTestType}
+                          onChange={(e) =>
+                            setManualTestType(e.target.value || "")
+                          }
+                        />
+                        <button
+                          className="redetect-btn"
+                          onClick={() => setManualTestType(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(detectionStatus === "low_confidence" ||
+                  detectionStatus === "failed" ||
+                  detectionStatus === "error") && (
+                  <div className="detection-fallback">
+                    <p className="detection-fallback-message">
+                      {detectionStatus === "low_confidence" && detectionResult
+                        ? `Low confidence detection: ${
+                            detectionResult.available_types.find(
+                              (t) => t.test_type_id === detectionResult.test_type,
+                            )?.display_name ?? detectionResult.test_type
+                          }. Please confirm or enter the report type below.`
+                        : "Could not identify the report type. Please enter it below."}
+                    </p>
+                    <input
+                      type="text"
+                      className="import-field-textarea"
+                      style={{ resize: "none", minHeight: "auto" }}
+                      placeholder='e.g., "echocardiogram", "lipid panel", "stress test"'
+                      value={manualTestType ?? ""}
+                      onChange={(e) =>
+                        setManualTestType(e.target.value || null)
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
               {result.warnings.length > 0 && (
                 <div className="preview-warnings">
                   {result.warnings.map((w, i) => (
@@ -533,7 +728,11 @@ export function ImportScreen() {
                 No PHI is stored or sent to the AI. All identifiable information is redacted before processing.
               </p>
 
-              <button className="proceed-btn" onClick={handleProceed}>
+              <button
+                className="proceed-btn"
+                onClick={handleProceed}
+                disabled={!resolvedTestType || detectionStatus === "detecting"}
+              >
                 Continue to Processing
               </button>
             </div>
@@ -544,16 +743,16 @@ export function ImportScreen() {
         <div className="import-right-panel">
           <div className="mode-toggle">
             <button
-              className={`mode-toggle-btn ${mode === "pdf" ? "mode-toggle-btn--active" : ""}`}
-              onClick={() => handleModeChange("pdf")}
-            >
-              Upload File
-            </button>
-            <button
               className={`mode-toggle-btn ${mode === "text" ? "mode-toggle-btn--active" : ""}`}
               onClick={() => handleModeChange("text")}
             >
               Paste Text
+            </button>
+            <button
+              className={`mode-toggle-btn ${mode === "pdf" ? "mode-toggle-btn--active" : ""}`}
+              onClick={() => handleModeChange("pdf")}
+            >
+              Upload File
             </button>
           </div>
 

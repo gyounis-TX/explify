@@ -5,6 +5,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueSettingsUpsert } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
+import { SharingPanel } from "../teaching-points/SharingPanel";
 import type { LiteracyLevel, ExplanationVoice, PhysicianNameSource, FooterType } from "../../types/sidecar";
 import "./SettingsScreen.css";
 
@@ -892,6 +893,9 @@ export function SettingsScreen() {
         {success && <span className="save-success">Settings saved.</span>}
         {error && <span className="save-error">{error}</span>}
       </div>
+
+      {/* Sharing */}
+      <SharingPanel />
 
       {/* About */}
       <section className="settings-section about-section">

@@ -101,11 +101,15 @@ export function ProcessingScreen() {
   const locationState = location.state as {
     extractionResult?: ExtractionResult;
     templateId?: number;
+    sharedTemplateSyncId?: string;
     clinicalContext?: string;
+    testType?: string;
   } | null;
   const extractionResult = locationState?.extractionResult;
   const templateId = locationState?.templateId;
+  const sharedTemplateSyncId = locationState?.sharedTemplateSyncId;
   const clinicalContext = locationState?.clinicalContext;
+  const testType = locationState?.testType;
 
   const { showToast } = useToast();
   const [currentStep, setCurrentStep] =
@@ -125,7 +129,9 @@ export function ProcessingScreen() {
       setCurrentStep("explaining");
       const response: ExplainResponse = await sidecarApi.explainReport({
         extraction_result: extractionResult,
+        test_type: testType,
         template_id: templateId,
+        shared_template_sync_id: sharedTemplateSyncId,
         clinical_context: clinicalContext,
         short_comment: true,
         deep_analysis: deepAnalysis || undefined,
@@ -167,7 +173,7 @@ export function ProcessingScreen() {
       setError(categorizeError(msg));
       setCurrentStep("error");
     }
-  }, [extractionResult, templateId, clinicalContext, deepAnalysis, navigate, showToast]);
+  }, [extractionResult, templateId, sharedTemplateSyncId, clinicalContext, testType, deepAnalysis, navigate, showToast]);
 
   useEffect(() => {
     runPipeline();

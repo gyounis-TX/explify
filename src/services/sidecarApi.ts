@@ -25,6 +25,8 @@ import type {
   LetterListResponse,
   LetterDeleteResponse,
   TeachingPoint,
+  SharedTeachingPoint,
+  SharedTemplate,
 } from "../types/sidecar";
 
 class SidecarApi {
@@ -189,13 +191,17 @@ class SidecarApi {
 
   async detectTestType(
     extractionResult: ExtractionResult,
+    userHint?: string,
   ): Promise<DetectTypeResponse> {
     const baseUrl = await this.ensureInitialized();
 
     const response = await fetch(`${baseUrl}/analyze/detect-type`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(extractionResult),
+      body: JSON.stringify({
+        extraction_result: extractionResult,
+        user_hint: userHint || null,
+      }),
     });
 
     if (!response.ok) {
@@ -241,6 +247,8 @@ class SidecarApi {
     if (request.clinical_context != null)
       body.clinical_context = request.clinical_context;
     if (request.template_id != null) body.template_id = request.template_id;
+    if (request.shared_template_sync_id != null)
+      body.shared_template_sync_id = request.shared_template_sync_id;
     if (request.refinement_instruction != null)
       body.refinement_instruction = request.refinement_instruction;
     if (request.tone_preference != null)
@@ -252,6 +260,16 @@ class SidecarApi {
       body.short_comment = request.short_comment;
     if (request.sms_summary != null)
       body.sms_summary = request.sms_summary;
+    if (request.explanation_voice != null)
+      body.explanation_voice = request.explanation_voice;
+    if (request.name_drop != null)
+      body.name_drop = request.name_drop;
+    if (request.physician_name_override != null)
+      body.physician_name_override = request.physician_name_override;
+    if (request.include_key_findings != null)
+      body.include_key_findings = request.include_key_findings;
+    if (request.include_measurements != null)
+      body.include_measurements = request.include_measurements;
     if (request.deep_analysis != null)
       body.deep_analysis = request.deep_analysis;
 
@@ -664,6 +682,69 @@ class SidecarApi {
       await this.handleErrorResponse(response);
     }
   }
+
+  // --- Shared Content ---
+
+  async listSharedTeachingPoints(
+    testType?: string,
+  ): Promise<SharedTeachingPoint[]> {
+    const baseUrl = await this.ensureInitialized();
+    const params = new URLSearchParams();
+    if (testType) {
+      params.set("test_type", testType);
+    }
+    const qs = params.toString();
+    const response = await fetch(
+      `${baseUrl}/teaching-points/shared${qs ? `?${qs}` : ""}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async syncSharedTeachingPoints(
+    rows: Record<string, unknown>[],
+  ): Promise<{ replaced: number }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/teaching-points/shared/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async listSharedTemplates(): Promise<SharedTemplate[]> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/templates/shared`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async syncSharedTemplates(
+    rows: Record<string, unknown>[],
+  ): Promise<{ replaced: number }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/templates/shared/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
   // --- Sync ---
 
   async syncExportAll(table: string): Promise<Record<string, unknown>[]> {

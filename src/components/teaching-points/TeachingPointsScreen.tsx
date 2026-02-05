@@ -1,16 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueUpsertAfterMutation, deleteFromSupabase } from "../../services/syncEngine";
+import { getMyShareRecipients, type ShareRecipient } from "../../services/sharingService";
+import { getSupabase, getSession } from "../../services/supabase";
 import { useToast } from "../shared/Toast";
-import type { TeachingPoint } from "../../types/sidecar";
+import type { TeachingPoint, SharedTeachingPoint } from "../../types/sidecar";
 import "./TeachingPointsScreen.css";
 
 export function TeachingPointsScreen() {
   const { showToast } = useToast();
   const [teachingPoints, setTeachingPoints] = useState<TeachingPoint[]>([]);
+  const [sharedPoints, setSharedPoints] = useState<SharedTeachingPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Recipients state (for "Shared with" footer)
+  const [recipients, setRecipients] = useState<ShareRecipient[]>([]);
 
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -19,8 +25,12 @@ export function TeachingPointsScreen() {
 
   const fetchPoints = useCallback(async () => {
     try {
-      const pts = await sidecarApi.listTeachingPoints();
+      const [pts, shared] = await Promise.all([
+        sidecarApi.listTeachingPoints(),
+        sidecarApi.listSharedTeachingPoints().catch(() => [] as SharedTeachingPoint[]),
+      ]);
       setTeachingPoints(pts);
+      setSharedPoints(shared);
     } catch {
       showToast("error", "Failed to load teaching points.");
     } finally {
@@ -31,6 +41,20 @@ export function TeachingPointsScreen() {
   useEffect(() => {
     fetchPoints();
   }, [fetchPoints]);
+
+  useEffect(() => {
+    async function loadRecipients() {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const session = await getSession();
+      if (!session?.user) return;
+      try {
+        const r = await getMyShareRecipients();
+        setRecipients(r);
+      } catch {}
+    }
+    loadRecipients();
+  }, []);
 
   const handleAdd = useCallback(async () => {
     const text = newText.trim();
@@ -246,6 +270,47 @@ export function TeachingPointsScreen() {
           </div>
         )}
       </section>
+
+      {/* Shared With You */}
+      {sharedPoints.length > 0 && (
+        <section className="tp-section tp-shared">
+          <h3 className="tp-section-title">
+            Shared With You
+            <span className="tp-library-count">{sharedPoints.length}</span>
+          </h3>
+          <p className="tp-section-desc">
+            These teaching points are shared by colleagues and are automatically
+            included in your reports.
+          </p>
+          <div className="tp-library-list">
+            {sharedPoints.map((sp) => (
+              <div key={sp.sync_id} className="tp-card tp-card--shared">
+                <div className="tp-card-body">
+                  <p className="tp-card-text">{sp.text}</p>
+                  <div className="tp-card-meta">
+                    <span className="tp-card-sharer">
+                      Shared by {sp.sharer_email}
+                    </span>
+                    {sp.test_type ? (
+                      <span className="tp-card-type">{sp.test_type}</span>
+                    ) : (
+                      <span className="tp-card-type tp-card-type--global">
+                        All types
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {recipients.length > 0 && (
+        <p className="tp-shared-footer">
+          Shared with: {recipients.map(r => r.recipient_email).join(", ")}
+        </p>
+      )}
     </div>
   );
 }

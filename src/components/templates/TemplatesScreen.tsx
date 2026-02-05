@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueUpsertAfterMutation, deleteFromSupabase } from "../../services/syncEngine";
+import { getMyShareRecipients, type ShareRecipient } from "../../services/sharingService";
+import { getSupabase, getSession } from "../../services/supabase";
 import { useToast } from "../shared/Toast";
-import type { Template } from "../../types/sidecar";
+import type { Template, SharedTemplate } from "../../types/sidecar";
 import "./TemplatesScreen.css";
 
 interface FormState {
@@ -24,17 +26,37 @@ const EMPTY_FORM: FormState = {
 export function TemplatesScreen() {
   const { showToast } = useToast();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [recipients, setRecipients] = useState<ShareRecipient[]>([]);
+
+  useEffect(() => {
+    async function loadRecipients() {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const session = await getSession();
+      if (!session?.user) return;
+      try {
+        const r = await getMyShareRecipients();
+        setRecipients(r);
+      } catch {}
+    }
+    loadRecipients();
+  }, []);
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await sidecarApi.listTemplates();
+      const [res, shared] = await Promise.all([
+        sidecarApi.listTemplates(),
+        sidecarApi.listSharedTemplates().catch(() => [] as SharedTemplate[]),
+      ]);
       setTemplates(res.items);
+      setSharedTemplates(shared);
     } catch {
       showToast("error", "Failed to load templates.");
     } finally {
@@ -195,6 +217,43 @@ export function TemplatesScreen() {
           </div>
         ))}
       </div>
+
+      {/* Shared Templates */}
+      {sharedTemplates.length > 0 && (
+        <div className="templates-shared-section">
+          <h3 className="templates-shared-title">Shared Templates</h3>
+          <p className="templates-shared-desc">
+            These templates are shared by colleagues and can be used in your
+            reports. They are read-only.
+          </p>
+          <div className="templates-list">
+            {sharedTemplates.map((tpl) => (
+              <div key={tpl.sync_id} className="template-card template-card--shared">
+                <div className="template-card-info">
+                  <div className="template-card-name">{tpl.name}</div>
+                  <div className="template-card-meta">
+                    <span className="template-badge template-badge--shared">
+                      Shared by {tpl.sharer_email}
+                    </span>
+                    {tpl.test_type && (
+                      <span className="template-badge">{tpl.test_type}</span>
+                    )}
+                    {tpl.tone && (
+                      <span className="template-badge">{tpl.tone}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recipients.length > 0 && (
+        <p className="templates-shared-footer">
+          Shared with: {recipients.map(r => r.recipient_email).join(", ")}
+        </p>
+      )}
 
       {showForm && (
         <div className="template-form-overlay" onClick={closeForm}>

@@ -3,7 +3,7 @@ import tempfile
 
 from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
 
-from api.analysis_models import DetectTypeResponse, ParsedReport, ParseRequest
+from api.analysis_models import DetectTypeRequest, DetectTypeResponse, ParsedReport, ParseRequest
 from api.explain_models import (
     AppSettings,
     ExplainRequest,
@@ -228,21 +228,74 @@ async def scrub_preview(body: dict = Body(...)):
 
 
 @router.post("/analyze/detect-type", response_model=DetectTypeResponse)
-async def detect_test_type(body: dict = Body(...)):
-    """Auto-detect the medical test type from extraction results."""
+async def detect_test_type(body: DetectTypeRequest = Body(...)):
+    """Auto-detect the medical test type from extraction results.
+
+    Uses a three-tier strategy:
+    1. Keyword detection (fast, free) — accept if confidence >= 0.4
+    2. LLM fallback — if keywords are low confidence
+    3. Return best result with detection_method indicating outcome
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+
     try:
-        extraction_result = ExtractionResult(**body)
+        extraction_result = ExtractionResult(**body.extraction_result)
     except Exception as e:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid extraction result: {str(e)}",
         )
 
+    available = registry.list_types()
+
+    # Tier 1: Keyword detection
     type_id, confidence = registry.detect(extraction_result)
+
+    if confidence >= 0.4 and type_id is not None:
+        return DetectTypeResponse(
+            test_type=type_id,
+            confidence=round(confidence, 3),
+            available_types=available,
+            detection_method="keyword",
+            llm_attempted=False,
+        )
+
+    # Tier 2: LLM fallback
+    llm_attempted = False
+    try:
+        settings = settings_store.get_settings()
+        provider_str = settings.llm_provider.value
+        api_key = settings_store.get_api_key_for_provider(provider_str)
+
+        if api_key:
+            from test_types.llm_detector import llm_detect_test_type
+
+            llm_attempted = True
+            provider_enum = LLMProvider(provider_str)
+            client = LLMClient(provider=provider_enum, api_key=api_key)
+            llm_type_id, llm_confidence = await llm_detect_test_type(
+                client, extraction_result.full_text, body.user_hint,
+            )
+
+            if llm_type_id is not None and llm_confidence >= 0.5:
+                return DetectTypeResponse(
+                    test_type=llm_type_id,
+                    confidence=round(llm_confidence, 3),
+                    available_types=available,
+                    detection_method="llm",
+                    llm_attempted=True,
+                )
+    except Exception:
+        _logger.exception("LLM fallback failed during detect-type")
+
+    # Tier 3: Return best keyword result with "none" method (frontend shows dropdown)
     return DetectTypeResponse(
         test_type=type_id,
         confidence=round(confidence, 3),
-        available_types=registry.list_types(),
+        available_types=available,
+        detection_method="none",
+        llm_attempted=llm_attempted,
     )
 
 
@@ -299,6 +352,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
 
     # 2. Detect test type
     test_type = request.test_type
+    detection_confidence = 0.0
     if not test_type:
         type_id, confidence = registry.detect(extraction_result)
         if type_id is None or confidence < 0.2:
@@ -307,21 +361,33 @@ async def explain_report(request: ExplainRequest = Body(...)):
                 detail="Could not determine the test type. Please specify test_type.",
             )
         test_type = type_id
+        detection_confidence = confidence
 
     handler = registry.get(test_type)
-    if handler is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Unknown test type: {test_type}",
-        )
 
-    # 3. Parse report
-    try:
-        parsed_report = handler.parse(extraction_result)
-    except Exception as e:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Failed to parse report: {str(e)}",
+    # If the user provided a free-text type that doesn't match a registered
+    # handler ID, treat it as an unknown type — don't fall back to a
+    # mismatched handler (e.g. don't use the lab_results handler to parse a
+    # calcium score CT report).
+    if handler is not None and request.test_type and request.test_type != handler.test_type_id:
+        handler = None
+
+    # 3. Parse report (or build a generic one for unknown types)
+    if handler is not None:
+        try:
+            parsed_report = handler.parse(extraction_result)
+        except Exception as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Failed to parse report: {str(e)}",
+            )
+    else:
+        # Unknown / user-specified test type — build a minimal parsed report
+        # and let the LLM interpret the raw text directly.
+        parsed_report = ParsedReport(
+            test_type=test_type,
+            test_type_display=test_type.replace("_", " ").title(),
+            detection_confidence=detection_confidence,
         )
 
     # 4. Resolve API key
@@ -369,7 +435,10 @@ async def explain_report(request: ExplainRequest = Body(...)):
     # 6. Build prompts
     literacy_level = LiteracyLevel(request.literacy_level.value)
     prompt_engine = PromptEngine()
-    prompt_context = handler.get_prompt_context()
+    prompt_context = handler.get_prompt_context() if handler else {}
+    if not handler:
+        # For unknown test types, tell the LLM what the user thinks it is
+        prompt_context["test_type_hint"] = test_type
     if settings.specialty and "specialty" not in prompt_context:
         prompt_context["specialty"] = settings.specialty
     tone_pref = request.tone_preference if request.tone_preference is not None else settings.tone_preference
@@ -407,6 +476,15 @@ async def explain_report(request: ExplainRequest = Body(...)):
             template_closing = tpl.get("closing_text")
             if template_tone:
                 prompt_context["tone"] = template_tone
+    elif request.shared_template_sync_id:
+        db = get_db()
+        tpl = db.get_shared_template_by_sync_id(request.shared_template_sync_id)
+        if tpl:
+            template_tone = tpl.get("tone")
+            template_instructions = tpl.get("structure_instructions")
+            template_closing = tpl.get("closing_text")
+            if template_tone:
+                prompt_context["tone"] = template_tone
 
     # 6c. Fetch liked examples for style guidance
     liked_examples = get_db().get_liked_examples(
@@ -414,13 +492,13 @@ async def explain_report(request: ExplainRequest = Body(...)):
         tone_preference=tone_pref, detail_preference=detail_pref,
     )
 
-    # 6d. Fetch teaching points
-    teaching_points = get_db().list_teaching_points(test_type=test_type)
+    # 6d. Fetch teaching points (global + type-specific, including shared)
+    teaching_points = get_db().list_all_teaching_points_for_prompt(test_type=test_type)
 
     user_prompt = prompt_engine.build_user_prompt(
         parsed_report=parsed_report,
-        reference_ranges=handler.get_reference_ranges(),
-        glossary=handler.get_glossary(),
+        reference_ranges=handler.get_reference_ranges() if handler else {},
+        glossary=handler.get_glossary() if handler else {},
         scrubbed_text=scrub_result.scrubbed_text,
         clinical_context=request.clinical_context,
         template_instructions=template_instructions,
@@ -607,6 +685,24 @@ async def create_template(request: TemplateCreateRequest = Body(...)):
     return TemplateResponse(**record)
 
 
+@router.post("/templates/shared/sync")
+async def sync_shared_templates(body: dict = Body(...)):
+    """Full-replace local shared templates cache."""
+    rows = body.get("rows", [])
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows must be a list.")
+    db = get_db()
+    count = db.replace_shared_templates(rows)
+    return {"replaced": count}
+
+
+@router.get("/templates/shared")
+async def list_shared_templates():
+    """Return cached shared templates."""
+    db = get_db()
+    return db.list_shared_templates()
+
+
 @router.patch("/templates/{template_id}", response_model=TemplateResponse)
 async def update_template(template_id: int, request: TemplateUpdateRequest = Body(...)):
     """Update an existing template."""
@@ -786,6 +882,24 @@ async def create_teaching_point(body: dict = Body(...)):
     return db.create_teaching_point(text=text, test_type=test_type)
 
 
+@router.post("/teaching-points/shared/sync")
+async def sync_shared_teaching_points(body: dict = Body(...)):
+    """Full-replace local shared teaching points cache."""
+    rows = body.get("rows", [])
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows must be a list.")
+    db = get_db()
+    count = db.replace_shared_teaching_points(rows)
+    return {"replaced": count}
+
+
+@router.get("/teaching-points/shared")
+async def list_shared_teaching_points(test_type: str | None = Query(None)):
+    """Return cached shared teaching points."""
+    db = get_db()
+    return db.list_shared_teaching_points(test_type=test_type)
+
+
 @router.delete("/teaching-points/{point_id}")
 async def delete_teaching_point(point_id: int):
     """Delete a teaching point."""
@@ -822,23 +936,107 @@ async def generate_letter(request: LetterGenerateRequest = Body(...)):
             detail=f"No API key configured for provider '{provider_str}'. Set it in Settings.",
         )
 
+    specialty = settings.specialty or "general medicine"
+
+    # Resolve physician voice settings
+    voice = settings.explanation_voice.value
+    name_drop = settings.name_drop
+    source = settings.physician_name_source.value
+    if source == "custom":
+        physician_name = settings.custom_physician_name
+    else:
+        physician_name = None
+
+    physician_section = ""
+    if voice == "first_person":
+        physician_section = (
+            "\n## Physician Voice — First Person\n"
+            "You ARE the physician. Write in first person. "
+            'Use first-person language: "I have reviewed your results", '
+            '"In my assessment". '
+            'NEVER use third-person references like "your doctor" or '
+            '"your physician".\n'
+        )
+    elif physician_name:
+        attribution = ""
+        if name_drop:
+            attribution = (
+                f" Include at least one explicit attribution such as "
+                f'"{physician_name} has reviewed your results".'
+            )
+        physician_section = (
+            f"\n## Physician Voice — Third Person (Care Team)\n"
+            f"You are writing on behalf of the physician. "
+            f'When referring to the physician, use "{physician_name}" '
+            f'instead of generic phrases like "your doctor" or "your physician".{attribution}\n'
+        )
+
+    # Fetch teaching points (including shared) and liked examples for style guidance
+    db = get_db()
+    teaching_points = db.list_all_teaching_points_for_prompt(test_type=None)
+    liked_examples = db.get_liked_examples(
+        limit=2, test_type=None,
+        tone_preference=settings.tone_preference,
+        detail_preference=settings.detail_preference,
+    )
+
+    teaching_section = ""
+    if teaching_points:
+        teaching_section = (
+            "\n## Teaching Points\n"
+            "The physician has provided the following personalized instructions.\n"
+            "These reflect their clinical style and preferences. Follow them closely\n"
+            "so the output matches how this physician communicates:\n"
+        )
+        for tp in teaching_points:
+            source = tp.get("source", "own")
+            if source == "own":
+                teaching_section += f"- {tp['text']}\n"
+            else:
+                teaching_section += f"- [From {source}] {tp['text']}\n"
+
+    style_section = ""
+    if liked_examples:
+        style_section = (
+            "\n## Preferred Output Style\n"
+            "The physician has approved outputs with the following structural characteristics.\n"
+            "Match this structure, length, and level of detail.\n"
+        )
+        for idx, example in enumerate(liked_examples, 1):
+            style_section += (
+                f"\n### Style Reference {idx}\n"
+                f"- Summary length: ~{example.get('approx_char_length', 'unknown')} characters\n"
+                f"- Paragraphs: {example.get('paragraph_count', 'unknown')}\n"
+                f"- Approximate sentences: {example.get('approx_sentence_count', 'unknown')}\n"
+            )
+
+    from llm.prompt_engine import _TONE_DESCRIPTIONS, _DETAIL_DESCRIPTIONS
+    tone_desc = _TONE_DESCRIPTIONS.get(settings.tone_preference, _TONE_DESCRIPTIONS[3])
+    detail_desc = _DETAIL_DESCRIPTIONS.get(settings.detail_preference, _DETAIL_DESCRIPTIONS[3])
+
     system_prompt = (
-        "You are writing as a physician or member of the care team composing a "
-        "message to a patient. The message must sound exactly like the clinician "
-        "wrote it themselves and require no editing before sending.\n\n"
-        "## Rules\n"
-        "1. Write in plain, compassionate language appropriate for patients.\n"
-        "2. Do NOT include any patient-identifying information.\n"
-        "3. Interpret findings — explain WHAT results mean for the patient. "
-        "The patient already has their results; do NOT simply recite values "
-        "they can already read. Synthesize findings into meaningful clinical "
-        "statements that help the patient understand their health.\n"
-        "4. NEVER suggest treatments, future testing, or hypothetical actions. "
-        "Do NOT write phrases like 'your doctor may recommend' or 'we may need to'. "
-        "The physician will add their own specific recommendations separately.\n"
-        "5. Be thorough but concise.\n"
-        "6. Structure the response clearly with paragraphs or sections as appropriate.\n"
-        "7. Return ONLY the letter/explanation text. No preamble or meta-commentary."
+        f"You are writing as a physician or member of the care team at a "
+        f"{specialty} practice, composing a message to a patient. The message "
+        f"must sound exactly like the clinician wrote it themselves and require "
+        f"no editing before sending.\n\n"
+        f"## Rules\n"
+        f"1. Write in plain, compassionate language appropriate for patients.\n"
+        f"2. Do NOT include any patient-identifying information.\n"
+        f"3. Interpret findings — explain WHAT results mean for the patient. "
+        f"The patient already has their results; do NOT simply recite values "
+        f"they can already read. Synthesize findings into meaningful clinical "
+        f"statements that help the patient understand their health.\n"
+        f"4. NEVER suggest treatments, future testing, or hypothetical actions. "
+        f"Do NOT write phrases like 'your doctor may recommend' or 'we may need to'. "
+        f"The physician will add their own specific recommendations separately.\n"
+        f"5. Be thorough but concise.\n"
+        f"6. Structure the response clearly with paragraphs or sections as appropriate.\n"
+        f"7. Return ONLY the letter/explanation text. No preamble or meta-commentary.\n"
+        f"{physician_section}"
+        f"\n## Tone Preference\n{tone_desc}\n"
+        f"\n## Detail Level\n{detail_desc}\n"
+        f"{teaching_section}"
+        f"{style_section}"
     )
 
     llm_provider = LLMProvider(provider_str)
