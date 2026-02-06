@@ -17,6 +17,83 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+import re
+
+# Stylistic phrase patterns to extract from liked outputs
+# These are non-clinical patterns that reflect communication style
+_OPENING_PATTERNS = [
+    r"^(I have reviewed|We have reviewed|Your .+ has been reviewed)",
+    r"^(Overall,? |In summary,? |To summarize,? )",
+    r"^(The good news is|Reassuringly,? |Encouragingly,? )",
+    r"^(Thank you for|I wanted to share|I am pleased to report)",
+]
+_TRANSITION_PATTERNS = [
+    r"(On a positive note,? |That said,? |However,? |Additionally,? )",
+    r"(It's worth noting|Worth mentioning|Something to be aware of)",
+    r"(The reassuring findings|The concerning findings)",
+]
+_CLOSING_PATTERNS = [
+    r"(Please don't hesitate to|Feel free to|If you have any questions)",
+    r"(We will discuss|I look forward to|Looking forward to)",
+    r"(Take care|Best regards|Warmly)",
+]
+_SOFTENING_PATTERNS = [
+    r"(warrants? discussion|worth discussing|something to discuss)",
+    r"(worth mentioning|worth noting|worth being aware of)",
+    r"(may be related|could be related|might be associated)",
+]
+
+
+def _extract_stylistic_patterns(text: str) -> dict[str, list[str]]:
+    """Extract non-clinical stylistic patterns from liked output text.
+
+    Returns patterns for: openings, transitions, closings, softening language.
+    Never extracts clinical content, diagnoses, or measurements.
+    """
+    patterns: dict[str, list[str]] = {
+        "openings": [],
+        "transitions": [],
+        "closings": [],
+        "softening": [],
+    }
+
+    # Extract opening patterns (first sentence)
+    first_sentence = text.split(".")[0] if "." in text else text[:100]
+    for pattern in _OPENING_PATTERNS:
+        match = re.search(pattern, first_sentence, re.IGNORECASE)
+        if match:
+            patterns["openings"].append(match.group(1).strip())
+
+    # Extract transition patterns
+    for pattern in _TRANSITION_PATTERNS:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for m in matches[:3]:  # Limit to 3
+            phrase = m.strip() if isinstance(m, str) else m[0].strip()
+            if phrase and phrase not in patterns["transitions"]:
+                patterns["transitions"].append(phrase)
+
+    # Extract closing patterns (last paragraph)
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if paragraphs:
+        last_para = paragraphs[-1]
+        for pattern in _CLOSING_PATTERNS:
+            match = re.search(pattern, last_para, re.IGNORECASE)
+            if match:
+                phrase = match.group(1).strip()
+                if phrase and phrase not in patterns["closings"]:
+                    patterns["closings"].append(phrase)
+
+    # Extract softening language patterns
+    for pattern in _SOFTENING_PATTERNS:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for m in matches[:3]:
+            phrase = m.strip() if isinstance(m, str) else m[0].strip()
+            if phrase and phrase not in patterns["softening"]:
+                patterns["softening"].append(phrase)
+
+    return patterns
+
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -560,6 +637,9 @@ class Database:
                     # to reproduce prior diagnoses on unrelated reports.
                     paragraphs = [p for p in overall_summary.split("\n\n") if p.strip()]
                     sentences = overall_summary.replace("\n", " ").split(". ")
+                    # Extract stylistic phrases (non-clinical patterns)
+                    stylistic_patterns = _extract_stylistic_patterns(overall_summary)
+
                     examples.append({
                         "paragraph_count": len(paragraphs),
                         "approx_sentence_count": len(sentences),
@@ -570,6 +650,7 @@ class Database:
                             for kf in key_findings
                             if kf.get("severity")
                         ][:5],
+                        "stylistic_patterns": stylistic_patterns,
                     })
                 except (json.JSONDecodeError, TypeError):
                     continue

@@ -32,8 +32,55 @@ class RangeThresholds:
     moderate_max: Optional[float] = None
     severe_low: Optional[float] = None
     severe_high: Optional[float] = None
+    critical_low: Optional[float] = None  # Panic value - immediate attention
+    critical_high: Optional[float] = None  # Panic value - immediate attention
     unit: str = ""
     source: str = "Standard adult clinical reference ranges"
+
+
+# Critical/Panic values requiring immediate clinical attention
+# These are approximate values used in many US labs; actual panic values vary by institution
+CRITICAL_VALUES: dict[str, tuple[Optional[float], Optional[float]]] = {
+    # Electrolytes
+    "K": (2.5, 6.5),        # Potassium: <2.5 or >6.5 mEq/L
+    "NA": (120, 160),       # Sodium: <120 or >160 mEq/L
+    "CA": (6.0, 13.0),      # Calcium: <6.0 or >13.0 mg/dL
+    "MG": (1.0, 4.0),       # Magnesium: <1.0 or >4.0 mg/dL
+    "PHOS": (1.0, 8.0),     # Phosphorus: <1.0 or >8.0 mg/dL
+
+    # Glucose
+    "GLU": (40, 500),       # Glucose: <40 or >500 mg/dL
+
+    # Renal
+    "CREAT": (None, 10.0),  # Creatinine: >10.0 mg/dL (no critical low)
+    "BUN": (None, 100),     # BUN: >100 mg/dL
+
+    # Hematology
+    "HGB": (5.0, 20.0),     # Hemoglobin: <5.0 or >20.0 g/dL
+    "HCT": (15.0, 60.0),    # Hematocrit: <15% or >60%
+    "PLT": (20.0, 1000.0),  # Platelets: <20 or >1000 K/uL
+    "WBC": (1.0, 50.0),     # WBC: <1.0 or >50.0 K/uL
+
+    # Coagulation
+    "INR": (None, 5.0),     # INR: >5.0 (for patients on warfarin)
+    "PTT": (None, 100),     # PTT: >100 seconds
+
+    # Liver
+    "TBILI": (None, 15.0),  # Total Bilirubin: >15.0 mg/dL (in adults)
+
+    # Cardiac
+    "TROP": (None, 0.1),    # Troponin: any elevation may be critical depending on context
+    "TROPHS": (None, 52),   # High-sensitivity troponin: varies by assay
+
+    # Blood gases
+    "PH": (7.2, 7.6),       # pH: <7.2 or >7.6
+    "PCO2": (20, 70),       # pCO2: <20 or >70 mmHg
+    "PO2": (40, None),      # pO2: <40 mmHg (no critical high)
+
+    # Other
+    "LAC": (None, 4.0),     # Lactate: >4.0 mmol/L (sepsis concern)
+    "NH3": (None, 100),     # Ammonia: >100 umol/L (hepatic encephalopathy)
+}
 
 
 # Sex-stratified reference ranges for key analytes
@@ -709,6 +756,8 @@ def classify_measurement(
 
     If gender is provided and a sex-stratified range exists for this analyte,
     uses the sex-specific range; otherwise falls back to the union range.
+
+    Critical/panic values are checked first and flagged with CRITICAL status.
     """
     rr: Optional[RangeThresholds] = None
 
@@ -736,6 +785,23 @@ def classify_measurement(
         )
 
     ref_str = _format_reference_range(rr)
+
+    # Check for CRITICAL/PANIC values first
+    critical = CRITICAL_VALUES.get(abbreviation)
+    if critical is not None:
+        critical_low, critical_high = critical
+        if critical_low is not None and value <= critical_low:
+            return ClassificationResult(
+                status=SeverityStatus.CRITICAL,
+                direction=AbnormalityDirection.BELOW_NORMAL,
+                reference_range_str=ref_str,
+            )
+        if critical_high is not None and value >= critical_high:
+            return ClassificationResult(
+                status=SeverityStatus.CRITICAL,
+                direction=AbnormalityDirection.ABOVE_NORMAL,
+                reference_range_str=ref_str,
+            )
 
     # Check above normal
     if rr.normal_max is not None and value > rr.normal_max:

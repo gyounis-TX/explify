@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from api.middleware import add_cors_middleware
@@ -6,16 +8,20 @@ from server import find_free_port, start_server
 from storage import get_db, get_keychain
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup
+    get_db()
+    get_keychain()
+    yield
+    # Shutdown (nothing to do currently)
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Explify Sidecar", version="0.2.0")
+    app = FastAPI(title="Explify Sidecar", version="0.2.5", lifespan=lifespan)
     add_cors_middleware(app)
     app.include_router(router)
-
-    @app.on_event("startup")
-    async def _init_storage() -> None:
-        get_db()
-        get_keychain()
-
     return app
 
 

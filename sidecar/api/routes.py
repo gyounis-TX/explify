@@ -531,6 +531,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
     inc_findings = request.include_key_findings if request.include_key_findings is not None else settings.include_key_findings
     inc_measurements = request.include_measurements if request.include_measurements is not None else settings.include_measurements
     is_sms = bool(request.sms_summary)
+    use_analogies = request.use_analogies if request.use_analogies is not None else settings.use_analogies
     system_prompt = prompt_engine.build_system_prompt(
         literacy_level=literacy_level,
         prompt_context=prompt_context,
@@ -547,6 +548,8 @@ async def explain_report(request: ExplainRequest = Body(...)):
         patient_gender=patient_gender,
         sms_summary=is_sms,
         sms_summary_char_limit=settings.sms_summary_char_limit,
+        high_anxiety_mode=bool(request.high_anxiety_mode),
+        use_analogies=use_analogies,
     )
     # 6b. Load template if specified
     template_tone = None
@@ -603,6 +606,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         recent_edits=recent_edits,
         patient_age=patient_age,
         patient_gender=patient_gender,
+        quick_reasons=request.quick_reasons,
     )
 
     # Log prompt sizes for debugging token issues

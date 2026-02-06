@@ -14,6 +14,25 @@ const baseNavItems = [
   { path: "/settings", label: "Settings" },
 ];
 
+const TAGLINES = [
+  "Explain better",
+  "When smartphrases aren't enough",
+  "Nonhumans helping humans help humans",
+  "Turning results into understanding",
+  "Clear explanations. Less typing.",
+  "Make every result understandable",
+  "Transforming complexity to clarity",
+  "Because your time matters",
+];
+
+function getDailyTagline(): string {
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 0);
+  const diff = now.getTime() - startOfYear.getTime();
+  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+  return TAGLINES[dayOfYear % TAGLINES.length];
+}
+
 function getNavItems(userEmail: string | null) {
   if (isAdmin(userEmail)) {
     return [...baseNavItems, { path: "/admin", label: "Admin" }];
@@ -138,7 +157,7 @@ export function Sidebar() {
         ) : (
           <>
             <h1 className="sidebar-title">Explify</h1>
-            <span className="sidebar-descriptor">Explain Better</span>
+            <span className="sidebar-descriptor">{getDailyTagline()}</span>
           </>
         )}
       </div>

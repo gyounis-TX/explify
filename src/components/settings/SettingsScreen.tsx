@@ -87,6 +87,7 @@ export function SettingsScreen() {
   const [smsCharLimit, setSmsCharLimit] = useState(300);
   const [footerType, setFooterType] = useState<FooterType>("explify_branding");
   const [customFooterText, setCustomFooterText] = useState("");
+  const [useAnalogies, setUseAnalogies] = useState(true);
 
   // About / Update state
   const [appVersion, setAppVersion] = useState("");
@@ -123,6 +124,7 @@ export function SettingsScreen() {
         setSmsCharLimit(s.sms_summary_char_limit ?? 300);
         setFooterType(s.footer_type ?? "explify_branding");
         setCustomFooterText(s.custom_footer_text ?? "");
+        setUseAnalogies(s.use_analogies ?? true);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to load settings";
         setError(msg);
@@ -161,6 +163,7 @@ export function SettingsScreen() {
         sms_summary_char_limit: smsCharLimit,
         footer_type: footerType,
         custom_footer_text: customFooterText.trim() || null,
+        use_analogies: useAnalogies,
       };
 
       await sidecarApi.updateSettings(update);
@@ -182,7 +185,7 @@ export function SettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, showToast]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, showToast]);
 
   // Auto-save: debounce 800ms after any setting changes
   const handleSaveRef = useRef(handleSave);
@@ -196,7 +199,7 @@ export function SettingsScreen() {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies]);
 
   const handleCheckForUpdates = async () => {
     setUpdateStatus("checking");
@@ -385,6 +388,21 @@ export function SettingsScreen() {
               <span key={n} className={`slider-tick${detailPreference === n ? " slider-tick--active" : ""}`}>{n}</span>
             ))}
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label checkbox-label">
+            <input
+              type="checkbox"
+              checked={useAnalogies}
+              onChange={(e) => setUseAnalogies(e.target.checked)}
+            />
+            <span className="checkbox-label-text">
+              Use Analogies
+              <span className="checkbox-label-hint">
+                Include size comparisons and everyday analogies to help patients understand measurements
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 

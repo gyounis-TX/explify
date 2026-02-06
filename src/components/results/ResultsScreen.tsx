@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type {
   ExplainResponse,
@@ -24,6 +24,7 @@ const SEVERITY_LABELS: Record<string, string> = {
   mildly_abnormal: "Mildly Abnormal",
   moderately_abnormal: "Moderately Abnormal",
   severely_abnormal: "Severely Abnormal",
+  critical: "CRITICAL",
   undetermined: "Undetermined",
 };
 
@@ -32,6 +33,7 @@ const SEVERITY_ICONS: Record<string, string> = {
   mildly_abnormal: "\u26A0",
   moderately_abnormal: "\u25B2",
   severely_abnormal: "\u2716",
+  critical: "\u26A0\u26A0",  // Double warning for critical
   undetermined: "\u2014",
 };
 
@@ -139,6 +141,7 @@ export function ResultsScreen() {
     historyId?: number;
     historyLiked?: boolean;
     clinicalContext?: string;
+    quickReasons?: string[];
     letterMode?: boolean;
     letterId?: number;
     letterContent?: string;
@@ -155,6 +158,7 @@ export function ResultsScreen() {
     ?? session?.extractionResult as ExtractionResult | undefined) ?? null;
   const templateId = locationState?.templateId ?? (session?.templateId as number | undefined);
   const clinicalContext = locationState?.clinicalContext ?? (session?.clinicalContext as string | undefined);
+  const quickReasons = locationState?.quickReasons ?? (session?.quickReasons as string[] | undefined);
 
   // Letter mode state
   const letterMode = locationState?.letterMode ?? false;
@@ -203,6 +207,12 @@ export function ResultsScreen() {
   // Deep analysis state
   const [deepAnalysis, setDeepAnalysis] = useState(false);
 
+  // High anxiety mode — maximizes reassurance and avoids alarming language
+  const [highAnxietyMode, setHighAnxietyMode] = useState(false);
+
+  // Analogy mode — includes size comparisons and everyday analogies
+  const [useAnalogies, setUseAnalogies] = useState(true);
+
   // Physician voice & attribution state
   const [explanationVoice, setExplanationVoice] = useState<ExplanationVoice>("third_person");
   const [nameDrop, setNameDrop] = useState(true);
@@ -250,10 +260,45 @@ export function ResultsScreen() {
     ? testTypeOverride.trim().replace(/\b\w/g, (c) => c.toUpperCase())
     : currentResponse?.parsed_report.test_type_display || "this type";
 
+  // Draft auto-save key and debounce ref
+  const draftKey = historyId ? `draft:${historyId}` : null;
+  const draftSaveRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   // Sync edit state when response changes
   useEffect(() => {
     if (!currentResponse) return;
     const expl = currentResponse.explanation;
+
+    // Check for saved draft before overwriting
+    if (draftKey) {
+      const savedDraft = localStorage.getItem(draftKey);
+      if (savedDraft) {
+        try {
+          const draft = JSON.parse(savedDraft);
+          // Use draft if it exists and has content
+          if (draft.summary && draft.summary !== expl.overall_summary) {
+            setEditedSummary(draft.summary);
+            setIsDirty(true);
+            setIsEditing(true);
+            // Restore findings if present
+            if (draft.findings) {
+              setEditedFindings(draft.findings);
+            } else {
+              setEditedFindings(
+                expl.key_findings.map((f) => ({
+                  finding: f.finding,
+                  explanation: f.explanation,
+                })),
+              );
+            }
+            return;
+          }
+        } catch {
+          // Invalid draft, ignore
+        }
+      }
+    }
+
     setEditedSummary(expl.overall_summary);
     setEditedFindings(
       expl.key_findings.map((f) => ({
@@ -263,7 +308,37 @@ export function ResultsScreen() {
     );
     setIsDirty(false);
     setIsEditing(false);
-  }, [currentResponse]);
+  }, [currentResponse, draftKey]);
+
+  // Auto-save draft when editing (debounced)
+  useEffect(() => {
+    if (!draftKey || !isDirty) return;
+
+    if (draftSaveRef.current) {
+      clearTimeout(draftSaveRef.current);
+    }
+
+    draftSaveRef.current = setTimeout(() => {
+      localStorage.setItem(draftKey, JSON.stringify({
+        summary: editedSummary,
+        findings: editedFindings,
+        savedAt: new Date().toISOString(),
+      }));
+    }, 2000);
+
+    return () => {
+      if (draftSaveRef.current) {
+        clearTimeout(draftSaveRef.current);
+      }
+    };
+  }, [draftKey, editedSummary, editedFindings, isDirty]);
+
+  // Clear draft after successful copy
+  const clearDraft = useCallback(() => {
+    if (draftKey) {
+      localStorage.removeItem(draftKey);
+    }
+  }, [draftKey]);
 
   useEffect(() => {
     if (!currentResponse) return;
@@ -318,6 +393,7 @@ export function ResultsScreen() {
         setNameDrop(s.name_drop ?? true);
         setPracticeProviders(s.practice_providers ?? []);
         setSmsEnabled(s.sms_summary_enabled ?? false);
+        setUseAnalogies(s.use_analogies ?? true);
         const src = s.physician_name_source ?? "auto_extract";
         if (src === "custom" && s.custom_physician_name) {
           setPhysicianOverride(s.custom_physician_name);
@@ -342,8 +418,9 @@ export function ResultsScreen() {
       historyId,
       historyLiked: isLiked,
       clinicalContext,
+      quickReasons,
     });
-  }, [currentResponse, fromHistory, extractionResult, templateId, historyId, isLiked, clinicalContext]);
+  }, [currentResponse, fromHistory, extractionResult, templateId, historyId, isLiked, clinicalContext, quickReasons]);
 
   const canRefine = !fromHistory && extractionResult != null;
 
@@ -371,6 +448,9 @@ export function ResultsScreen() {
         include_measurements: (isShort || isSms) ? true : sectionSettings.include_measurements,
         refinement_instruction: refinementInstruction.trim() || undefined,
         deep_analysis: deepAnalysis || undefined,
+        high_anxiety_mode: highAnxietyMode || undefined,
+        quick_reasons: quickReasons,
+        use_analogies: useAnalogies,
       });
       if (isSms) {
         setSmsText(response.explanation.overall_summary);
@@ -393,7 +473,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, effectiveTestType, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, commentMode, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, deepAnalysis, showToast]);
+  }, [extractionResult, effectiveTestType, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, deepAnalysis, highAnxietyMode, useAnalogies, showToast]);
 
   const handleTranslateToggle = useCallback(async () => {
     const translatingToSpanish = !isSpanish;
@@ -445,6 +525,9 @@ export function ResultsScreen() {
           ? "Translate the entire explanation into Spanish. Keep all medical values and units in their original form. Use simple, patient-friendly Spanish."
           : undefined,
         deep_analysis: deepAnalysis || undefined,
+        high_anxiety_mode: highAnxietyMode || undefined,
+        quick_reasons: quickReasons,
+        use_analogies: useAnalogies,
       });
       if (isSms) {
         setSmsText(response.explanation.overall_summary);
@@ -468,7 +551,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, effectiveTestType, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, commentMode, isSpanish, explanationVoice, nameDrop, physicianOverride, sectionSettings, deepAnalysis, showToast, letterMode, letterPrompt]);
+  }, [extractionResult, effectiveTestType, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, isSpanish, explanationVoice, nameDrop, physicianOverride, sectionSettings, deepAnalysis, highAnxietyMode, useAnalogies, showToast, letterMode, letterPrompt]);
 
   const handleExportPdf = useCallback(async () => {
     if (!currentResponse) return;
@@ -573,6 +656,9 @@ export function ResultsScreen() {
         include_key_findings: true,
         include_measurements: true,
         deep_analysis: deepAnalysis || undefined,
+        high_anxiety_mode: highAnxietyMode || undefined,
+        quick_reasons: quickReasons,
+        use_analogies: useAnalogies,
       });
       setShortCommentText(response.explanation.overall_summary);
       logUsage({
@@ -587,7 +673,7 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingComment(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, highAnxietyMode, useAnalogies, showToast]);
 
   // Generate long explanation on demand when user switches to "long" tab
   const generateLongExplanation = useCallback(async () => {
@@ -611,6 +697,9 @@ export function ResultsScreen() {
         include_measurements: sectionSettings.include_measurements,
         refinement_instruction: refinementInstruction.trim() || undefined,
         deep_analysis: deepAnalysis || undefined,
+        high_anxiety_mode: highAnxietyMode || undefined,
+        quick_reasons: quickReasons,
+        use_analogies: useAnalogies,
       });
       setLongExplanationResponse(response);
       logUsage({
@@ -625,7 +714,7 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingLong(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, highAnxietyMode, useAnalogies, showToast]);
 
   // Generate SMS summary on demand
   const generateSmsText = useCallback(async () => {
@@ -648,6 +737,9 @@ export function ResultsScreen() {
         include_key_findings: true,
         include_measurements: true,
         deep_analysis: deepAnalysis || undefined,
+        high_anxiety_mode: highAnxietyMode || undefined,
+        quick_reasons: quickReasons,
+        use_analogies: useAnalogies,
       });
       setSmsText(response.explanation.overall_summary);
       logUsage({
@@ -663,7 +755,7 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingSms(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, highAnxietyMode, useAnalogies, showToast]);
 
   // Generate on-demand when user switches tabs and content isn't cached
   useEffect(() => {
@@ -741,10 +833,13 @@ export function ResultsScreen() {
           });
         }
       }
+
+      // Clear draft after successful copy
+      clearDraft();
     } catch {
       showToast("error", "Failed to copy to clipboard.");
     }
-  }, [commentPreviewText, showToast, historyId, isDirty, commentMode, editedSummary]);
+  }, [commentPreviewText, showToast, historyId, isDirty, commentMode, editedSummary, clearDraft]);
 
   const handleCopyLetter = useCallback(async () => {
     try {
@@ -864,6 +959,36 @@ export function ResultsScreen() {
                   </button>
                 </div>
               </div>
+              {teachingPoints.length > 0 && (
+                <div className="own-teaching-points">
+                  <span className="own-teaching-points-label">Your teaching points</span>
+                  {teachingPoints.map((tp) => (
+                    <div key={tp.id} className="own-teaching-point-card">
+                      <p className="own-teaching-point-text">{tp.text}</p>
+                      <div className="own-teaching-point-meta">
+                        {tp.test_type ? (
+                          <span className="own-teaching-point-type">{tp.test_type}</span>
+                        ) : (
+                          <span className="own-teaching-point-type own-teaching-point-type--global">All types</span>
+                        )}
+                        <button
+                          className="own-teaching-point-delete"
+                          onClick={async () => {
+                            try {
+                              await sidecarApi.deleteTeachingPoint(tp.id);
+                              setTeachingPoints((prev) => prev.filter((p) => p.id !== tp.id));
+                            } catch {
+                              showToast("error", "Failed to delete teaching point.");
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {sharedTeachingPoints.length > 0 && (
                 <div className="shared-teaching-points">
                   <span className="shared-teaching-points-label">Shared with you</span>
@@ -932,7 +1057,9 @@ export function ResultsScreen() {
               <div className="quick-slider-group">
                 <label className="quick-slider-label">
                   Tone
-                  <span className="quick-slider-value">{TONE_LABELS[toneSlider]}</span>
+                  <span className="quick-slider-value">
+                    {highAnxietyMode ? "High Anxiety Mode" : TONE_LABELS[toneSlider]}
+                  </span>
                 </label>
                 <div className="quick-slider-row">
                   <span className="quick-slider-end">Concerning</span>
@@ -942,11 +1069,37 @@ export function ResultsScreen() {
                     min={1}
                     max={5}
                     step={1}
-                    value={toneSlider}
+                    value={highAnxietyMode ? 5 : toneSlider}
                     onChange={(e) => setToneSlider(Number(e.target.value))}
+                    disabled={highAnxietyMode}
                   />
                   <span className="quick-slider-end">Very Reassuring</span>
                 </div>
+                <label className="high-anxiety-toggle">
+                  <input
+                    type="checkbox"
+                    checked={highAnxietyMode}
+                    onChange={(e) => {
+                      setHighAnxietyMode(e.target.checked);
+                      if (e.target.checked) setToneSlider(5);
+                    }}
+                  />
+                  <span className="high-anxiety-label">High Anxiety Patient</span>
+                  <span className="high-anxiety-hint">
+                    Extra reassurance, avoids alarming language
+                  </span>
+                </label>
+                <label className="high-anxiety-toggle">
+                  <input
+                    type="checkbox"
+                    checked={useAnalogies}
+                    onChange={(e) => setUseAnalogies(e.target.checked)}
+                  />
+                  <span className="high-anxiety-label">Use Analogies</span>
+                  <span className="high-anxiety-hint">
+                    Size comparisons and everyday examples
+                  </span>
+                </label>
               </div>
               <div className="quick-slider-group">
                 <label className="quick-slider-label">
@@ -1468,6 +1621,36 @@ export function ResultsScreen() {
               </button>
             </div>
           </div>
+          {teachingPoints.length > 0 && (
+            <div className="own-teaching-points">
+              <span className="own-teaching-points-label">Your teaching points</span>
+              {teachingPoints.map((tp) => (
+                <div key={tp.id} className="own-teaching-point-card">
+                  <p className="own-teaching-point-text">{tp.text}</p>
+                  <div className="own-teaching-point-meta">
+                    {tp.test_type ? (
+                      <span className="own-teaching-point-type">{tp.test_type}</span>
+                    ) : (
+                      <span className="own-teaching-point-type own-teaching-point-type--global">All types</span>
+                    )}
+                    <button
+                      className="own-teaching-point-delete"
+                      onClick={async () => {
+                        try {
+                          await sidecarApi.deleteTeachingPoint(tp.id);
+                          setTeachingPoints((prev) => prev.filter((p) => p.id !== tp.id));
+                        } catch {
+                          showToast("error", "Failed to delete teaching point.");
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {sharedTeachingPoints.length > 0 && (
             <div className="shared-teaching-points">
               <span className="shared-teaching-points-label">Shared with you</span>
@@ -1541,7 +1724,9 @@ export function ResultsScreen() {
             <div className="quick-slider-group">
               <label className="quick-slider-label">
                 Tone
-                <span className="quick-slider-value">{TONE_LABELS[toneSlider]}</span>
+                <span className="quick-slider-value">
+                  {highAnxietyMode ? "High Anxiety Mode" : TONE_LABELS[toneSlider]}
+                </span>
               </label>
               <div className="quick-slider-row">
                 <span className="quick-slider-end">Concerning</span>
@@ -1551,11 +1736,37 @@ export function ResultsScreen() {
                   min={1}
                   max={5}
                   step={1}
-                  value={toneSlider}
+                  value={highAnxietyMode ? 5 : toneSlider}
                   onChange={(e) => setToneSlider(Number(e.target.value))}
+                  disabled={highAnxietyMode}
                 />
                 <span className="quick-slider-end">Very Reassuring</span>
               </div>
+              <label className="high-anxiety-toggle">
+                <input
+                  type="checkbox"
+                  checked={highAnxietyMode}
+                  onChange={(e) => {
+                    setHighAnxietyMode(e.target.checked);
+                    if (e.target.checked) setToneSlider(5);
+                  }}
+                />
+                <span className="high-anxiety-label">High Anxiety Patient</span>
+                <span className="high-anxiety-hint">
+                  Extra reassurance, avoids alarming language
+                </span>
+              </label>
+              <label className="high-anxiety-toggle">
+                <input
+                  type="checkbox"
+                  checked={useAnalogies}
+                  onChange={(e) => setUseAnalogies(e.target.checked)}
+                />
+                <span className="high-anxiety-label">Use Analogies</span>
+                <span className="high-anxiety-hint">
+                  Size comparisons and everyday examples
+                </span>
+              </label>
             </div>
             <div className="quick-slider-group">
               <label className="quick-slider-label">

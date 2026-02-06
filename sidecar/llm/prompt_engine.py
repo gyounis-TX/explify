@@ -40,6 +40,693 @@ def _extract_indication_from_report(report_text: str) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Medication Awareness
+# ---------------------------------------------------------------------------
+
+# Common medications and their effects on test interpretation
+_MEDICATION_EFFECTS: dict[str, list[str]] = {
+    # Cardiac medications
+    "beta_blockers": [
+        "Beta blockers (metoprolol, atenolol, carvedilol, bisoprolol, propranolol) "
+        "lower heart rate and blunt exercise response. A 'low' heart rate is expected. "
+        "Peak exercise HR may not reach target. Evaluate chronotropic response in context."
+    ],
+    "ace_arb": [
+        "ACE inhibitors/ARBs (lisinopril, losartan, valsartan, olmesartan) can cause "
+        "mild potassium elevation and creatinine increase (up to 30% is acceptable). "
+        "A small creatinine rise does not indicate renal failure."
+    ],
+    "diuretics": [
+        "Diuretics (furosemide, hydrochlorothiazide, spironolactone, chlorthalidone) "
+        "can cause electrolyte changes: low potassium/magnesium (loop/thiazide) or "
+        "high potassium (spironolactone). Also may elevate uric acid and glucose."
+    ],
+    "statins": [
+        "Statins (atorvastatin, rosuvastatin, simvastatin, pravastatin) may cause "
+        "mild transaminase elevation (ALT/AST). Up to 3x normal is generally acceptable. "
+        "May also slightly elevate CK."
+    ],
+    "anticoagulants": [
+        "Anticoagulants (warfarin, apixaban, rivaroxaban, dabigatran, enoxaparin) "
+        "affect coagulation studies. INR is expected to be elevated on warfarin. "
+        "Direct oral anticoagulants may affect factor Xa and thrombin time."
+    ],
+    "antiplatelets": [
+        "Antiplatelets (aspirin, clopidogrel, prasugrel, ticagrelor) affect platelet "
+        "function tests but not standard coagulation studies or platelet count."
+    ],
+    # Endocrine medications
+    "thyroid_meds": [
+        "Thyroid medications (levothyroxine, methimazole, PTU) directly affect thyroid "
+        "labs. TSH may take 6-8 weeks to equilibrate after dose changes. Interpret "
+        "thyroid panels in context of medication timing."
+    ],
+    "diabetes_meds": [
+        "Diabetes medications: Metformin can rarely cause lactic acidosis and B12 "
+        "deficiency. SGLT2 inhibitors (empagliflozin, dapagliflozin) cause glycosuria "
+        "and may affect kidney function tests. GLP-1 agonists may slow gastric emptying."
+    ],
+    "steroids": [
+        "Corticosteroids (prednisone, dexamethasone, hydrocortisone) cause glucose "
+        "elevation, electrolyte changes, and may suppress adrenal function. They can "
+        "also cause leukocytosis (elevated WBC) without infection."
+    ],
+    # Other common medications
+    "nsaids": [
+        "NSAIDs (ibuprofen, naproxen, meloxicam, celecoxib) can affect renal function "
+        "(elevated creatinine, reduced eGFR), cause fluid retention, and may affect "
+        "blood pressure. Can also cause GI bleeding affecting hemoglobin."
+    ],
+    "proton_pump_inhibitors": [
+        "PPIs (omeprazole, pantoprazole, esomeprazole) can cause low magnesium, B12 "
+        "deficiency with long-term use, and may affect iron absorption."
+    ],
+    "antidepressants": [
+        "SSRIs/SNRIs may affect platelet function and sodium levels (SIADH causing "
+        "hyponatremia). QTc prolongation can occur with certain antidepressants."
+    ],
+}
+
+# Medication name patterns for extraction
+_MEDICATION_PATTERNS: dict[str, list[str]] = {
+    "beta_blockers": [
+        r"\b(?:metoprolol|atenolol|carvedilol|bisoprolol|propranolol|nadolol|"
+        r"nebivolol|labetalol|lopressor|toprol|coreg)\b"
+    ],
+    "ace_arb": [
+        r"\b(?:lisinopril|enalapril|ramipril|benazepril|captopril|"
+        r"losartan|valsartan|olmesartan|irbesartan|telmisartan|candesartan|"
+        r"prinivil|zestril|diovan|cozaar|benicar)\b"
+    ],
+    "diuretics": [
+        r"\b(?:furosemide|lasix|hydrochlorothiazide|hctz|spironolactone|"
+        r"chlorthalidone|bumetanide|metolazone|torsemide|aldactone)\b"
+    ],
+    "statins": [
+        r"\b(?:atorvastatin|rosuvastatin|simvastatin|pravastatin|lovastatin|"
+        r"pitavastatin|lipitor|crestor|zocor)\b"
+    ],
+    "anticoagulants": [
+        r"\b(?:warfarin|coumadin|apixaban|eliquis|rivaroxaban|xarelto|"
+        r"dabigatran|pradaxa|enoxaparin|lovenox|heparin)\b"
+    ],
+    "antiplatelets": [
+        r"\b(?:aspirin|clopidogrel|plavix|prasugrel|effient|ticagrelor|brilinta)\b"
+    ],
+    "thyroid_meds": [
+        r"\b(?:levothyroxine|synthroid|methimazole|tapazole|propylthiouracil|ptu|"
+        r"liothyronine|cytomel|armour thyroid)\b"
+    ],
+    "diabetes_meds": [
+        r"\b(?:metformin|glucophage|glipizide|glyburide|glimepiride|"
+        r"empagliflozin|jardiance|dapagliflozin|farxiga|canagliflozin|invokana|"
+        r"semaglutide|ozempic|wegovy|liraglutide|victoza|dulaglutide|trulicity|"
+        r"sitagliptin|januvia|insulin)\b"
+    ],
+    "steroids": [
+        r"\b(?:prednisone|prednisolone|dexamethasone|methylprednisolone|"
+        r"hydrocortisone|cortisone|medrol)\b"
+    ],
+    "nsaids": [
+        r"\b(?:ibuprofen|advil|motrin|naproxen|aleve|meloxicam|mobic|"
+        r"celecoxib|celebrex|diclofenac|indomethacin|ketorolac)\b"
+    ],
+    "proton_pump_inhibitors": [
+        r"\b(?:omeprazole|prilosec|pantoprazole|protonix|esomeprazole|nexium|"
+        r"lansoprazole|prevacid|rabeprazole)\b"
+    ],
+    "antidepressants": [
+        r"\b(?:sertraline|zoloft|fluoxetine|prozac|escitalopram|lexapro|"
+        r"citalopram|celexa|paroxetine|paxil|venlafaxine|effexor|"
+        r"duloxetine|cymbalta|bupropion|wellbutrin|trazodone)\b"
+    ],
+}
+
+
+def _extract_medications_from_context(clinical_context: str) -> list[str]:
+    """Extract medication classes detected in clinical context.
+
+    Returns a list of medication class names (e.g., 'beta_blockers', 'statins')
+    that were found in the clinical context text.
+    """
+    if not clinical_context:
+        return []
+
+    detected_classes: list[str] = []
+    text_lower = clinical_context.lower()
+
+    for med_class, patterns in _MEDICATION_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, text_lower):
+                detected_classes.append(med_class)
+                break  # Only count each class once
+
+    return detected_classes
+
+
+def _build_medication_guidance(detected_classes: list[str]) -> str:
+    """Build medication-specific interpretation guidance for detected medications."""
+    if not detected_classes:
+        return ""
+
+    guidance_parts = [
+        "\n## Medication Considerations",
+        "The following medications were detected in the clinical context. "
+        "Consider their effects when interpreting test results:\n",
+    ]
+
+    for med_class in detected_classes:
+        effects = _MEDICATION_EFFECTS.get(med_class, [])
+        for effect in effects:
+            guidance_parts.append(f"- {effect}")
+
+    return "\n".join(guidance_parts)
+
+
+# ---------------------------------------------------------------------------
+# Condition-Aware Interpretation
+# ---------------------------------------------------------------------------
+
+# Chronic conditions and their interpretation adjustments
+_CONDITION_GUIDANCE: dict[str, str] = {
+    "diabetes": (
+        "DIABETES: A1C target is typically <7% but may be relaxed to <8% in elderly "
+        "or those with comorbidities. Fasting glucose 100-125 is prediabetic; ≥126 is "
+        "diabetic. For established diabetics, focus on control trend rather than "
+        "single values. Kidney function monitoring is essential."
+    ),
+    "ckd": (
+        "CHRONIC KIDNEY DISEASE: Baseline creatinine and eGFR are already reduced. "
+        "Small creatinine changes are expected. Focus on stability rather than absolute "
+        "values. Potassium and phosphorus monitoring important. Anemia (low Hgb) is "
+        "expected in CKD stages 3-5. Drug dosing often adjusted for renal function."
+    ),
+    "heart_failure": (
+        "HEART FAILURE: BNP/NT-proBNP may be chronically elevated. Focus on trend "
+        "from baseline rather than absolute values. Fluid status affects many labs. "
+        "Renal function may fluctuate with diuretic therapy. Low sodium can occur "
+        "with fluid overload or diuretic use."
+    ),
+    "hypertension": (
+        "HYPERTENSION: Monitor for target organ damage (kidney function, cardiac "
+        "changes). Electrolytes may be affected by antihypertensive medications. "
+        "LVH on echo is a sign of longstanding HTN."
+    ),
+    "atrial_fibrillation": (
+        "ATRIAL FIBRILLATION: Irregular heart rate expected. If on anticoagulation, "
+        "coagulation studies will be affected. LA enlargement is common and expected. "
+        "Rate control is the primary goal for most patients."
+    ),
+    "copd": (
+        "COPD: Baseline PFTs show obstructive pattern. Chronic CO2 retention may "
+        "affect baseline labs. Pulmonary hypertension may develop. Polycythemia "
+        "(elevated Hgb/Hct) can occur as compensation for chronic hypoxia."
+    ),
+    "cirrhosis": (
+        "CIRRHOSIS/LIVER DISEASE: Baseline liver enzymes may be abnormal. Coagulation "
+        "may be impaired (elevated INR without anticoagulation). Low albumin and "
+        "platelet count are expected. Interpret creatinine cautiously as muscle mass "
+        "is often reduced."
+    ),
+    "hypothyroidism": (
+        "HYPOTHYROIDISM: If on replacement therapy, TSH should be normal. Untreated "
+        "or undertreated hypothyroidism can cause elevated cholesterol, low sodium, "
+        "and anemia. Weight and energy changes affect other parameters."
+    ),
+    "hyperthyroidism": (
+        "HYPERTHYROIDISM: Can cause elevated liver enzymes, low cholesterol, "
+        "tachycardia, atrial fibrillation, and bone loss. Monitor for improvement "
+        "with treatment."
+    ),
+    "anemia": (
+        "CHRONIC ANEMIA: Baseline Hgb is already low. Focus on stability and trend. "
+        "Identify type (iron deficiency, B12, chronic disease) for targeted "
+        "interpretation. Compensatory changes may be present."
+    ),
+    "obesity": (
+        "OBESITY: Metabolic syndrome components (glucose, lipids, blood pressure) "
+        "are common. Fatty liver may cause mild transaminase elevation. Sleep apnea "
+        "may cause pulmonary hypertension and polycythemia."
+    ),
+    "cancer": (
+        "ACTIVE MALIGNANCY: Many lab abnormalities can occur. Anemia of chronic "
+        "disease is common. Chemotherapy affects counts and organ function. "
+        "Tumor markers should be interpreted in clinical context."
+    ),
+    "autoimmune": (
+        "AUTOIMMUNE DISEASE: Chronic inflammation affects multiple lab values. "
+        "Anemia of chronic disease, elevated inflammatory markers expected. "
+        "Immunosuppressive medications have their own effects."
+    ),
+}
+
+# Condition detection patterns
+_CONDITION_PATTERNS: dict[str, list[str]] = {
+    "diabetes": [
+        r"\b(?:diabet(?:es|ic)|t2dm|t1dm|dm2|dm1|iddm|niddm|a1c|hba1c|"
+        r"type\s*[12]\s*diabet|insulin[- ]?dependent)\b"
+    ],
+    "ckd": [
+        r"\b(?:ckd|chronic\s*kidney|renal\s*(?:failure|insufficiency|disease)|"
+        r"esrd|end[- ]?stage\s*renal|dialysis|gfr\s*(?:stage|<)|nephropathy)\b"
+    ],
+    "heart_failure": [
+        r"\b(?:chf|hfref|hfpef|heart\s*failure|systolic\s*dysfunction|"
+        r"diastolic\s*dysfunction|cardiomyopathy|reduced\s*ef|low\s*ef|"
+        r"lvef\s*(?:<|reduced)|congestive)\b"
+    ],
+    "hypertension": [
+        r"\b(?:htn|hypertension|high\s*blood\s*pressure|elevated\s*bp|"
+        r"essential\s*hypertension)\b"
+    ],
+    "atrial_fibrillation": [
+        r"\b(?:afib|a[- ]?fib|atrial\s*fibrillation|atrial\s*flutter|"
+        r"af(?:ib)?(?:\s|$)|paroxysmal\s*af)\b"
+    ],
+    "copd": [
+        r"\b(?:copd|chronic\s*obstructive|emphysema|chronic\s*bronchitis|"
+        r"gold\s*stage|obstructive\s*lung\s*disease)\b"
+    ],
+    "cirrhosis": [
+        r"\b(?:cirrhosis|liver\s*(?:disease|failure|fibrosis)|hepatic\s*"
+        r"(?:disease|failure|encephalopathy)|nash|nafld|alcoholic\s*liver|"
+        r"portal\s*hypertension|esophageal\s*varices|ascites)\b"
+    ],
+    "hypothyroidism": [
+        r"\b(?:hypothyroid|hashimoto|low\s*thyroid|underactive\s*thyroid|"
+        r"thyroid\s*replacement|levothyroxine|synthroid)\b"
+    ],
+    "hyperthyroidism": [
+        r"\b(?:hyperthyroid|graves|overactive\s*thyroid|thyrotoxicosis|"
+        r"high\s*thyroid)\b"
+    ],
+    "anemia": [
+        r"\b(?:anemia|anaemia|low\s*(?:hgb|hemoglobin|hematocrit)|"
+        r"iron\s*deficiency|b12\s*deficiency|folate\s*deficiency)\b"
+    ],
+    "obesity": [
+        r"\b(?:obesity|obese|morbid(?:ly)?\s*obese|bmi\s*(?:>|over)\s*30|"
+        r"metabolic\s*syndrome|bariatric)\b"
+    ],
+    "cancer": [
+        r"\b(?:cancer|malignancy|carcinoma|lymphoma|leukemia|melanoma|"
+        r"oncology|chemotherapy|radiation\s*therapy|tumor|metasta)\b"
+    ],
+    "autoimmune": [
+        r"\b(?:lupus|sle|rheumatoid\s*arthritis|ra\b|psoriatic\s*arthritis|"
+        r"sjogren|autoimmune|inflammatory\s*arthritis|vasculitis|"
+        r"scleroderma|myasthenia)\b"
+    ],
+}
+
+
+def _extract_conditions_from_context(clinical_context: str) -> list[str]:
+    """Extract chronic conditions detected in clinical context."""
+    if not clinical_context:
+        return []
+
+    detected: list[str] = []
+    text_lower = clinical_context.lower()
+
+    for condition, patterns in _CONDITION_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, text_lower):
+                detected.append(condition)
+                break
+
+    return detected
+
+
+def _build_condition_guidance(detected_conditions: list[str]) -> str:
+    """Build condition-specific interpretation guidance."""
+    if not detected_conditions:
+        return ""
+
+    parts = [
+        "\n## Chronic Condition Considerations",
+        "The following conditions were detected. Adjust interpretation accordingly:\n",
+    ]
+
+    for condition in detected_conditions:
+        guidance = _CONDITION_GUIDANCE.get(condition)
+        if guidance:
+            parts.append(f"- {guidance}")
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Chief Complaint Extraction
+# ---------------------------------------------------------------------------
+
+_CHIEF_COMPLAINT_PATTERNS = [
+    r"(?:chief\s*complaint|cc|presenting\s*complaint)[:=]\s*(.+?)(?:\n|$)",
+    r"(?:presents?\s*(?:with|for)|complaining\s*of|c/o)[:=]?\s*(.+?)(?:\n|\.)",
+    r"(?:reason\s*for\s*visit|rfv)[:=]\s*(.+?)(?:\n|$)",
+    r"(?:hpi|history\s*of\s*present\s*illness)[:=]?\s*(.+?)(?:\n|\.)",
+]
+
+_SYMPTOM_FINDING_CORRELATIONS: dict[str, list[str]] = {
+    "chest_pain": [
+        "Chest pain workup: Cardiac enzymes (troponin), EKG findings, and echo "
+        "function are key. Address whether findings support or exclude acute "
+        "coronary syndrome, pericarditis, or musculoskeletal cause."
+    ],
+    "shortness_of_breath": [
+        "Dyspnea workup: Evaluate cardiac function (EF, filling pressures), "
+        "pulmonary findings, and oxygenation. BNP elevation suggests cardiac cause. "
+        "Address whether findings point to cardiac vs pulmonary etiology."
+    ],
+    "fatigue": [
+        "Fatigue workup: Check for anemia (Hgb), thyroid dysfunction (TSH), "
+        "diabetes (glucose/A1C), and cardiac function. Iron studies and B12 "
+        "may be relevant. Address which findings may explain the symptom."
+    ],
+    "palpitations": [
+        "Palpitations workup: Rhythm assessment is key. Check for arrhythmias, "
+        "thyroid dysfunction, anemia, and structural heart disease. Electrolytes "
+        "(K, Mg) can contribute. Address whether cause was identified."
+    ],
+    "syncope": [
+        "Syncope workup: Evaluate for arrhythmia, structural heart disease "
+        "(AS, HCM, RVOT obstruction), and orthostatic causes. EKG intervals "
+        "(QT) and echo findings are critical. Address identified vs unexplained."
+    ],
+    "edema": [
+        "Edema workup: Evaluate cardiac function (EF, right heart), renal "
+        "function, liver function (albumin), and venous studies. BNP helps "
+        "distinguish cardiac from other causes."
+    ],
+    "dizziness": [
+        "Dizziness workup: Distinguish cardiac (arrhythmia, AS) from neurologic "
+        "or vestibular causes. Check blood pressure, heart rhythm, and consider "
+        "anemia or metabolic causes."
+    ],
+    "weight_changes": [
+        "Weight change workup: Evaluate thyroid function, glucose metabolism, "
+        "fluid status, and nutritional markers. Unintentional weight loss "
+        "warrants malignancy consideration."
+    ],
+}
+
+_SYMPTOM_PATTERNS: dict[str, list[str]] = {
+    "chest_pain": [r"\b(?:chest\s*pain|angina|cp\b|substernal|precordial)\b"],
+    "shortness_of_breath": [
+        r"\b(?:shortness\s*of\s*breath|dyspnea|sob\b|breathless|"
+        r"difficulty\s*breathing|doe\b|pnd\b|orthopnea)\b"
+    ],
+    "fatigue": [r"\b(?:fatigue|tired|exhausted|malaise|weakness|lethargy)\b"],
+    "palpitations": [r"\b(?:palpitation|racing\s*heart|heart\s*flutter|skipped\s*beat)\b"],
+    "syncope": [r"\b(?:syncope|faint|passed\s*out|loss\s*of\s*consciousness|loc\b)\b"],
+    "edema": [r"\b(?:edema|swelling|swollen\s*(?:leg|ankle|feet)|fluid\s*retention)\b"],
+    "dizziness": [r"\b(?:dizz(?:y|iness)|lightheaded|vertigo|presyncope)\b"],
+    "weight_changes": [
+        r"\b(?:weight\s*(?:loss|gain)|losing\s*weight|gaining\s*weight|"
+        r"unintentional\s*weight)\b"
+    ],
+}
+
+
+def _extract_chief_complaint(clinical_context: str) -> str | None:
+    """Extract the chief complaint from clinical context."""
+    if not clinical_context:
+        return None
+
+    for pattern in _CHIEF_COMPLAINT_PATTERNS:
+        match = re.search(pattern, clinical_context, re.IGNORECASE)
+        if match:
+            complaint = match.group(1).strip()
+            if len(complaint) > 3 and complaint.lower() not in ("none", "n/a"):
+                return complaint
+
+    return None
+
+
+def _extract_symptoms(clinical_context: str) -> list[str]:
+    """Extract symptom categories from clinical context."""
+    if not clinical_context:
+        return []
+
+    detected: list[str] = []
+    text_lower = clinical_context.lower()
+
+    for symptom, patterns in _SYMPTOM_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, text_lower):
+                detected.append(symptom)
+                break
+
+    return detected
+
+
+def _build_chief_complaint_guidance(
+    chief_complaint: str | None,
+    detected_symptoms: list[str],
+) -> str:
+    """Build guidance for addressing the chief complaint."""
+    parts: list[str] = []
+
+    if chief_complaint:
+        parts.append("\n## Chief Complaint Correlation")
+        parts.append(f'The patient presented with: "{chief_complaint}"')
+        parts.append(
+            "\nCRITICAL: You MUST explicitly address whether the test findings:\n"
+            "- SUPPORT a cause related to this complaint\n"
+            "- ARGUE AGAINST a cause related to this complaint\n"
+            "- Are INCONCLUSIVE for explaining this complaint\n"
+            "Do not simply describe findings — tie them to the clinical question."
+        )
+
+    if detected_symptoms:
+        if not parts:
+            parts.append("\n## Symptom Correlation")
+        else:
+            parts.append("\n### Symptom-Specific Guidance")
+
+        for symptom in detected_symptoms:
+            correlations = _SYMPTOM_FINDING_CORRELATIONS.get(symptom, [])
+            for correlation in correlations:
+                parts.append(f"- {correlation}")
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Enhanced Lab Pattern Recognition
+# ---------------------------------------------------------------------------
+
+_LAB_PATTERN_GUIDANCE: dict[str, str] = {
+    "dka": (
+        "DIABETIC KETOACIDOSIS PATTERN: High glucose (often >250) + metabolic acidosis "
+        "(low bicarb, low pH) + positive ketones + anion gap elevation. This is a "
+        "medical emergency requiring immediate attention."
+    ),
+    "hhs": (
+        "HYPEROSMOLAR HYPERGLYCEMIC STATE: Very high glucose (often >600) + high "
+        "osmolality + minimal or no ketones. More common in T2DM. Severe dehydration "
+        "is typical."
+    ),
+    "hepatorenal": (
+        "HEPATORENAL PATTERN: Liver dysfunction (elevated bili, low albumin, abnormal "
+        "INR) combined with acute kidney injury (rising creatinine) suggests "
+        "hepatorenal syndrome. This indicates severe liver disease."
+    ),
+    "tumor_lysis": (
+        "TUMOR LYSIS PATTERN: Elevated uric acid + elevated potassium + elevated "
+        "phosphorus + low calcium. Can occur spontaneously in aggressive malignancies "
+        "or after chemotherapy. Requires urgent management."
+    ),
+    "sepsis": (
+        "SEPSIS/INFECTION PATTERN: Elevated WBC (or very low WBC) + elevated lactate + "
+        "bandemia + organ dysfunction markers. Procalcitonin elevation supports "
+        "bacterial infection. Clinical context is essential."
+    ),
+    "hemolysis": (
+        "HEMOLYSIS PATTERN: Low haptoglobin + elevated LDH + elevated indirect "
+        "bilirubin + reticulocytosis + anemia. Suggests red blood cell destruction. "
+        "Direct Coombs helps distinguish immune vs non-immune causes."
+    ),
+    "rhabdomyolysis": (
+        "RHABDOMYOLYSIS PATTERN: Markedly elevated CK (often >10,000) + elevated "
+        "myoglobin + acute kidney injury + dark urine. Muscle breakdown releasing "
+        "contents into blood. Hydration is critical."
+    ),
+    "siadh": (
+        "SIADH PATTERN: Low sodium (hyponatremia) + low serum osmolality + "
+        "inappropriately concentrated urine (high urine osmolality) + euvolemia. "
+        "Common with certain medications, malignancies, and CNS disorders."
+    ),
+    "adrenal_insufficiency": (
+        "ADRENAL INSUFFICIENCY PATTERN: Low cortisol (especially AM) + low sodium + "
+        "high potassium + low glucose + eosinophilia. May see hyperpigmentation "
+        "clinically. Requires cortisol replacement."
+    ),
+    "thyroid_storm": (
+        "THYROID STORM PATTERN: Very low TSH + very high T4/T3 + tachycardia + "
+        "fever + altered mental status + elevated liver enzymes. This is a "
+        "medical emergency requiring immediate treatment."
+    ),
+    "myxedema": (
+        "MYXEDEMA PATTERN: Very high TSH + very low T4 + hypothermia + bradycardia + "
+        "altered mental status + hyponatremia. Severe hypothyroidism requiring "
+        "urgent thyroid replacement."
+    ),
+    "dic": (
+        "DIC PATTERN: Low platelets + prolonged PT/INR + prolonged PTT + low "
+        "fibrinogen + elevated D-dimer + schistocytes on smear. Indicates "
+        "consumptive coagulopathy, often with underlying sepsis or malignancy."
+    ),
+    "ttp_hus": (
+        "TTP/HUS PATTERN: Microangiopathic hemolytic anemia (low Hgb, schistocytes, "
+        "elevated LDH) + thrombocytopenia + acute kidney injury ± neurologic symptoms "
+        "± fever. ADAMTS13 activity helps distinguish. Urgent hematology consult needed."
+    ),
+    "pancreatitis": (
+        "PANCREATITIS PATTERN: Elevated lipase (>3x normal) ± elevated amylase + "
+        "abdominal pain. Triglycerides >1000 can cause pancreatitis. Check calcium "
+        "as hypocalcemia can occur."
+    ),
+    "alcoholic_hepatitis": (
+        "ALCOHOLIC HEPATITIS PATTERN: AST:ALT ratio >2:1 + elevated bilirubin + "
+        "history of alcohol use. GGT often markedly elevated. MCV may be elevated. "
+        "Maddrey score helps assess severity."
+    ),
+    "drug_induced_liver": (
+        "DRUG-INDUCED LIVER INJURY: Elevated transaminases (often >10x normal) with "
+        "temporal relationship to new medication. Check acetaminophen level. Pattern "
+        "may be hepatocellular, cholestatic, or mixed."
+    ),
+    "heart_failure_decompensation": (
+        "DECOMPENSATED HEART FAILURE: Elevated BNP/NT-proBNP (often >3x baseline) + "
+        "possible prerenal azotemia (elevated BUN:Cr ratio) + possible hyponatremia. "
+        "Troponin may be mildly elevated from demand ischemia."
+    ),
+    "acute_coronary_syndrome": (
+        "ACUTE CORONARY SYNDROME PATTERN: Elevated troponin (rising pattern) + "
+        "clinical symptoms + EKG changes. Even small troponin elevations are "
+        "significant. Trend is important — check serial values."
+    ),
+    "pulmonary_embolism": (
+        "PULMONARY EMBOLISM PATTERN: Elevated D-dimer + hypoxia + tachycardia + "
+        "possible troponin/BNP elevation (right heart strain). D-dimer has high "
+        "negative predictive value; elevated D-dimer needs imaging confirmation."
+    ),
+}
+
+
+def _detect_lab_patterns(clinical_context: str, measurements: list) -> list[str]:
+    """Detect complex lab patterns that should be highlighted.
+
+    This checks for keywords in clinical context that suggest these patterns
+    may be relevant. Actual pattern detection from lab values would require
+    the measurement values themselves.
+    """
+    if not clinical_context:
+        return []
+
+    detected: list[str] = []
+    text_lower = clinical_context.lower()
+
+    # Pattern keywords to look for in clinical context
+    pattern_keywords: dict[str, list[str]] = {
+        "dka": ["dka", "diabetic ketoacidosis", "ketoacidosis"],
+        "hhs": ["hhs", "hyperosmolar", "hyperglycemic state"],
+        "hepatorenal": ["hepatorenal", "liver failure.*kidney", "cirrhosis.*aki"],
+        "tumor_lysis": ["tumor lysis", "tls", "chemotherapy"],
+        "sepsis": ["sepsis", "septic", "bacteremia", "infection"],
+        "hemolysis": ["hemolysis", "hemolytic", "haptoglobin"],
+        "rhabdomyolysis": ["rhabdo", "rhabdomyolysis", "crush", "elevated ck"],
+        "siadh": ["siadh", "hyponatremia", "inappropriate adh"],
+        "adrenal_insufficiency": ["adrenal insufficiency", "addison", "hypoadrenal"],
+        "thyroid_storm": ["thyroid storm", "thyrotoxic crisis"],
+        "myxedema": ["myxedema", "severe hypothyroid"],
+        "dic": ["dic", "disseminated intravascular", "consumptive coagulopathy"],
+        "ttp_hus": ["ttp", "hus", "thrombotic thrombocytopenic", "hemolytic uremic"],
+        "pancreatitis": ["pancreatitis", "elevated lipase"],
+        "alcoholic_hepatitis": ["alcoholic hepatitis", "alcohol.*liver"],
+        "heart_failure_decompensation": ["chf exacerbation", "decompensated", "volume overload"],
+        "acute_coronary_syndrome": ["acs", "nstemi", "stemi", "mi", "heart attack", "troponin"],
+        "pulmonary_embolism": ["pe", "pulmonary embolism", "dvt", "clot"],
+    }
+
+    for pattern, keywords in pattern_keywords.items():
+        for keyword in keywords:
+            if re.search(keyword, text_lower):
+                detected.append(pattern)
+                break
+
+    return detected
+
+
+def _build_lab_pattern_guidance(detected_patterns: list[str]) -> str:
+    """Build guidance for detected lab patterns."""
+    if not detected_patterns:
+        return ""
+
+    parts = [
+        "\n## Clinical Pattern Recognition",
+        "The following clinical patterns may be relevant based on the context:\n",
+    ]
+
+    for pattern in detected_patterns:
+        guidance = _LAB_PATTERN_GUIDANCE.get(pattern)
+        if guidance:
+            parts.append(f"- {guidance}")
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Analogy Library for Patient Understanding
+# ---------------------------------------------------------------------------
+
+_ANALOGY_LIBRARY = """
+## Analogy Guidelines for Patient Understanding
+
+When explaining measurements and findings, use relatable comparisons to help patients understand:
+
+### Size Comparisons (mm/cm)
+- 1-2mm: grain of rice, pinhead
+- 3-4mm: peppercorn, small pea
+- 5-6mm: pencil eraser, blueberry
+- 10mm (1cm): fingertip, marble, peanut
+- 2cm: grape, cherry
+- 3cm: walnut, ping pong ball
+- 5cm: lime, golf ball
+
+### Cardiac Function (Ejection Fraction)
+- 55-70%: "Your heart is pumping strongly and efficiently"
+- 40-54%: "Your heart is pumping but not at full strength — like an engine running on fewer cylinders"
+- <40%: "Your heart is working harder than it should to pump blood"
+
+### Lab Value Analogies
+- **Hemoglobin**: "Carries oxygen in your blood — like cargo trucks delivering oxygen to your body"
+- **Cholesterol**: "LDL is like delivery trucks dropping packages in your arteries; HDL is like cleanup trucks removing them"
+- **Creatinine/eGFR**: "Measures how well your kidneys filter waste — like checking how well a coffee filter works"
+- **A1C**: "A 3-month average of your blood sugar — a snapshot over time, not just today"
+- **TSH**: "The signal your brain sends to control your thyroid — high means your thyroid is underactive, low means overactive"
+
+### Severity Context
+- **Trace/trivial**: "So small it's barely detectable"
+- **Mild**: "A small change — typically not concerning on its own"
+- **Moderate**: "Noticeable but usually manageable"
+- **Severe**: "Significant enough to need attention"
+
+### Prevalence for Reassurance
+When appropriate, provide context like:
+- "Thyroid nodules are found in about 50% of people over 60"
+- "Small lung nodules appear in about 1 in 4 chest CTs"
+- "Trace valve leakage is seen in most healthy hearts"
+
+### Usage Rules
+1. Always pair numbers with analogies: "6mm — about the size of a pencil eraser"
+2. Use functional analogies for percentages: "pumping at 55% efficiency"
+3. Provide risk context when available: "less than 1% chance of being concerning"
+4. Connect to daily life: "This explains why you might feel tired"
+"""
+
+
 class LiteracyLevel(str, Enum):
     GRADE_4 = "grade_4"
     GRADE_6 = "grade_6"
@@ -196,14 +883,31 @@ mental structure — do NOT print the labels as headers in the output.
 Remember: the patient already has their results. Do not recite values they
 can already read. Synthesize findings into clinical meaning.
 
+## Core Purpose: "Why This Report Matters"
+
+Every interpretation must answer: "Why does this report matter to ME?"
+The patient wants to know:
+- Am I okay? Is something wrong?
+- What does this mean for my daily life?
+- Do I need to worry or change anything?
+- Does this explain my symptoms?
+
+Frame findings in terms of their real-world impact, not just medical status.
+A "normal ejection fraction" means nothing to patients — "your heart is
+pumping blood effectively" connects to their life.
+
 1. BOTTOM LINE — 1-2 sentences stating what matters most and whether the
-   findings are overall reassuring or concerning.
+   findings are overall reassuring or concerning. Lead with the answer to
+   "Am I okay?" before any details.
 
 2. WHAT IS REASSURING — Synthesize normal or stable findings into a
    meaningful clinical statement. Group related normal findings together
    rather than listing each individually. For example, instead of listing
    every normal chamber size, say "Your heart chambers are all a normal
    size and your heart is pumping well."
+
+   Connect to real life: "This means your heart is doing its job well and
+   supporting your daily activities."
 
 3. WHAT IS WORTH DISCUSSING — Abnormal or noteworthy findings, prioritized
    by clinical significance. Explain what each finding means for the
@@ -230,6 +934,64 @@ can already read. Synthesize findings into clinical meaning.
 4. HOW THIS RELATES TO YOUR SYMPTOMS — Tie findings directly to the
    patient's complaint or clinical context when provided. If no clinical
    context was given, omit this section.
+
+5. WHAT THIS MEANS FOR YOU — A brief closing that summarizes the practical
+   takeaway. What can the patient expect? What should they feel confident
+   about? This reduces follow-up questions and improves understanding.
+
+"""
+
+_HIGH_ANXIETY_MODE = """\
+## HIGH ANXIETY PATIENT MODE — ACTIVE
+
+This patient has been flagged as high-anxiety. Your response must prioritize
+emotional reassurance while remaining medically accurate.
+
+### Communication Goals for Anxious Patients:
+- Reduce worry and prevent panic
+- Minimize follow-up clarification messages
+- Improve understanding without causing alarm
+- Build confidence in their health status
+
+### Required Adjustments:
+
+1. LEAD WITH REASSURANCE
+   - Open with the most reassuring finding first
+   - Use phrases like "The good news is...", "Reassuringly,...", "I'm pleased to report..."
+   - Front-load positive information before any caveats
+
+2. AVOID ALARMING LANGUAGE — Never use:
+   - "abnormal", "concerning", "worrying", "troubling"
+   - "needs attention", "requires action", "monitor closely"
+   - "elevated risk", "increased chance", "higher likelihood"
+   - Medical jargon without immediate, gentle explanation
+
+   Instead use:
+   - "slightly different from typical" instead of "abnormal"
+   - "worth a conversation" instead of "concerning"
+   - "something we noticed" instead of "finding"
+   - "on the higher/lower side" instead of "elevated/decreased"
+
+3. CONTEXTUALIZE ALL FINDINGS
+   - For ANY non-normal finding, immediately explain how common it is
+   - "This is something we see frequently and is usually not serious"
+   - "Many people have this and live completely normal, active lives"
+   - Provide perspective: "While this is technically outside the normal range..."
+
+4. EMPHASIZE WHAT IS WORKING WELL
+   - Spend more time on normal findings
+   - Be explicit about what is NOT wrong
+   - "Your heart is pumping strongly", "Your kidney function is excellent"
+
+5. END ON A POSITIVE NOTE
+   - Final paragraph must be reassuring
+   - Reinforce that the physician is available for questions
+   - Express confidence in the patient's health trajectory
+
+6. SIMPLIFY LANGUAGE
+   - Use the simplest possible terms
+   - Explain everything as if to someone with no medical background
+   - Avoid numbers when possible; use descriptive language instead
 
 """
 
@@ -594,8 +1356,17 @@ class PromptEngine:
         patient_gender: str | None = None,
         sms_summary: bool = False,
         sms_summary_char_limit: int = 300,
+        high_anxiety_mode: bool = False,
+        use_analogies: bool = True,
     ) -> str:
-        """Build the system prompt with role, rules, and constraints."""
+        """Build the system prompt with role, rules, and constraints.
+
+        Args:
+            high_anxiety_mode: If True, applies special guidance for anxious patients
+                that emphasizes reassurance and avoids alarming language.
+            use_analogies: If True, includes the analogy library for patient-friendly
+                size and value comparisons.
+        """
         specialty = prompt_context.get("specialty", "general medicine")
 
         if sms_summary:
@@ -796,12 +1567,20 @@ class PromptEngine:
             f"conclusions based on this report type.\n\n"
         ) if test_type_hint else ""
 
-        tone_pref = _TONE_DESCRIPTIONS.get(tone_preference, _TONE_DESCRIPTIONS[3])
+        # Override tone to maximum reassuring if high anxiety mode is active
+        effective_tone = 5 if high_anxiety_mode else tone_preference
+        tone_pref = _TONE_DESCRIPTIONS.get(effective_tone, _TONE_DESCRIPTIONS[3])
         detail_pref = _DETAIL_DESCRIPTIONS.get(detail_preference, _DETAIL_DESCRIPTIONS[3])
 
         style_section = (
             f"## Explanation Style\n{explanation_style}\n\n" if explanation_style else ""
         )
+
+        # Include high anxiety mode guidance if active
+        anxiety_section = _HIGH_ANXIETY_MODE if high_anxiety_mode else ""
+
+        # Include analogy library if enabled
+        analogy_section = _ANALOGY_LIBRARY if use_analogies else ""
 
         return (
             f"{_PHYSICIAN_IDENTITY.format(specialty=specialty)}"
@@ -813,6 +1592,8 @@ class PromptEngine:
             f"{_INTERPRETATION_QUALITY_RULE}"
             f"{_select_domain_knowledge(prompt_context)}"
             f"{_INTERPRETATION_STRUCTURE}"
+            f"{anxiety_section}"
+            f"{analogy_section}"
             f"## Literacy Level\n{literacy_desc}\n\n"
             f"## Clinical Guidelines\n"
             f"Base your interpretations on: {guidelines}\n\n"
@@ -848,6 +1629,7 @@ class PromptEngine:
         recent_edits: list[dict] | None = None,
         patient_age: int | None = None,
         patient_gender: str | None = None,
+        quick_reasons: list[str] | None = None,
     ) -> str:
         """Build the user prompt with report data, ranges, and glossary.
 
@@ -896,7 +1678,54 @@ class PromptEngine:
                 "- If medications affect interpretation (e.g., beta blockers → controlled heart rate, diuretics → electrolytes), mention this"
             )
 
-        # 1c. Patient demographics (for interpretation context)
+            # Extract and add medication-specific guidance
+            detected_meds = _extract_medications_from_context(effective_context)
+            if detected_meds:
+                med_guidance = _build_medication_guidance(detected_meds)
+                if med_guidance:
+                    sections.append(med_guidance)
+
+            # Extract and add chronic condition guidance
+            detected_conditions = _extract_conditions_from_context(effective_context)
+            if detected_conditions:
+                condition_guidance = _build_condition_guidance(detected_conditions)
+                if condition_guidance:
+                    sections.append(condition_guidance)
+
+            # Extract chief complaint and symptoms for correlation
+            chief_complaint = _extract_chief_complaint(effective_context)
+            detected_symptoms = _extract_symptoms(effective_context)
+            if chief_complaint or detected_symptoms:
+                cc_guidance = _build_chief_complaint_guidance(chief_complaint, detected_symptoms)
+                if cc_guidance:
+                    sections.append(cc_guidance)
+
+            # Detect relevant lab patterns
+            detected_patterns = _detect_lab_patterns(
+                effective_context,
+                parsed_report.measurements if parsed_report else [],
+            )
+            if detected_patterns:
+                pattern_guidance = _build_lab_pattern_guidance(detected_patterns)
+                if pattern_guidance:
+                    sections.append(pattern_guidance)
+
+        # 1c. Quick reasons (structured clinical indicators from settings)
+        if quick_reasons:
+            sections.append("\n## Primary Clinical Indications")
+            sections.append(
+                "The physician selected the following primary reasons for this test. "
+                "These are the KEY clinical questions that MUST be addressed in the interpretation:\n"
+            )
+            for reason in quick_reasons:
+                sections.append(f"- **{reason}**")
+            sections.append(
+                "\n**Priority:** Address each of these indications explicitly. "
+                "State whether findings support, argue against, or are inconclusive for each concern. "
+                "If a finding is particularly relevant to one of these indications, highlight that connection."
+            )
+
+        # 1d. Patient demographics (for interpretation context)
         if patient_age is not None or patient_gender is not None:
             demo_parts: list[str] = []
             if patient_age is not None:
@@ -942,6 +1771,13 @@ class PromptEngine:
                 "Match this structure, length, and level of detail using ONLY the data\n"
                 "from the current report."
             )
+
+            # Collect stylistic patterns from all examples
+            all_openings: list[str] = []
+            all_transitions: list[str] = []
+            all_closings: list[str] = []
+            all_softening: list[str] = []
+
             for idx, example in enumerate(liked_examples, 1):
                 sections.append(f"\n### Style Reference {idx}")
                 sections.append(
@@ -955,6 +1791,38 @@ class PromptEngine:
                 )
                 num_findings = example.get("num_key_findings", 0)
                 sections.append(f"- Number of key findings reported: {num_findings}")
+
+                # Collect stylistic patterns
+                patterns = example.get("stylistic_patterns", {})
+                if patterns:
+                    all_openings.extend(patterns.get("openings", []))
+                    all_transitions.extend(patterns.get("transitions", []))
+                    all_closings.extend(patterns.get("closings", []))
+                    all_softening.extend(patterns.get("softening", []))
+
+            # Add learned terminology patterns if any were found
+            if any([all_openings, all_transitions, all_closings, all_softening]):
+                sections.append("\n### Practice Terminology Preferences")
+                sections.append(
+                    "The physician prefers these communication patterns. "
+                    "Use similar phrasing where appropriate:"
+                )
+                if all_openings:
+                    unique = list(dict.fromkeys(all_openings))[:3]
+                    quoted = [f'"{p}"' for p in unique]
+                    sections.append(f"- Opening phrases: {', '.join(quoted)}")
+                if all_transitions:
+                    unique = list(dict.fromkeys(all_transitions))[:4]
+                    quoted = [f'"{p}"' for p in unique]
+                    sections.append(f"- Transition phrases: {', '.join(quoted)}")
+                if all_softening:
+                    unique = list(dict.fromkeys(all_softening))[:3]
+                    quoted = [f'"{p}"' for p in unique]
+                    sections.append(f"- Softening language: {', '.join(quoted)}")
+                if all_closings:
+                    unique = list(dict.fromkeys(all_closings))[:2]
+                    quoted = [f'"{p}"' for p in unique]
+                    sections.append(f"- Closing phrases: {', '.join(quoted)}")
 
         # 1g. Teaching points (personalized instructions)
         if teaching_points:
@@ -1011,6 +1879,7 @@ class PromptEngine:
 
         # 2. Parsed measurements with reference ranges
         sections.append("\n## Parsed Measurements")
+        critical_values_found: list[str] = []
         if parsed_report.measurements:
             for m in parsed_report.measurements:
                 ref_info = ""
@@ -1035,10 +1904,27 @@ class PromptEngine:
                     ]
                     prior_info = " | " + " | ".join(prior_parts)
 
+                # Flag critical/panic values prominently
+                critical_flag = ""
+                if m.status.value == "critical":
+                    critical_flag = " *** CRITICAL/PANIC VALUE ***"
+                    critical_values_found.append(f"{m.name} ({m.abbreviation}): {m.value} {m.unit}")
+
                 sections.append(
                     f"- {m.name} ({m.abbreviation}): {m.value} {m.unit} "
-                    f"[status: {m.status.value}]{prior_info}{ref_info}"
+                    f"[status: {m.status.value}]{critical_flag}{prior_info}{ref_info}"
                 )
+
+        # Add critical value warning if any found
+        if critical_values_found:
+            sections.insert(
+                sections.index("\n## Parsed Measurements") + 1,
+                "\n### CRITICAL VALUES DETECTED\n"
+                "The following values are at CRITICAL/PANIC levels. "
+                "These require immediate clinical attention and must be prominently "
+                "addressed in your interpretation. Explain the clinical significance "
+                "and urgency:\n" + "\n".join(f"- {cv}" for cv in critical_values_found)
+            )
         else:
             sections.append(
                 "No measurements were pre-extracted by the parser. "

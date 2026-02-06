@@ -104,12 +104,14 @@ export function ProcessingScreen() {
     sharedTemplateSyncId?: string;
     clinicalContext?: string;
     testType?: string;
+    quickReasons?: string[];
   } | null;
   const extractionResult = locationState?.extractionResult;
   const templateId = locationState?.templateId;
   const sharedTemplateSyncId = locationState?.sharedTemplateSyncId;
   const clinicalContext = locationState?.clinicalContext;
   const testType = locationState?.testType;
+  const quickReasons = locationState?.quickReasons;
 
   const { showToast } = useToast();
   const [currentStep, setCurrentStep] =
@@ -135,6 +137,7 @@ export function ProcessingScreen() {
         clinical_context: clinicalContext,
         short_comment: true,
         deep_analysis: deepAnalysis || undefined,
+        quick_reasons: quickReasons,
       });
 
       logUsage({
@@ -166,6 +169,7 @@ export function ProcessingScreen() {
           extractionResult,
           templateId,
           clinicalContext,
+          quickReasons,
         },
       });
     } catch (err) {
@@ -173,7 +177,7 @@ export function ProcessingScreen() {
       setError(categorizeError(msg));
       setCurrentStep("error");
     }
-  }, [extractionResult, templateId, sharedTemplateSyncId, clinicalContext, testType, deepAnalysis, navigate, showToast]);
+  }, [extractionResult, templateId, sharedTemplateSyncId, clinicalContext, quickReasons, testType, deepAnalysis, navigate, showToast]);
 
   useEffect(() => {
     runPipeline();

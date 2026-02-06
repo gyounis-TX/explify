@@ -11,6 +11,7 @@ class SeverityStatus(str, Enum):
     MILDLY_ABNORMAL = "mildly_abnormal"
     MODERATELY_ABNORMAL = "moderately_abnormal"
     SEVERELY_ABNORMAL = "severely_abnormal"
+    CRITICAL = "critical"  # Panic/critical values requiring immediate attention
     UNDETERMINED = "undetermined"
 
 

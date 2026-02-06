@@ -69,6 +69,9 @@ class ExplainRequest(BaseModel):
     patient_age: Optional[int] = None
     patient_gender: Optional[str] = None
     deep_analysis: Optional[bool] = None
+    high_anxiety_mode: Optional[bool] = None
+    quick_reasons: Optional[list[str]] = None
+    use_analogies: Optional[bool] = None
 
 
 # --- Response sub-models ---
@@ -147,6 +150,7 @@ class AppSettings(BaseModel):
     sms_summary_char_limit: int = Field(default=300, ge=100, le=500)
     footer_type: FooterTypeEnum = FooterTypeEnum.EXPLIFY_BRANDING
     custom_footer_text: Optional[str] = None
+    use_analogies: bool = True
 
 
 class SettingsUpdate(BaseModel):
@@ -176,3 +180,4 @@ class SettingsUpdate(BaseModel):
     sms_summary_char_limit: Optional[int] = Field(default=None, ge=100, le=500)
     footer_type: Optional[FooterTypeEnum] = None
     custom_footer_text: Optional[str] = None
+    use_analogies: Optional[bool] = None

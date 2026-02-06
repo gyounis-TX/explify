@@ -487,6 +487,7 @@ export function ImportScreen() {
         extractionResult: result,
         clinicalContext: clinicalContext.trim() || undefined,
         testType: resolvedTestType,
+        quickReasons: selectedReasons.size > 0 ? Array.from(selectedReasons) : undefined,
       };
       if (selectedTemplateValue.startsWith("own:")) {
         state.templateId = Number(selectedTemplateValue.slice(4));
@@ -495,7 +496,7 @@ export function ImportScreen() {
       }
       navigate("/processing", { state });
     }
-  }, [navigate, result, selectedTemplateValue, clinicalContext, resolvedTestType]);
+  }, [navigate, result, selectedTemplateValue, clinicalContext, selectedReasons, resolvedTestType]);
 
   const canExtract =
     status !== "extracting" &&
@@ -850,7 +851,7 @@ export function ImportScreen() {
                 setClinicalContext(e.target.value);
                 setSelectedReasons(new Set());
               }}
-              rows={3}
+              rows={7}
             />
           </div>
 

@@ -167,6 +167,9 @@ export interface ExplainRequest {
   patient_age?: number;
   patient_gender?: string;
   deep_analysis?: boolean;
+  high_anxiety_mode?: boolean;
+  quick_reasons?: string[];
+  use_analogies?: boolean;
 }
 
 export interface ExplainResponse {
@@ -210,6 +213,7 @@ export interface AppSettings {
   sms_summary_char_limit: number;
   footer_type: FooterType;
   custom_footer_text: string | null;
+  use_analogies: boolean;
 }
 
 export interface SettingsUpdate {
@@ -237,6 +241,7 @@ export interface SettingsUpdate {
   sms_summary_char_limit?: number;
   footer_type?: FooterType;
   custom_footer_text?: string | null;
+  use_analogies?: boolean;
 }
 
 // --- Template Types ---
