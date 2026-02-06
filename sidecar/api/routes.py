@@ -2,6 +2,7 @@ import os
 import tempfile
 
 from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
+from pydantic import BaseModel
 
 from api.analysis_models import DetectTypeRequest, DetectTypeResponse, ParsedReport, ParseRequest
 from api.explain_models import (
