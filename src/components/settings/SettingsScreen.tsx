@@ -72,6 +72,8 @@ export function SettingsScreen() {
   const [detailPreference, setDetailPreference] = useState(3);
   const [quickReasons, setQuickReasons] = useState<string[]>([]);
   const [newReason, setNewReason] = useState("");
+  const [customPhrases, setCustomPhrases] = useState<string[]>([]);
+  const [newPhrase, setNewPhrase] = useState("");
   const [nextStepsOptions, setNextStepsOptions] = useState<string[]>([
     "We will contact you to discuss next steps",
   ]);
@@ -111,6 +113,7 @@ export function SettingsScreen() {
         setTonePreference(s.tone_preference);
         setDetailPreference(s.detail_preference);
         setQuickReasons(s.quick_reasons ?? []);
+        setCustomPhrases(s.custom_phrases ?? []);
         setNextStepsOptions(s.next_steps_options ?? [
           "We will contact you to discuss next steps",
         ]);
@@ -152,6 +155,7 @@ export function SettingsScreen() {
         tone_preference: tonePreference,
         detail_preference: detailPreference,
         quick_reasons: quickReasons,
+        custom_phrases: customPhrases,
         next_steps_options: nextStepsOptions,
         explanation_voice: explanationVoice,
         name_drop: nameDrop,
@@ -814,6 +818,62 @@ export function SettingsScreen() {
             Add
           </button>
         </div>
+      </section>
+
+      {/* Custom Phrases */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Custom Phrases</h3>
+        <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+          Add phrases you commonly use in your communications. These help the AI match your natural voice
+          and writing style. Examples: "Everything looks good", "Nothing concerning here", "Worth keeping an eye on".
+        </p>
+        <div className="list-input-row">
+          <input
+            type="text"
+            className="form-input"
+            placeholder="e.g. Overall, things look reassuring"
+            value={newPhrase}
+            onChange={(e) => setNewPhrase(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newPhrase.trim() && customPhrases.length < 30) {
+                e.preventDefault();
+                if (!customPhrases.includes(newPhrase.trim())) {
+                  setCustomPhrases([...customPhrases, newPhrase.trim()]);
+                }
+                setNewPhrase("");
+              }
+            }}
+          />
+          <button
+            className="list-add-btn"
+            disabled={!newPhrase.trim() || customPhrases.length >= 30 || customPhrases.includes(newPhrase.trim())}
+            onClick={() => {
+              if (newPhrase.trim() && customPhrases.length < 30 && !customPhrases.includes(newPhrase.trim())) {
+                setCustomPhrases([...customPhrases, newPhrase.trim()]);
+                setNewPhrase("");
+              }
+            }}
+          >
+            Add
+          </button>
+        </div>
+        {customPhrases.length > 0 && (
+          <div className="list-items">
+            {customPhrases.map((phrase, i) => (
+              <span key={i} className="list-item-chip">
+                {phrase}
+                <button
+                  className="list-item-remove"
+                  onClick={() => setCustomPhrases(customPhrases.filter((_, idx) => idx !== i))}
+                  aria-label={`Remove ${phrase}`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <span className="list-count">{customPhrases.length}/30</span>
       </section>
 
       {/* Comment Footer */}

@@ -542,6 +542,79 @@ class Database:
         finally:
             conn.close()
 
+    def get_learned_phrases(self, test_type: str | None = None, limit: int = 10) -> list[str]:
+        """Extract common phrases that doctors add when editing outputs.
+
+        Analyzes edited text to find phrases not present in the original output
+        that appear across multiple edits, indicating preferred phrasing.
+        Returns up to `limit` learned phrases.
+        """
+        import re
+
+        conn = self._get_conn()
+        try:
+            if test_type:
+                rows = conn.execute(
+                    """SELECT full_response, edited_text FROM history
+                       WHERE test_type = ? AND edited_text IS NOT NULL
+                       ORDER BY updated_at DESC LIMIT 20""",
+                    (test_type,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT full_response, edited_text FROM history
+                       WHERE edited_text IS NOT NULL
+                       ORDER BY updated_at DESC LIMIT 20""",
+                ).fetchall()
+
+            # Collect phrases added in edits
+            added_phrases: dict[str, int] = {}
+
+            for row in rows:
+                try:
+                    if not row["edited_text"]:
+                        continue
+
+                    full_response = json.loads(row["full_response"])
+                    original = full_response.get("explanation", {}).get("overall_summary", "")
+                    edited = row["edited_text"]
+
+                    if not original or not edited:
+                        continue
+
+                    # Find sentences/phrases in edited that aren't in original
+                    original_lower = original.lower()
+
+                    # Split edited text into sentences
+                    sentences = re.split(r'(?<=[.!?])\s+', edited)
+                    for sentence in sentences:
+                        sentence = sentence.strip()
+                        if len(sentence) < 10 or len(sentence) > 150:
+                            continue
+
+                        # Check if this sentence (or close variant) exists in original
+                        sentence_lower = sentence.lower()
+                        if sentence_lower not in original_lower:
+                            # This is an added phrase - count it
+                            # Normalize for counting
+                            normalized = sentence_lower[:80]  # Truncate for matching
+                            added_phrases[normalized] = added_phrases.get(normalized, 0) + 1
+
+                except (json.JSONDecodeError, TypeError, KeyError):
+                    continue
+
+            # Return phrases that appear more than once (learned patterns)
+            frequent_phrases = [
+                phrase for phrase, count in sorted(
+                    added_phrases.items(), key=lambda x: -x[1]
+                )
+                if count >= 2
+            ][:limit]
+
+            return frequent_phrases
+        finally:
+            conn.close()
+
     def get_prior_measurements(
         self, test_type: str, limit: int = 3
     ) -> list[dict[str, Any]]:

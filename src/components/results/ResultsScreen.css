@@ -388,6 +388,22 @@
   color: var(--color-text);
 }
 
+.template-select {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  margin-top: var(--space-xs);
+}
+
+.template-select:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+}
+
 .refine-btn {
   padding: var(--space-xs) var(--space-md);
   background-color: var(--color-primary-600);
@@ -1087,6 +1103,22 @@
   background-color: var(--color-primary-700);
 }
 
+.results-nav-buttons {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.results-back-btn--secondary {
+  background-color: var(--color-surface);
+  color: var(--color-primary-600);
+  border: 1px solid var(--color-primary-600);
+}
+
+.results-back-btn--secondary:hover {
+  background-color: var(--color-primary-50);
+}
+
 /* Teaching Points Panel */
 .teaching-points-panel {
   background-color: var(--color-surface);
@@ -1476,6 +1508,7 @@
 
 /* Print Styles */
 @media print {
+  .results-nav-buttons,
   .results-back-btn,
   .export-toolbar,
   .refine-toolbar,

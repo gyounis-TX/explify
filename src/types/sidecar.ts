@@ -214,6 +214,7 @@ export interface AppSettings {
   footer_type: FooterType;
   custom_footer_text: string | null;
   use_analogies: boolean;
+  custom_phrases: string[];
 }
 
 export interface SettingsUpdate {
@@ -242,6 +243,7 @@ export interface SettingsUpdate {
   footer_type?: FooterType;
   custom_footer_text?: string | null;
   use_analogies?: boolean;
+  custom_phrases?: string[];
 }
 
 // --- Template Types ---

@@ -11,12 +11,15 @@ import type {
   FooterType,
   TeachingPoint,
   SharedTeachingPoint,
+  Template,
+  SharedTemplate,
 } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
 import { logUsage } from "../../services/usageTracker";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
 import { GlossaryTooltip } from "./GlossaryTooltip";
+import { clearImportCache } from "../import/ImportScreen";
 import "./ResultsScreen.css";
 
 const SEVERITY_LABELS: Record<string, string> = {
@@ -253,6 +256,11 @@ export function ResultsScreen() {
   const [sharedTeachingPoints, setSharedTeachingPoints] = useState<SharedTeachingPoint[]>([]);
   const [newTeachingPoint, setNewTeachingPoint] = useState("");
 
+  // Template selection state
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(templateId);
+
   // Test type override — lets the user correct a misdetected type
   const [testTypeOverride, setTestTypeOverride] = useState<string | null>(null);
   const effectiveTestType = testTypeOverride?.trim() || currentResponse?.parsed_report.test_type || "";
@@ -374,6 +382,17 @@ export function ResultsScreen() {
     }).catch(() => {});
   }, [currentResponse, letterMode]);
 
+  // Fetch templates for template selector
+  useEffect(() => {
+    Promise.all([
+      sidecarApi.listTemplates(),
+      sidecarApi.listSharedTemplates().catch(() => [] as SharedTemplate[]),
+    ]).then(([res, shared]) => {
+      setTemplates(res.items);
+      setSharedTemplates(shared);
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     sidecarApi
       .getSettings()
@@ -420,7 +439,7 @@ export function ResultsScreen() {
       clinicalContext,
       quickReasons,
     });
-  }, [currentResponse, fromHistory, extractionResult, templateId, historyId, isLiked, clinicalContext, quickReasons]);
+  }, [currentResponse, fromHistory, extractionResult, selectedTemplateId, historyId, isLiked, clinicalContext, quickReasons]);
 
   const canRefine = !fromHistory && extractionResult != null;
 
@@ -434,7 +453,7 @@ export function ResultsScreen() {
         extraction_result: extractionResult,
         test_type: effectiveTestType,
         literacy_level: selectedLiteracy,
-        template_id: templateId,
+        template_id: selectedTemplateId,
         clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
@@ -473,7 +492,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, effectiveTestType, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, deepAnalysis, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, deepAnalysis, highAnxietyMode, useAnalogies, showToast]);
 
   const handleTranslateToggle = useCallback(async () => {
     const translatingToSpanish = !isSpanish;
@@ -509,7 +528,7 @@ export function ResultsScreen() {
         extraction_result: extractionResult,
         test_type: effectiveTestType,
         literacy_level: selectedLiteracy,
-        template_id: templateId,
+        template_id: selectedTemplateId,
         clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
@@ -551,7 +570,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, effectiveTestType, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, isSpanish, explanationVoice, nameDrop, physicianOverride, sectionSettings, deepAnalysis, highAnxietyMode, useAnalogies, showToast, letterMode, letterPrompt]);
+  }, [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, isSpanish, explanationVoice, nameDrop, physicianOverride, sectionSettings, deepAnalysis, highAnxietyMode, useAnalogies, showToast, letterMode, letterPrompt]);
 
   const handleExportPdf = useCallback(async () => {
     if (!currentResponse) return;
@@ -644,7 +663,7 @@ export function ResultsScreen() {
         extraction_result: extractionResult,
         test_type: effectiveTestType,
         literacy_level: selectedLiteracy,
-        template_id: templateId,
+        template_id: selectedTemplateId,
         clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
@@ -673,7 +692,7 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingComment(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, selectedTemplateId, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, highAnxietyMode, useAnalogies, showToast]);
 
   // Generate long explanation on demand when user switches to "long" tab
   const generateLongExplanation = useCallback(async () => {
@@ -684,7 +703,7 @@ export function ResultsScreen() {
         extraction_result: extractionResult,
         test_type: effectiveTestType,
         literacy_level: selectedLiteracy,
-        template_id: templateId,
+        template_id: selectedTemplateId,
         clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
@@ -714,7 +733,7 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingLong(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, highAnxietyMode, useAnalogies, showToast]);
 
   // Generate SMS summary on demand
   const generateSmsText = useCallback(async () => {
@@ -725,7 +744,7 @@ export function ResultsScreen() {
         extraction_result: extractionResult,
         test_type: effectiveTestType,
         literacy_level: selectedLiteracy,
-        template_id: templateId,
+        template_id: selectedTemplateId,
         clinical_context: clinicalContext,
         tone_preference: toneSlider,
         detail_preference: detailSlider,
@@ -755,7 +774,7 @@ export function ResultsScreen() {
     } finally {
       setIsGeneratingSms(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, templateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, currentResponse, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, highAnxietyMode, useAnalogies, showToast]);
 
   // Generate on-demand when user switches tabs and content isn't cached
   useEffect(() => {
@@ -1012,12 +1031,31 @@ export function ResultsScreen() {
             </div>
           </details>
 
-          <button
-            className="results-back-btn"
-            onClick={() => navigate("/")}
-          >
-            Analyze Another Report
-          </button>
+          <div className="results-nav-buttons">
+            <button
+              className="results-back-btn results-back-btn--secondary"
+              onClick={() => {
+                clearImportCache();
+                navigate("/", {
+                  state: {
+                    preservedClinicalContext: clinicalContext,
+                    preservedQuickReasons: quickReasons,
+                  },
+                });
+              }}
+            >
+              New Report, Same Patient
+            </button>
+            <button
+              className="results-back-btn"
+              onClick={() => {
+                clearImportCache();
+                navigate("/");
+              }}
+            >
+              Start Fresh (New Patient)
+            </button>
+          </div>
         </div>
 
         {/* Right Column — Refine + Settings */}
@@ -1037,6 +1075,35 @@ export function ResultsScreen() {
           {/* Result Settings Panel */}
           <div className="results-settings-panel">
             <h3>Result Settings</h3>
+
+            {/* Template Selector */}
+            <div className="settings-panel-label">
+              <span>Template</span>
+              <select
+                className="template-select"
+                value={selectedTemplateId ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedTemplateId(val ? Number(val) : undefined);
+                }}
+              >
+                <option value="">No template</option>
+                {templates.length > 0 && (
+                  <optgroup label="Your Templates">
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {sharedTemplates.length > 0 && (
+                  <optgroup label="Shared Templates">
+                    {sharedTemplates.map((t) => (
+                      <option key={`shared-${t.id}`} value={t.id}>{t.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
 
             <div className="settings-panel-label">
               <span>Literacy</span>
@@ -1674,17 +1741,37 @@ export function ResultsScreen() {
         </div>
       </details>
 
-      <button
-        className="results-back-btn"
-        onClick={() => {
-          if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) {
-            return;
-          }
-          navigate("/");
-        }}
-      >
-        Analyze Another Report
-      </button>
+      <div className="results-nav-buttons">
+        <button
+          className="results-back-btn results-back-btn--secondary"
+          onClick={() => {
+            if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) {
+              return;
+            }
+            clearImportCache();
+            navigate("/", {
+              state: {
+                preservedClinicalContext: clinicalContext,
+                preservedQuickReasons: quickReasons,
+              },
+            });
+          }}
+        >
+          New Report, Same Patient
+        </button>
+        <button
+          className="results-back-btn"
+          onClick={() => {
+            if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) {
+              return;
+            }
+            clearImportCache();
+            navigate("/");
+          }}
+        >
+          Start Fresh (New Patient)
+        </button>
+      </div>
       </div>
 
       {canRefine && (
@@ -1704,6 +1791,35 @@ export function ResultsScreen() {
       {/* Result Settings Panel */}
         <div className="results-settings-panel">
           <h3>Result Settings</h3>
+
+          {/* Template Selector */}
+          <div className="settings-panel-label">
+            <span>Template</span>
+            <select
+              className="template-select"
+              value={selectedTemplateId ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedTemplateId(val ? Number(val) : undefined);
+              }}
+            >
+              <option value="">No template</option>
+              {templates.length > 0 && (
+                <optgroup label="Your Templates">
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {sharedTemplates.length > 0 && (
+                <optgroup label="Shared Templates">
+                  {sharedTemplates.map((t) => (
+                    <option key={`shared-${t.id}`} value={t.id}>{t.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
 
           <div className="settings-panel-label">
             <span>Literacy</span>

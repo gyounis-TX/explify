@@ -1061,6 +1061,76 @@ _SAFETY_RULES = """\
 
 """
 
+_ANTI_AI_PHRASING = """\
+## Natural Voice — Avoid AI Patterns
+
+Your output must sound like a physician wrote it, not an AI. NEVER use these
+AI-typical phrases and patterns:
+
+### Banned Phrases (never use these):
+- "I'm pleased to report..." / "I'm happy to share..." / "I'm glad to say..."
+- "It's important to note that..." / "It's worth noting that..."
+- "It's worth mentioning that..." / "It bears mentioning..."
+- "Based on the results provided..." / "Based on your test results..."
+- "Overall, ..." at the start of sentences
+- "In summary, ..." / "To summarize, ..." / "In conclusion, ..."
+- "Let me explain..." / "Allow me to..." / "Let me break this down..."
+- "Rest assured..." / "You can rest easy..."
+- "This is great news!" / "Great news!" / "Good news!"
+- "I want to assure you..." / "I want you to know..."
+- "It appears that..." / "It seems that..." (overuse)
+- "Certainly" / "Absolutely" / "Indeed" / "Definitely" (overuse)
+- "As always, ..." / "As mentioned, ..."
+- "Please don't hesitate to..." / "Feel free to..."
+- "I hope this helps" / "I hope this clarifies"
+
+### Patterns to Avoid:
+- Starting multiple sentences with "Your..." ("Your heart... Your valves... Your...")
+- Robotic parallelism: "X is normal. Y is normal. Z is normal."
+- Excessive hedging: "may", "might", "could", "possibly" in every sentence
+- Generic reassurances without substance
+- Bullet-point thinking converted to prose (feels like a list read aloud)
+
+### Write Naturally Instead:
+- Use contractions: "don't", "isn't", "won't", "it's", "you're", "that's"
+- Vary sentence openers — start with the finding, a verb, a connector
+- Combine related points into flowing sentences
+- Write as if speaking to the patient in the exam room
+- Be direct: "The heart is pumping normally" not "Your cardiac function appears to be within normal parameters"
+
+"""
+
+_SENTENCE_VARIETY = """\
+## Sentence Variety & Flow
+
+Vary your sentence structure to sound natural:
+
+### Length Variation:
+- Mix short punchy sentences (5-10 words) with longer explanatory ones
+- A short sentence after a long one creates emphasis
+- Example: "Your heart function is excellent. The pumping strength, chamber sizes, and valve function all look healthy — this is exactly what we want to see."
+
+### Opener Variation:
+Don't start consecutive sentences the same way. Rotate through:
+- The finding: "Heart function looks good."
+- A connector: "And the valves are working properly."
+- Context: "Given your symptoms, this is reassuring."
+- Direct statement: "Nothing concerning here."
+
+### Combining Related Points:
+BAD (robotic): "Your LVEF is 60%. This is normal. Your LV size is normal. Your LA size is normal."
+GOOD (natural): "Your heart is pumping strongly at 60%, and all the chambers are a healthy size."
+
+### Natural Connectors:
+Use conversational transitions: "which means", "so", "and", "but", "that said",
+"on the other hand", "the good news is", "one thing worth noting"
+
+### Paragraph Flow:
+Each paragraph should flow logically to the next. The reader should never feel
+like they're reading a checklist converted to sentences.
+
+"""
+
 _CLINICAL_DOMAIN_KNOWLEDGE_CARDIAC = """\
 ## Clinical Domain Knowledge — Cardiac
 
@@ -1605,10 +1675,12 @@ class PromptEngine:
             f"{_TONE_RULES}"
             f"{_ZERO_EDIT_GOAL}"
             f"{_SAFETY_RULES}"
+            f"{_ANTI_AI_PHRASING}"
+            f"{_SENTENCE_VARIETY}"
             f"## Validation Rule\n"
-            f"If the output reads like a neutral summary, report recap, or "
-            f"contains treatment suggestions or hypothetical next steps, "
-            f"regenerate.\n"
+            f"If the output reads like a neutral summary, report recap, "
+            f"uses banned AI phrases, or contains treatment suggestions "
+            f"or hypothetical next steps, regenerate.\n"
         )
 
     def build_user_prompt(
@@ -1630,6 +1702,7 @@ class PromptEngine:
         patient_age: int | None = None,
         patient_gender: str | None = None,
         quick_reasons: list[str] | None = None,
+        custom_phrases: list[str] | None = None,
     ) -> str:
         """Build the user prompt with report data, ranges, and glossary.
 
@@ -1838,6 +1911,16 @@ class PromptEngine:
                     sections.append(f"- {tp['text']}")
                 else:
                     sections.append(f"- [From {source}] {tp['text']}")
+
+        # 1g2. Custom phrases (physician's natural voice)
+        if custom_phrases:
+            sections.append("\n## Physician's Custom Phrases")
+            sections.append(
+                "The physician commonly uses these phrases in their communications.\n"
+                "Incorporate these naturally where appropriate to match the physician's voice:"
+            )
+            for phrase in custom_phrases:
+                sections.append(f'- "{phrase}"')
 
         # 1h. Doctor editing patterns (learned from recent edits)
         if recent_edits and not short_comment:

@@ -14,6 +14,32 @@ import "./AdminScreen.css";
 
 type TimeRange = "7d" | "30d" | "all";
 
+// Anthropic pricing per million tokens (as of Jan 2025)
+const SONNET_INPUT_COST = 3; // $/M tokens
+const SONNET_OUTPUT_COST = 15; // $/M tokens
+const OPUS_INPUT_COST = 15; // $/M tokens
+const OPUS_OUTPUT_COST = 75; // $/M tokens
+
+function calculateCostPerQuery(
+  queries: number,
+  inputTokens: number,
+  outputTokens: number,
+  inputCost: number,
+  outputCost: number,
+): number | null {
+  if (queries === 0) return null;
+  const totalCost =
+    (inputTokens / 1_000_000) * inputCost +
+    (outputTokens / 1_000_000) * outputCost;
+  return totalCost / queries;
+}
+
+function formatCost(cost: number | null): string {
+  if (cost === null) return "—";
+  if (cost < 0.01) return "<$0.01";
+  return `$${cost.toFixed(2)}`;
+}
+
 function sinceDate(range: TimeRange): Date {
   if (range === "all") return new Date("2000-01-01");
   const d = new Date();
@@ -356,7 +382,9 @@ export function AdminScreen() {
                     <th>Signed Up</th>
                     <th>Queries</th>
                     <th>Sonnet Tokens</th>
+                    <th>Sonnet $/Query</th>
                     <th>Opus Tokens</th>
+                    <th>Opus $/Query</th>
                     <th>Deep Analysis</th>
                     <th>Last Active</th>
                   </tr>
@@ -382,10 +410,32 @@ export function AdminScreen() {
                               ).toLocaleString()}
                             </td>
                             <td>
+                              {formatCost(
+                                calculateCostPerQuery(
+                                  usage.sonnet_queries,
+                                  usage.sonnet_input_tokens,
+                                  usage.sonnet_output_tokens,
+                                  SONNET_INPUT_COST,
+                                  SONNET_OUTPUT_COST,
+                                ),
+                              )}
+                            </td>
+                            <td>
                               {(
                                 usage.opus_input_tokens +
                                 usage.opus_output_tokens
                               ).toLocaleString()}
+                            </td>
+                            <td>
+                              {formatCost(
+                                calculateCostPerQuery(
+                                  usage.opus_queries,
+                                  usage.opus_input_tokens,
+                                  usage.opus_output_tokens,
+                                  OPUS_INPUT_COST,
+                                  OPUS_OUTPUT_COST,
+                                ),
+                              )}
                             </td>
                             <td>
                               {usage.deep_analysis_count.toLocaleString()}
@@ -396,7 +446,7 @@ export function AdminScreen() {
                           </>
                         ) : (
                           <>
-                            <td colSpan={5} className="no-usage">
+                            <td colSpan={7} className="no-usage">
                               No usage data
                             </td>
                           </>

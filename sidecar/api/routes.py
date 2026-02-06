@@ -589,6 +589,15 @@ async def explain_report(request: ExplainRequest = Body(...)):
     # 6f. Fetch recent doctor edits for style learning
     recent_edits = get_db().get_recent_edits(test_type=test_type, limit=3)
 
+    # 6g. Fetch learned phrases from doctor edits
+    learned_phrases = get_db().get_learned_phrases(test_type=test_type, limit=5)
+
+    # Combine custom phrases (from settings) with learned phrases (from edits)
+    all_custom_phrases = list(settings.custom_phrases) if hasattr(settings, 'custom_phrases') else []
+    for lp in learned_phrases:
+        if lp not in all_custom_phrases:
+            all_custom_phrases.append(lp)
+
     user_prompt = prompt_engine.build_user_prompt(
         parsed_report=parsed_report,
         reference_ranges=handler.get_reference_ranges() if handler else {},
@@ -607,6 +616,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         patient_age=patient_age,
         patient_gender=patient_gender,
         quick_reasons=request.quick_reasons,
+        custom_phrases=all_custom_phrases,
     )
 
     # Log prompt sizes for debugging token issues

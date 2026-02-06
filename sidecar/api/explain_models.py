@@ -151,6 +151,7 @@ class AppSettings(BaseModel):
     footer_type: FooterTypeEnum = FooterTypeEnum.EXPLIFY_BRANDING
     custom_footer_text: Optional[str] = None
     use_analogies: bool = True
+    custom_phrases: list[str] = Field(default_factory=list)
 
 
 class SettingsUpdate(BaseModel):
@@ -181,3 +182,4 @@ class SettingsUpdate(BaseModel):
     footer_type: Optional[FooterTypeEnum] = None
     custom_footer_text: Optional[str] = None
     use_analogies: Optional[bool] = None
+    custom_phrases: Optional[list[str]] = None

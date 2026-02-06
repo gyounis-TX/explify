@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
 import type { ExtractionResult, Template, SharedTemplate, DetectTypeResponse, TestTypeInfo } from "../../types/sidecar";
@@ -65,6 +65,11 @@ function freshCache(): ImportStateCache {
 
 let _cache: ImportStateCache = freshCache();
 
+/** Clear all import state (for navigation back to import screen) */
+export function clearImportCache(): void {
+  _cache = freshCache();
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   cardiac: "Cardiac",
   vascular: "Vascular",
@@ -110,8 +115,15 @@ function groupTypesByCategory(types: TestTypeInfo[]): [string, TestTypeInfo[]][]
 
 export function ImportScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check for preserved context from "Same Patient" navigation
+  const locationState = location.state as {
+    preservedClinicalContext?: string;
+    preservedQuickReasons?: string[];
+  } | null;
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>(_cache.selectedFiles);
   const mode: ImportMode = selectedFiles.length > 0 ? "pdf" : "text";
@@ -149,6 +161,24 @@ export function ImportScreen() {
   const [detectionStatus, setDetectionStatus] = useState<DetectionStatus>(_cache.detectionStatus);
   const [detectionResult, setDetectionResult] = useState<DetectTypeResponse | null>(_cache.detectionResult);
   const [manualTestType, setManualTestType] = useState<string | null>(_cache.manualTestType);
+
+  // Track whether we've applied location state (to avoid re-applying on re-renders)
+  const [appliedLocationState, setAppliedLocationState] = useState(false);
+
+  // Apply preserved context from "Same Patient" navigation
+  useEffect(() => {
+    if (!appliedLocationState && locationState) {
+      if (locationState.preservedClinicalContext) {
+        setClinicalContext(locationState.preservedClinicalContext);
+      }
+      if (locationState.preservedQuickReasons) {
+        setSelectedReasons(new Set(locationState.preservedQuickReasons));
+      }
+      setAppliedLocationState(true);
+      // Clear location state to prevent re-applying on future renders
+      window.history.replaceState({}, document.title);
+    }
+  }, [locationState, appliedLocationState]);
 
   // Sync component state → module-level cache so it survives navigation
   useEffect(() => {
