@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Explify Sidecar", version="0.2.5", lifespan=lifespan)
+    app = FastAPI(title="Explify Sidecar", version="0.3.0", lifespan=lifespan)
     add_cors_middleware(app)
     app.include_router(router)
     return app
