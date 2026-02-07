@@ -70,7 +70,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           const result: SignUpResult = await signUp(email, password);
           if (result.error) {
             showToast("error", result.error);
-          } else if (result.confirmed) {
+          } else if ("confirmed" in result && result.confirmed) {
             // Auto-confirmed (no email verification required)
             showToast("success", "Account created.");
             onAuthSuccess();
