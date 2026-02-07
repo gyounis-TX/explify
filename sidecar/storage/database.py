@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS templates (
     structure_instructions TEXT,
     closing_text TEXT,
     is_builtin INTEGER NOT NULL DEFAULT 0,
+    is_default INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -235,6 +236,7 @@ class Database:
                 "ALTER TABLE settings ADD COLUMN updated_at TEXT",
                 "ALTER TABLE templates ADD COLUMN sync_id TEXT",
                 "ALTER TABLE history ADD COLUMN edited_text TEXT",
+                "ALTER TABLE templates ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0",
             ]
             for migration in migrations:
                 try:
@@ -802,10 +804,19 @@ class Database:
             if not existing:
                 return None
 
-            allowed = {"name", "test_type", "tone", "structure_instructions", "closing_text"}
+            allowed = {"name", "test_type", "tone", "structure_instructions", "closing_text", "is_default"}
             updates = {k: v for k, v in kwargs.items() if k in allowed}
             if not updates:
                 return dict(existing)
+
+            # If setting as default, clear any other default for the same test_type
+            if updates.get("is_default"):
+                test_type = updates.get("test_type", existing["test_type"])
+                if test_type:
+                    conn.execute(
+                        "UPDATE templates SET is_default = 0 WHERE test_type = ? AND id != ?",
+                        (test_type, template_id),
+                    )
 
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             values = list(updates.values())
@@ -816,6 +827,17 @@ class Database:
             )
             conn.commit()
             return self.get_template(template_id)
+        finally:
+            conn.close()
+
+    def get_default_template_for_type(self, test_type: str) -> dict[str, Any] | None:
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM templates WHERE test_type = ? AND is_default = 1 LIMIT 1",
+                (test_type,),
+            ).fetchone()
+            return dict(row) if row else None
         finally:
             conn.close()
 

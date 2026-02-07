@@ -468,9 +468,14 @@ async def explain_report(request: ExplainRequest = Body(...)):
     else:
         # Unknown / user-specified test type — build a minimal parsed report
         # and let the LLM interpret the raw text directly.
+        from test_types.generic import GenericTestType
+        fallback_display = test_type.replace("_", " ").title()
+        body_part = GenericTestType._extract_body_part(extraction_result.full_text, test_type)
+        if body_part:
+            fallback_display = f"{fallback_display} — {body_part}"
         parsed_report = ParsedReport(
             test_type=test_type,
-            test_type_display=test_type.replace("_", " ").title(),
+            test_type_display=fallback_display,
             detection_confidence=detection_confidence,
         )
 
@@ -535,6 +540,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
     inc_measurements = request.include_measurements if request.include_measurements is not None else settings.include_measurements
     is_sms = bool(request.sms_summary)
     use_analogies = request.use_analogies if request.use_analogies is not None else settings.use_analogies
+    include_lifestyle = request.include_lifestyle_recommendations if request.include_lifestyle_recommendations is not None else settings.include_lifestyle_recommendations
     system_prompt = prompt_engine.build_system_prompt(
         literacy_level=literacy_level,
         prompt_context=prompt_context,
@@ -554,6 +560,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         high_anxiety_mode=bool(request.high_anxiety_mode),
         anxiety_level=request.anxiety_level or 0,
         use_analogies=use_analogies,
+        include_lifestyle_recommendations=include_lifestyle,
     )
     # 6b. Load template if specified
     template_tone = None
@@ -759,9 +766,14 @@ async def _explain_stream_gen(request: ExplainRequest):
                 yield _sse_event({"stage": "error", "message": f"Failed to parse report: {str(e)}"})
                 return
         else:
+            from test_types.generic import GenericTestType
+            fallback_display = test_type.replace("_", " ").title()
+            body_part = GenericTestType._extract_body_part(extraction_result.full_text, test_type)
+            if body_part:
+                fallback_display = f"{fallback_display} — {body_part}"
             parsed_report = ParsedReport(
                 test_type=test_type,
-                test_type_display=test_type.replace("_", " ").title(),
+                test_type_display=fallback_display,
                 detection_confidence=detection_confidence,
             )
 
@@ -817,6 +829,7 @@ async def _explain_stream_gen(request: ExplainRequest):
         inc_measurements = request.include_measurements if request.include_measurements is not None else settings.include_measurements
         is_sms = bool(request.sms_summary)
         use_analogies = request.use_analogies if request.use_analogies is not None else settings.use_analogies
+        include_lifestyle = request.include_lifestyle_recommendations if request.include_lifestyle_recommendations is not None else settings.include_lifestyle_recommendations
 
         system_prompt = prompt_engine.build_system_prompt(
             literacy_level=literacy_level,
@@ -837,6 +850,8 @@ async def _explain_stream_gen(request: ExplainRequest):
             high_anxiety_mode=bool(request.high_anxiety_mode),
             anxiety_level=request.anxiety_level or 0,
             use_analogies=use_analogies,
+            include_lifestyle_recommendations=include_lifestyle,
+            avoid_openings=request.avoid_openings or None,
         )
 
         template_tone = None
@@ -1083,6 +1098,138 @@ async def compare_reports(body: dict = Body(...)):
     }
 
 
+@router.post("/analyze/synthesize")
+async def synthesize_reports(body: dict = Body(...)):
+    """Generate a unified summary synthesizing multiple reports."""
+    responses = body.get("responses", [])
+    labels = body.get("labels", [])
+    clinical_context = body.get("clinical_context", "")
+
+    if not responses or len(responses) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 responses are required.")
+    if len(responses) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 responses allowed.")
+
+    # Build per-report summaries
+    report_sections = []
+    for i, resp in enumerate(responses):
+        label = labels[i] if i < len(labels) else f"Report {i + 1}"
+        expl = resp.get("explanation", {})
+        parsed = resp.get("parsed_report", {})
+        test_type_display = parsed.get("test_type_display", "Report")
+
+        measurements = expl.get("measurements", [])
+        m_lines = []
+        for m in measurements:
+            m_lines.append(
+                f"- {m.get('abbreviation', '?')}: {m.get('value', '?')} "
+                f"{m.get('unit', '')} ({m.get('status', 'undetermined')}) — "
+                f"{m.get('plain_language', '')}"
+            )
+
+        findings = expl.get("key_findings", [])
+        f_lines = []
+        for f in findings:
+            f_lines.append(
+                f"- {f.get('finding', '?')} (severity: {f.get('severity', '?')}): "
+                f"{f.get('explanation', '')}"
+            )
+
+        section = (
+            f"### {label} ({test_type_display})\n"
+            f"Summary: {expl.get('overall_summary', 'N/A')}\n"
+            f"Measurements:\n{chr(10).join(m_lines) if m_lines else 'None'}\n"
+            f"Key Findings:\n{chr(10).join(f_lines) if f_lines else 'None'}\n"
+        )
+        report_sections.append(section)
+
+    # Load settings for tone/anxiety/voice
+    settings = settings_store.get_settings()
+    provider_str = settings.llm_provider.value
+    api_key = settings_store.get_api_key_for_provider(provider_str)
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No API key configured for provider '{provider_str}'. Set it in Settings.",
+        )
+
+    # Resolve physician voice
+    voice = settings.explanation_voice.value
+    physician_section = ""
+    if voice == "first_person":
+        physician_section = (
+            "Write in first person as the physician. "
+            'Use "I" language: "I have reviewed your results".\n'
+        )
+    else:
+        source = settings.physician_name_source.value
+        if source == "custom" and settings.custom_physician_name:
+            physician_section = (
+                f'When referring to the physician, use "{settings.custom_physician_name}".\n'
+            )
+
+    from llm.prompt_engine import _TONE_DESCRIPTIONS, _DETAIL_DESCRIPTIONS
+    tone_desc = _TONE_DESCRIPTIONS.get(settings.tone_preference, _TONE_DESCRIPTIONS[3])
+    detail_desc = _DETAIL_DESCRIPTIONS.get(settings.detail_preference, _DETAIL_DESCRIPTIONS[3])
+
+    system_prompt = (
+        "You are a physician writing a unified summary that ties together findings from "
+        "multiple medical reports for the same patient. This combined summary should help "
+        "the patient understand the overall clinical picture.\n\n"
+        "Rules:\n"
+        "- Write in plain, compassionate language appropriate for patients\n"
+        "- Connect findings across reports (e.g., 'Your echo shows your heart is pumping "
+        "well, and your labs confirm your cholesterol is improving')\n"
+        "- Lead with the overall picture, then highlight the most important findings from "
+        "each report\n"
+        "- Note any cross-report patterns (e.g., kidney labs + imaging findings)\n"
+        "- Use contractions and natural language\n"
+        "- Do NOT suggest treatments, future testing, or hypothetical actions\n"
+        "- Do NOT include any patient-identifying information\n"
+        "- Return ONLY the combined summary text, no preamble or meta-commentary\n"
+        f"{physician_section}"
+        f"\nTone: {tone_desc}\n"
+        f"Detail level: {detail_desc}\n"
+    )
+
+    clinical_context_section = ""
+    if clinical_context:
+        scrubbed = scrub_phi(clinical_context).scrubbed_text
+        clinical_context_section = f"\nClinical Context: {scrubbed}\n"
+
+    user_prompt = (
+        f"Synthesize these {len(responses)} reports into one unified patient-facing summary:"
+        f"{clinical_context_section}\n\n"
+        + "\n".join(report_sections)
+        + "\nGenerate a combined summary for the patient that ties all these results together."
+    )
+
+    model_override = (
+        settings.claude_model if provider_str == "claude" else settings.openai_model
+    )
+    client = LLMClient(
+        provider=LLMProvider(provider_str),
+        api_key=api_key,
+        model=model_override,
+    )
+
+    try:
+        llm_response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=2048,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM API call failed: {e}")
+
+    return {
+        "combined_summary": llm_response.text_content,
+        "model_used": getattr(llm_response, "model", ""),
+        "input_tokens": getattr(llm_response, "input_tokens", 0),
+        "output_tokens": getattr(llm_response, "output_tokens", 0),
+    }
+
+
 @router.get("/glossary/{test_type}")
 async def get_glossary(test_type: str):
     """Return glossary of medical terms for a given test type."""
@@ -1165,6 +1312,18 @@ async def list_templates():
 async def create_template(request: TemplateCreateRequest = Body(...)):
     """Create a new template."""
     db = get_db()
+    # If setting as default, clear other defaults for same test_type
+    if request.is_default and request.test_type:
+        from storage.database import get_db as _get_db
+        conn = _get_db()._get_conn()
+        try:
+            conn.execute(
+                "UPDATE templates SET is_default = 0 WHERE test_type = ?",
+                (request.test_type,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
     record = db.create_template(
         name=request.name,
         test_type=request.test_type,
@@ -1172,6 +1331,9 @@ async def create_template(request: TemplateCreateRequest = Body(...)):
         structure_instructions=request.structure_instructions,
         closing_text=request.closing_text,
     )
+    # Set is_default after creation if requested
+    if request.is_default and request.test_type:
+        record = db.update_template(record["id"], is_default=1)
     return TemplateResponse(**record)
 
 
@@ -1191,6 +1353,16 @@ async def list_shared_templates():
     """Return cached shared templates."""
     db = get_db()
     return db.list_shared_templates()
+
+
+@router.get("/templates/default/{test_type}")
+async def get_default_template(test_type: str):
+    """Return the default template for a given test type, or null."""
+    db = get_db()
+    record = db.get_default_template_for_type(test_type)
+    if not record:
+        return {"template": None}
+    return {"template": TemplateResponse(**record)}
 
 
 @router.patch("/templates/{template_id}", response_model=TemplateResponse)
@@ -1362,6 +1534,17 @@ async def complete_onboarding():
 
 
 # --- Letter Endpoints ---
+
+
+# --- Test Types Endpoint ---
+
+
+@router.get("/test-types")
+async def list_test_types():
+    """Return all registered test type IDs and display names."""
+    from test_types import registry
+    types = registry.list_types()
+    return [{"id": t["test_type_id"], "name": t["display_name"]} for t in types]
 
 
 # --- Teaching Points Endpoints ---

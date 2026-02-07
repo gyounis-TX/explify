@@ -18,6 +18,77 @@ from test_types.base import BaseTestType
 # Type alias for measurement extractor functions
 MeasurementExtractor = Callable[[str, Optional[str]], list[ParsedMeasurement]]
 
+# Broad modality IDs whose display name benefits from a body-part qualifier
+_BROAD_MODALITY_IDS = {"ultrasound", "ct_scan", "mri", "xray", "cta", "mra"}
+
+# Ordered keyword → label pairs for body-part extraction.
+# More-specific patterns first so "cervical spine" matches before "spine".
+_BODY_PART_KEYWORDS: list[tuple[str, str]] = [
+    # Spine — specific levels first
+    ("cervical spine", "Cervical Spine"),
+    ("c-spine", "Cervical Spine"),
+    ("lumbar spine", "Lumbar Spine"),
+    ("l-spine", "Lumbar Spine"),
+    ("thoracic spine", "Thoracic Spine"),
+    ("t-spine", "Thoracic Spine"),
+    ("spine", "Spine"),
+    # Head / Brain
+    ("brain", "Brain"),
+    ("head", "Head"),
+    ("orbits", "Orbits"),
+    ("sella", "Sella"),
+    ("internal auditory", "IAC"),
+    ("temporal bone", "Temporal Bone"),
+    ("sinus", "Sinuses"),
+    # Neck
+    ("soft tissue neck", "Neck"),
+    ("neck", "Neck"),
+    ("thyroid", "Thyroid"),
+    ("carotid", "Carotid"),
+    # Chest / Thorax
+    ("chest", "Chest"),
+    ("thorax", "Chest"),
+    ("lung", "Chest"),
+    ("pulmonary", "Chest"),
+    # Abdomen / Pelvis
+    ("abdomen and pelvis", "Abdomen/Pelvis"),
+    ("abdomen pelvis", "Abdomen/Pelvis"),
+    ("abdomen", "Abdomen"),
+    ("pelvis", "Pelvis"),
+    ("liver", "Liver"),
+    ("kidney", "Renal"),
+    ("renal", "Renal"),
+    ("gallbladder", "Gallbladder"),
+    ("pancreas", "Pancreas"),
+    ("spleen", "Spleen"),
+    ("bladder", "Bladder"),
+    ("prostate", "Prostate"),
+    ("uterus", "Uterus"),
+    ("ovary", "Ovaries"),
+    ("ovaries", "Ovaries"),
+    ("testicular", "Testicular"),
+    ("scrotal", "Scrotal"),
+    ("breast", "Breast"),
+    # Extremities / Joints
+    ("shoulder", "Shoulder"),
+    ("elbow", "Elbow"),
+    ("wrist", "Wrist"),
+    ("hand", "Hand"),
+    ("finger", "Hand"),
+    ("hip", "Hip"),
+    ("knee", "Knee"),
+    ("ankle", "Ankle"),
+    ("foot", "Foot"),
+    ("toe", "Foot"),
+    ("femur", "Femur"),
+    ("tibia", "Tibia"),
+    ("humerus", "Humerus"),
+    # Vascular
+    ("aorta", "Aorta"),
+    ("lower extremity", "Lower Extremity"),
+    ("upper extremity", "Upper Extremity"),
+]
+
 
 class GenericTestType(BaseTestType):
     """A reusable handler for test types that lack specialized parsing.
@@ -65,6 +136,17 @@ class GenericTestType(BaseTestType):
     def category(self) -> str:
         return self._category
 
+    @staticmethod
+    def _extract_body_part(text: str, type_id: str) -> str | None:
+        """Return a human-readable body-part label if type_id is a broad modality."""
+        if type_id not in _BROAD_MODALITY_IDS:
+            return None
+        snippet = text[:500].lower()
+        for keyword, label in _BODY_PART_KEYWORDS:
+            if keyword in snippet:
+                return label
+        return None
+
     def detect(self, extraction_result: ExtractionResult) -> float:
         """Keyword matching against full_text (case-insensitive).
 
@@ -101,9 +183,14 @@ class GenericTestType(BaseTestType):
         if self._measurement_extractor is not None:
             measurements = self._measurement_extractor(text, gender)
 
+        display = self._display_name
+        body_part = self._extract_body_part(text, self._test_type_id)
+        if body_part:
+            display = f"{self._display_name} — {body_part}"
+
         return ParsedReport(
             test_type=self._test_type_id,
-            test_type_display=self._display_name,
+            test_type_display=display,
             detection_confidence=detection_confidence,
             measurements=measurements,
             sections=sections,

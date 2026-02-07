@@ -48,19 +48,36 @@ def _extract_indication_from_report(report_text: str) -> str | None:
 _MEDICATION_EFFECTS: dict[str, list[str]] = {
     # Cardiac medications
     "beta_blockers": [
-        "Beta blockers (metoprolol, atenolol, carvedilol, bisoprolol, propranolol) "
+        "Beta blockers (metoprolol succinate 25-200 mg, metoprolol tartrate 25-100 mg BID, "
+        "atenolol 25-100 mg, carvedilol 3.125-25 mg BID, bisoprolol 2.5-10 mg, "
+        "propranolol 40-160 mg BID, nebivolol 5-40 mg, labetalol 100-400 mg BID) "
         "lower heart rate and blunt exercise response. A 'low' heart rate is expected. "
         "Peak exercise HR may not reach target. Evaluate chronotropic response in context."
     ],
     "ace_arb": [
-        "ACE inhibitors/ARBs (lisinopril, losartan, valsartan, olmesartan) can cause "
-        "mild potassium elevation and creatinine increase (up to 30% is acceptable). "
-        "A small creatinine rise does not indicate renal failure."
+        "ACE inhibitors (lisinopril 2.5-40 mg, enalapril 2.5-40 mg, ramipril 1.25-20 mg, "
+        "benazepril 5-40 mg) and ARBs (losartan 25-100 mg, valsartan 40-320 mg, "
+        "olmesartan 5-40 mg, irbesartan 75-300 mg, telmisartan 20-80 mg, candesartan 4-32 mg) "
+        "can cause mild potassium elevation and creatinine increase (up to 30% is acceptable). "
+        "A small creatinine rise does not indicate renal failure. Dry cough is a class effect "
+        "of ACE inhibitors (switch to ARB if intolerable)."
+    ],
+    "calcium_channel_blockers": [
+        "Calcium channel blockers: dihydropyridines (amlodipine 2.5-10 mg, nifedipine ER "
+        "30-90 mg, felodipine 2.5-10 mg) mainly lower BP via vasodilation; "
+        "non-dihydropyridines (diltiazem ER 120-480 mg, verapamil ER 120-480 mg) also slow "
+        "heart rate and AV conduction. Pedal edema is common with amlodipine. Verapamil and "
+        "diltiazem should not be combined with beta blockers (risk of bradycardia/heart block). "
+        "Constipation is common with verapamil."
     ],
     "diuretics": [
-        "Diuretics (furosemide, hydrochlorothiazide, spironolactone, chlorthalidone) "
-        "can cause electrolyte changes: low potassium/magnesium (loop/thiazide) or "
-        "high potassium (spironolactone). Also may elevate uric acid and glucose."
+        "Diuretics: thiazide-type (hydrochlorothiazide 12.5-50 mg, chlorthalidone 12.5-25 mg, "
+        "indapamide 1.25-2.5 mg) are first-line for hypertension; loop diuretics (furosemide "
+        "20-600 mg, bumetanide 0.5-10 mg, torsemide 5-200 mg) for volume overload; "
+        "potassium-sparing (spironolactone 12.5-50 mg, eplerenone 25-50 mg) for resistant "
+        "hypertension and heart failure. Can cause electrolyte changes: low potassium/magnesium "
+        "(loop/thiazide) or high potassium (spironolactone/eplerenone). Also may elevate "
+        "uric acid and glucose."
     ],
     "statins": [
         "Statins (atorvastatin, rosuvastatin, simvastatin, pravastatin) may cause "
@@ -160,13 +177,18 @@ _MEDICATION_PATTERNS: dict[str, list[str]] = {
         r"nebivolol|labetalol|lopressor|toprol|coreg)\b"
     ],
     "ace_arb": [
-        r"\b(?:lisinopril|enalapril|ramipril|benazepril|captopril|"
+        r"\b(?:lisinopril|enalapril|ramipril|benazepril|captopril|quinapril|"
         r"losartan|valsartan|olmesartan|irbesartan|telmisartan|candesartan|"
-        r"prinivil|zestril|diovan|cozaar|benicar)\b"
+        r"prinivil|zestril|diovan|cozaar|benicar|atacand|avapro|micardis)\b"
+    ],
+    "calcium_channel_blockers": [
+        r"\b(?:amlodipine|norvasc|nifedipine|procardia|adalat|felodipine|plendil|"
+        r"diltiazem|cardizem|tiazac|verapamil|calan|verelan|isradipine|nicardipine)\b"
     ],
     "diuretics": [
         r"\b(?:furosemide|lasix|hydrochlorothiazide|hctz|spironolactone|"
-        r"chlorthalidone|bumetanide|metolazone|torsemide|aldactone)\b"
+        r"chlorthalidone|bumetanide|metolazone|torsemide|aldactone|"
+        r"indapamide|eplerenone|inspra)\b"
     ],
     "statins": [
         r"\b(?:atorvastatin|rosuvastatin|simvastatin|pravastatin|lovastatin|"
@@ -303,7 +325,11 @@ _CONDITION_GUIDANCE: dict[str, str] = {
         "with fluid overload or diuretic use."
     ),
     "hypertension": (
-        "HYPERTENSION: Monitor for target organ damage (kidney function, cardiac "
+        "HYPERTENSION: Per 2025 guidelines, treatment target is <130/80 mmHg and "
+        "initiation threshold is >130/80 mmHg. First-line classes: ACE inhibitors "
+        "(lisinopril 10-40 mg), ARBs (losartan 50-100 mg), CCBs (amlodipine 5-10 mg), "
+        "thiazide-type diuretics (chlorthalidone 12.5-25 mg). Combination therapy is "
+        "often needed. Monitor for target organ damage (kidney function, cardiac "
         "changes). Electrolytes may be affected by antihypertensive medications. "
         "LVH on echo is a sign of longstanding HTN."
     ),
@@ -1017,13 +1043,18 @@ pumping blood effectively" connects to their life.
    Connect to real life: "This means your heart is doing its job well and
    supporting your daily activities."
 
-3. WHAT IS WORTH DISCUSSING — Abnormal or noteworthy findings, prioritized
+3. WHAT TO DISCUSS — Abnormal or noteworthy findings, prioritized
    by clinical significance. Explain what each finding means for the
    patient, not just what the value is. Use softened, non-conclusive
-   language scaled to severity:
-   - Mild: "are worth mentioning", "is something to be aware of"
-   - Moderate: "warrants discussion", "is something we should discuss"
-   - Severe: "needs to be discussed", "is important to address"
+   language scaled to severity — pick from the pool below and do NOT
+   reuse the same phrase for multiple findings:
+   - Mild: "worth mentioning", "something to be aware of", "good to know
+     about", "worth noting"
+   - Moderate: "something to discuss", "worth a conversation", "worth
+     talking through", "something your doctor will want to review"
+   - Severe: "important to discuss", "something to talk through carefully",
+     "a key finding to review together"
+   NEVER use "warrants" — it sounds legalistic.
    NEVER use definitive alarm language like "needs attention", "requires
    immediate action", or "is dangerous". The physician will determine
    urgency and next steps.
@@ -1066,7 +1097,7 @@ This patient has some anxiety about their results. Make small adjustments:
 
 - Avoid alarming words: don't use "abnormal", "concerning", "worrying"
 - Instead use: "a bit outside the typical range", "slightly elevated/low",
-  "worth mentioning"
+  "good to be aware of"
 - Lead with the overall picture before diving into specifics
 - You can still use medical terms — just avoid alarm language
 - Tone override: not needed. Use the physician's chosen tone setting.
@@ -1187,14 +1218,19 @@ _TONE_RULES = """\
 - Never speculative beyond the report.
 - Use hedging language where clinically appropriate: "may," "appears to,"
   "could suggest," "seems to indicate."
-- For abnormal findings, use softened language: "warrants discussion,"
-  "worth mentioning," "something to discuss," "something to be aware of."
+- For abnormal findings, use softened language chosen from this pool (never
+  repeat the same phrase twice in one response): "worth mentioning,"
+  "something to be aware of," "worth a conversation," "good to know about,"
+  "something to keep in mind," "worth bringing up," "something to talk
+  through," "worth flagging," "something your doctor will want to discuss,"
+  "a finding to note."
+  NEVER use "warrants" — it sounds legalistic.
 - AVOID conclusive/alarming phrasing: "needs attention," "requires action,"
   "is dangerous," "is critical," "proves," "confirms," "definitely."
 
 """
 
-_NO_RECOMMENDATIONS_RULE = """\
+_NO_RECOMMENDATIONS_BASE = """\
 ## CRITICAL: NO TREATMENT SUGGESTIONS OR HYPOTHETICAL ACTIONS
 
 NEVER include:
@@ -1204,20 +1240,63 @@ NEVER include:
 - Suggestions about future bloodwork, imaging, or procedures
 - Phrases like "your doctor may want to...", "we will need to...",
   "this may require...", "additional testing may be needed"
+- Medication advice or changes to prescriptions
 - ANY forward-looking medical action items
 
+"""
+
+_LIFESTYLE_EXCEPTION = """\
+EXCEPTION — Lifestyle recommendations ARE allowed:
+- Diet and nutrition advice relevant to the findings (e.g. reducing sodium
+  for elevated blood pressure, increasing iron-rich foods for low ferritin)
+- Exercise and physical activity guidance
+- General lifestyle modifications (sleep, stress, hydration, alcohol, smoking)
+These are safe, non-prescriptive suggestions a patient can act on independently.
+Keep them brief and tied directly to the findings.
+
+You are providing an INTERPRETATION of findings, not a treatment plan.
+The physician using this tool will add their own specific medical
+recommendations separately. Your job is to explain WHAT the results show,
+WHAT they mean, and where appropriate, what lifestyle changes may help.
+
+"""
+
+_NO_LIFESTYLE_CLOSING = """\
 You are providing an INTERPRETATION of findings, not a treatment plan.
 The physician using this tool will add their own specific recommendations
 separately. Your job is to explain WHAT the results show and WHAT they mean,
 not to suggest what should be done about them.
 
+"""
+
+_NEXT_STEPS_CLAUSE = """\
 If the user has explicitly included specific next steps in their input,
 you may include ONLY those exact next steps — do not embellish, expand,
 or add your own.
 
 """
 
-_SAFETY_RULES = """\
+
+def _build_no_recommendations_rule(include_lifestyle: bool = True) -> str:
+    """Build the no-recommendations rule, optionally including lifestyle exception."""
+    if include_lifestyle:
+        return _NO_RECOMMENDATIONS_BASE + _LIFESTYLE_EXCEPTION + _NEXT_STEPS_CLAUSE
+    return _NO_RECOMMENDATIONS_BASE + _NO_LIFESTYLE_CLOSING + _NEXT_STEPS_CLAUSE
+
+_SAFETY_RULE_7_WITH_LIFESTYLE = (
+    "7. Do NOT provide medication advice or treatment recommendations\n"
+    "   (lifestyle suggestions such as diet, exercise, and habits are OK)."
+)
+_SAFETY_RULE_7_STRICT = (
+    "7. Do NOT provide medication advice, treatment recommendations,\n"
+    "   or lifestyle suggestions."
+)
+
+
+def _build_safety_rules(include_lifestyle: bool = True) -> str:
+    """Build safety rules, with rule #7 reflecting lifestyle toggle."""
+    rule7 = _SAFETY_RULE_7_WITH_LIFESTYLE if include_lifestyle else _SAFETY_RULE_7_STRICT
+    return f"""\
 ## Safety & Scope Rules
 1. ONLY use data that appears in the report provided. NEVER invent, guess,
    or assume measurements, findings, or diagnoses not explicitly stated.
@@ -1230,7 +1309,7 @@ _SAFETY_RULES = """\
    cannot be classified without more context.
 5. Do NOT mention the patient by name or include any PHI.
 6. Do NOT introduce diagnoses not supported by the source report.
-7. Do NOT provide medication advice or treatment recommendations.
+{rule7}
 8. Call the explain_report tool with your response. Do not produce any
    output outside of this tool call.
 9. When prior values are provided, briefly note the trend. Don't
@@ -1282,6 +1361,7 @@ AI-typical phrases and patterns:
 - "Notably, ..." / "Importantly, ..." / "Significantly, ..."
 - "It is reassuring that..." / "It is encouraging that..."
 - "As we can see..." / "Looking at the results..."
+- "good cholesterol" / "bad cholesterol" — always use "HDL" and "LDL" instead
 - "Moving on to..." / "Turning to..." / "Now, regarding..."
 - "In terms of..." / "With regard to..." / "With respect to..."
 - "comprehensive" / "thorough" / "meticulous" (describing the test itself)
@@ -1351,7 +1431,7 @@ natural imperfections that AI lacks. Incorporate these patterns:
 - "Good news overall." / "One thing to note." / "Solid results."
 
 ### Parenthetical Asides:
-- "Your cholesterol (the 'bad' kind, LDL) is a bit high."
+- "Your LDL cholesterol is a bit high."
 - "The ejection fraction (how well your heart pumps) is strong."
 
 ### Casual Starters:
@@ -1365,7 +1445,7 @@ natural imperfections that AI lacks. Incorporate these patterns:
 
 ### Em Dashes for Emphasis:
 - "Everything looks healthy — really healthy, actually."
-- "One mild finding — nothing alarming — but worth mentioning."
+- "One mild finding — nothing alarming — but good to know about."
 
 ### Occasional Rhetorical Softeners:
 - "which is exactly what we want to see"
@@ -1388,7 +1468,7 @@ matches the CLINICAL SITUATION:
 
 ### When there's 1-2 mild abnormalities in otherwise normal results:
 - Finding-forward: "Cholesterol is the main thing to talk about here."
-- Specific finding: "Most of this looks great — one thing worth mentioning."
+- Specific finding: "Most of this looks great — one thing to be aware of."
 - Contextual: "Overall a reassuring report, with one area to keep an eye on."
 
 ### When results are mixed (some normal, some abnormal):
@@ -1770,6 +1850,144 @@ than listing each value separately. Patterns matter more than individual numbers
   Triglycerides > 500 is a separate risk for pancreatitis.
   Non-HDL cholesterol (Total - HDL) is often more clinically useful than LDL
   when triglycerides are elevated (> 200).
+  CRITICAL — CHOLESTEROL INTERPRETATION RULES:
+  1. IGNORE any "normal" or "reference range" printed on the lab report PDF for
+     cholesterol values. Cholesterol targets are RISK-BASED, not range-based.
+     A lab-printed "normal" range (e.g., LDL < 100 or < 130) does NOT mean the
+     patient's level is appropriate for their risk profile.
+  2. NEVER say a cholesterol value is "in the normal range" or "within normal
+     limits." Instead, state the value and discuss it in the context of the
+     patient's cardiovascular risk factors if clinical context is provided.
+  3. NEVER use the terms "good cholesterol" or "bad cholesterol." Use HDL and
+     LDL by name.
+  4. LDL targets depend on risk: very high risk (prior ASCVD, TIA, stroke,
+     stent) → LDL < 55; high risk → LDL < 70; moderate risk → LDL < 100;
+     low risk → LDL < 130. If clinical context suggests high cardiovascular
+     risk, frame the LDL result relative to that target, not the lab range.
+
+- CHOLESTEROL MEDICATIONS — Common lipid-lowering drugs and typical doses:
+  **Statins** (HMG-CoA reductase inhibitors — first-line for elevated LDL):
+  - Atorvastatin (Lipitor): 10-80 mg/day; 40-80 mg = high-intensity
+  - Rosuvastatin (Crestor): 5-40 mg/day; 20-40 mg = high-intensity
+  - Simvastatin (Zocor): 5-40 mg/day (80 mg no longer recommended due to
+    myopathy risk); 20-40 mg = moderate-intensity
+  - Pravastatin (Pravachol): 10-80 mg/day; 40-80 mg = moderate-intensity
+  - Pitavastatin (Livalo): 1-4 mg/day; moderate-intensity
+  - Lovastatin (Mevacor): 20-80 mg/day; 40-80 mg = moderate-intensity
+  High-intensity statins (atorvastatin 40-80, rosuvastatin 20-40) lower LDL
+  by ~50% or more. Moderate-intensity lowers LDL by 30-49%.
+  **Other lipid-lowering agents**:
+  - Ezetimibe (Zetia): 10 mg/day; blocks cholesterol absorption, lowers LDL
+    an additional ~15-20%; often added to a statin
+  - PCSK9 inhibitors (Repatha/evolocumab, Praluent/alirocumab): injectable,
+    every 2-4 weeks; lowers LDL by 50-60%; used when statins are insufficient
+    or not tolerated
+  - Bempedoic acid (Nexletol): 180 mg/day; oral, for statin-intolerant
+    patients; lowers LDL ~15-18%
+  - Icosapent ethyl (Vascepa): 2g twice daily; for triglycerides ≥ 150;
+    reduces cardiovascular risk
+  - Fibrates (fenofibrate 48-145 mg/day, gemfibrozil 600 mg twice daily):
+    primarily for elevated triglycerides
+  - Niacin: 500-2000 mg/day; raises HDL, lowers triglycerides; less commonly
+    used due to side effects
+
+- ADVANCED LIPID MARKERS:
+  **Direct LDL**: Measured directly (not calculated via Friedewald). More
+  accurate when triglycerides are >400 or patient is non-fasting. Interpret
+  with the same risk-based targets as calculated LDL.
+
+  **Lipoprotein(a) / Lp(a)**: Genetically determined; does not change much
+  with diet, exercise, or statins. Measured in nmol/L (preferred) or mg/dL.
+  - < 75 nmol/L (< 30 mg/dL): desirable
+  - 75-125 nmol/L (30-50 mg/dL): borderline high
+  - > 125 nmol/L (> 50 mg/dL): high — independent risk factor for ASCVD
+  Elevated Lp(a) may warrant more aggressive LDL lowering. PCSK9 inhibitors
+  lower Lp(a) by ~25%. Only needs to be measured once in a lifetime since
+  it is genetically fixed.
+
+  **Apolipoprotein B (ApoB)**: One ApoB molecule per atherogenic particle
+  (LDL, VLDL, IDL, Lp(a)). ApoB is a direct particle count and may be a
+  better predictor of cardiovascular risk than LDL alone.
+  - < 90 mg/dL: desirable for most adults
+  - < 65 mg/dL: target for very high-risk patients (prior ASCVD)
+  - > 130 mg/dL: high
+  Particularly useful when LDL and particle number are discordant (e.g.,
+  normal LDL but high ApoB suggests many small dense LDL particles).
+
+  **Non-HDL Cholesterol**: Total cholesterol minus HDL. Captures all
+  atherogenic particles. Target is typically LDL goal + 30 mg/dL.
+  More useful than LDL when triglycerides are elevated (> 200).
+
+- EXPANDED LIPID PROFILE (Quest CardioIQ / LabCorp NMR LipoProfile):
+  When advanced lipid testing is present, explain ALL markers found — do not
+  skip any. These tests provide a more comprehensive cardiovascular risk picture
+  than a standard lipid panel.
+
+  **LDL Particle Number (LDL-P)**: Measured by NMR spectroscopy. Counts the
+  actual number of LDL particles, which may be more predictive than LDL
+  cholesterol concentration alone.
+  - < 1000 nmol/L: desirable
+  - 1000-1299 nmol/L: borderline high
+  - >= 1300 nmol/L: high
+  When LDL-C is normal but LDL-P is high (discordance), the particle number
+  is the better predictor of risk.
+
+  **Small LDL-P**: The number of small dense LDL particles. Small particles
+  penetrate artery walls more easily.
+  - < 527 nmol/L: desirable
+  - 527-839 nmol/L: moderate
+  - >= 840 nmol/L: high
+
+  **LDL Particle Size**: Average diameter. Pattern A (>= 20.5 nm, large
+  buoyant) is favorable. Pattern B (< 20.5 nm, small dense) is associated
+  with higher risk, especially when combined with high triglycerides and
+  low HDL.
+
+  **Large HDL-P**: Large HDL particles are the most effective at reverse
+  cholesterol transport. Higher is better (>= 7.2 umol/L desirable).
+
+  **Large VLDL-P**: Marker of triglyceride-rich lipoproteins and insulin
+  resistance. Lower is better (<= 2.7 nmol/L desirable).
+
+  **LP-IR Score**: Lipoprotein Insulin Resistance Score (0-100). Derived
+  from the lipoprotein particle profile.
+  - <= 27: low insulin resistance
+  - 28-44: moderate
+  - >= 45: high — significant insulin resistance; diabetes risk elevated
+
+  **Small Dense LDL (sdLDL)**: Direct measurement of small dense LDL
+  cholesterol.
+  - < 26 mg/dL: optimal
+  - 26-40 mg/dL: above optimal
+  - > 40 mg/dL: high
+
+  **Lp-PLA2**: Vascular inflammation marker. Elevated levels (>= 200 ng/mL)
+  indicate active arterial inflammation and higher risk of plaque rupture.
+
+  **hs-CRP**: High-sensitivity C-reactive protein — systemic inflammation.
+  - < 1.0 mg/L: low cardiovascular risk
+  - 1.0-3.0 mg/L: average risk
+  - > 3.0 mg/L: high risk (rule out acute infection/inflammation first)
+
+  **Homocysteine**: Elevated levels (> 15 umol/L) are an independent risk
+  factor for cardiovascular disease. Often related to B12, folate, or B6
+  deficiency. Supplementation can lower levels.
+
+  **Omega-3 Index**: Percentage of EPA+DHA in red blood cell membranes.
+  - >= 8%: desirable (low cardiovascular risk)
+  - 4-8%: intermediate
+  - < 4%: high risk — consider omega-3 supplementation
+
+  **Fasting Insulin**: Elevated fasting insulin (> 25 uIU/mL) with normal
+  glucose suggests early insulin resistance, even before prediabetes
+  develops on standard glucose testing.
+
+  When interpreting expanded lipid profiles, group findings by theme:
+  1. Particle burden (LDL-P, ApoB, small LDL-P, sdLDL)
+  2. Particle quality (LDL size, large HDL-P)
+  3. Inflammation (hs-CRP, Lp-PLA2)
+  4. Metabolic/insulin resistance (LP-IR, fasting insulin, large VLDL-P)
+  5. Other risk factors (Lp(a), homocysteine, omega-3 index)
 
 ### Electrolyte Patterns
 
@@ -2113,7 +2331,7 @@ Apply these imaging-specific interpretation rules:
 
 - TREND INTERPRETATION: BMD changes of < 3-5% between scans may be within
   measurement error. Stability is reassuring. A clear decline (> 5%)
-  warrants discussion.
+  is something to discuss.
 
 - COMMON PATIENT CONCERNS: Patients often equate osteopenia with
   osteoporosis — clarify that osteopenia is a milder condition. Bone
@@ -2438,6 +2656,23 @@ class PromptEngine:
         )
         return "\n".join(lines)
 
+    @staticmethod
+    def _build_avoid_openings_section(avoid_openings: list[str] | None) -> str:
+        if not avoid_openings:
+            return ""
+        lines = [
+            "## Batch Variety — MANDATORY\n",
+            "Other reports in this same batch already used these opening lines:",
+        ]
+        for opening in avoid_openings:
+            lines.append(f'  - "{opening}"')
+        lines.append(
+            "\nYou MUST pick a completely different opening style and sentence "
+            "structure. Do NOT paraphrase the above — choose an entirely different "
+            "approach from the Opening Line Variety options.\n"
+        )
+        return "\n".join(lines) + "\n"
+
     def build_system_prompt(
         self,
         literacy_level: LiteracyLevel,
@@ -2458,6 +2693,8 @@ class PromptEngine:
         high_anxiety_mode: bool = False,
         anxiety_level: int = 0,
         use_analogies: bool = True,
+        include_lifestyle_recommendations: bool = True,
+        avoid_openings: list[str] | None = None,
     ) -> str:
         """Build the system prompt with role, rules, and constraints.
 
@@ -2466,6 +2703,10 @@ class PromptEngine:
             anxiety_level: Graduated anxiety: 0=none, 1=mild, 2=moderate, 3=severe.
             use_analogies: If True, includes the analogy library for patient-friendly
                 size and value comparisons.
+            include_lifestyle_recommendations: If True, allows diet/exercise/lifestyle
+                suggestions in the output.
+            avoid_openings: Opening sentences used by prior reports in this batch.
+                When provided, the LLM must choose a different opening style.
         """
         specialty = prompt_context.get("specialty", "general medicine")
 
@@ -2632,8 +2873,15 @@ class PromptEngine:
                 f"## Rules\n"
                 f"- Interpret findings — explain what they MEAN, don't recite values.\n"
                 f"- NEVER suggest treatments, future testing, or hypothetical actions.\n"
-                f"- Use softened language for abnormal findings: \"warrants discussion\", "
-                f"\"worth mentioning\", \"something to discuss\". Avoid \"needs attention\".\n"
+                f"- Use softened language for abnormal findings — pick from this pool and "
+                f"never repeat the same phrase twice: \"worth mentioning\", "
+                f"\"something to be aware of\", \"worth a conversation\", "
+                f"\"good to know about\", \"something to keep in mind\", "
+                f"\"worth bringing up\", \"something to talk through\", "
+                f"\"a finding to note\". "
+                f"NEVER use \"warrants\" — it sounds legalistic. "
+                f"NEVER use \"good cholesterol\" or \"bad cholesterol\" — use HDL and LDL. "
+                f"Avoid \"needs attention\".\n"
                 f"- ONLY use data from the report. Never invent findings.\n"
                 f"- Use the provided status (normal, mildly_abnormal, etc.) — do NOT reclassify.\n"
                 f"- Do NOT mention the patient by name.\n"
@@ -2700,7 +2948,7 @@ class PromptEngine:
             f"{demographics_section}"
             f"{test_type_hint_section}"
             f"{_CLINICAL_VOICE_RULE.format(specialty=specialty)}"
-            f"{_NO_RECOMMENDATIONS_RULE}"
+            f"{_build_no_recommendations_rule(include_lifestyle_recommendations)}"
             f"{_CLINICAL_CONTEXT_RULE}"
             f"{_INTERPRETATION_QUALITY_RULE}"
             f"{_select_domain_knowledge(prompt_context)}"
@@ -2717,11 +2965,12 @@ class PromptEngine:
             f"{physician_section}"
             f"{_TONE_RULES}"
             f"{_ZERO_EDIT_GOAL}"
-            f"{_SAFETY_RULES}"
+            f"{_build_safety_rules(include_lifestyle_recommendations)}"
             f"{_ANTI_AI_PHRASING}"
             f"{_SENTENCE_VARIETY}"
             f"{_PHYSICIAN_CADENCE}"
             f"{_OPENING_VARIETY}"
+            f"{self._build_avoid_openings_section(avoid_openings)}"
             f"{_CLOSING_VARIETY}"
             f"{specialty_voice_section}"
             f"## Validation Rule\n"

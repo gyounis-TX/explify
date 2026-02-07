@@ -5,14 +5,23 @@
 .templates-header {
   margin-bottom: var(--space-xl);
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
+  gap: var(--space-xs);
 }
 
 .templates-title {
   font-size: var(--font-size-2xl);
   font-weight: 600;
   color: var(--color-text);
+}
+
+.templates-description {
+  width: 100%;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
 }
 
 .templates-create-btn {
@@ -79,6 +88,12 @@
   color: var(--color-text-secondary);
 }
 
+.template-badge--default {
+  background-color: var(--color-accent-50, #ecfdf5);
+  color: var(--color-accent-700, #047857);
+  font-weight: 600;
+}
+
 .template-card-actions {
   display: flex;
   gap: var(--space-xs);
@@ -105,6 +120,30 @@
   background-color: #fef2f2;
   color: #dc2626;
   border-color: #fecaca;
+}
+
+.template-default-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background-color 0.15s ease;
+}
+
+.template-default-btn:hover {
+  background-color: var(--color-accent-50, #ecfdf5);
+  color: var(--color-accent-700, #047857);
+  border-color: var(--color-accent-300, #6ee7b7);
+}
+
+.template-default-btn--active {
+  background-color: var(--color-accent-50, #ecfdf5);
+  color: var(--color-accent-700, #047857);
+  border-color: var(--color-accent-300, #6ee7b7);
+  font-weight: 600;
 }
 
 /* Form */

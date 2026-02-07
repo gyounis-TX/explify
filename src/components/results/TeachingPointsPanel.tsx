@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from "react";
 import type { TeachingPoint, SharedTeachingPoint } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
@@ -31,7 +32,73 @@ export function TeachingPointsPanel({
   showUndoToast,
   letterMode,
 }: TeachingPointsPanelProps) {
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+  const [validTypes, setValidTypes] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    sidecarApi.listTestTypes().then(setValidTypes).catch(() => {});
+  }, []);
+
   const totalCount = teachingPoints.length + sharedTeachingPoints.length;
+
+  // Deduplicated sorted set of all test_type values across own + shared points
+  const uniqueTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const tp of teachingPoints) {
+      if (tp.test_type) types.add(tp.test_type);
+    }
+    for (const sp of sharedTeachingPoints) {
+      if (sp.test_type) types.add(sp.test_type);
+    }
+    return [...types].sort();
+  }, [teachingPoints, sharedTeachingPoints]);
+
+  // All valid types for the datalist (registry + any already used), with display names
+  const allTypeOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of validTypes) map.set(t.id, t.name);
+    for (const t of uniqueTypes) {
+      if (!map.has(t)) map.set(t, t.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
+    }
+    if (effectiveTestType && !map.has(effectiveTestType)) {
+      map.set(effectiveTestType, effectiveTestType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [validTypes, uniqueTypes, effectiveTestType]);
+
+  /** Try to match free-text input to a valid registry type ID. */
+  const resolveTypeId = (input: string): string | null => {
+    if (!input) return null;
+    const lower = input.toLowerCase().replace(/[\s_-]+/g, "_");
+    const exact = validTypes.find((t) => t.id === lower);
+    if (exact) return exact.id;
+    const byName = validTypes.find((t) => t.name.toLowerCase() === input.toLowerCase());
+    if (byName) return byName.id;
+    const partial = validTypes.find(
+      (t) => t.id.includes(lower) || t.name.toLowerCase().includes(input.toLowerCase()),
+    );
+    if (partial) return partial.id;
+    return null;
+  };
+
+  const getDisplayName = (typeId: string): string => {
+    const found = validTypes.find(t => t.id === typeId);
+    return found?.name ?? typeId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  // Filter logic: "" = all, "__global__" = only null test_type, specific = that type + global
+  const filteredTeachingPoints = useMemo(() => {
+    if (!typeFilter) return teachingPoints;
+    if (typeFilter === "__global__") return teachingPoints.filter((tp) => !tp.test_type);
+    return teachingPoints.filter((tp) => !tp.test_type || tp.test_type === typeFilter);
+  }, [teachingPoints, typeFilter]);
+
+  const filteredSharedPoints = useMemo(() => {
+    if (!typeFilter) return sharedTeachingPoints;
+    if (typeFilter === "__global__") return sharedTeachingPoints.filter((sp) => !sp.test_type);
+    return sharedTeachingPoints.filter((sp) => !sp.test_type || sp.test_type === typeFilter);
+  }, [sharedTeachingPoints, typeFilter]);
 
   const handleSaveForType = async () => {
     if (!newTeachingPoint.trim()) return;
@@ -86,6 +153,50 @@ export function TeachingPointsPanel({
     });
   };
 
+  const handleTypeChange = async (id: number, rawInput: string | null) => {
+    setEditingTypeId(null);
+    const prev = teachingPoints.find((tp) => tp.id === id);
+    if (!prev) return;
+
+    // Blank = "All types"
+    if (!rawInput) {
+      if (prev.test_type === null) return;
+      setTeachingPoints((pts) =>
+        pts.map((tp) => (tp.id === id ? { ...tp, test_type: null } : tp)),
+      );
+      try {
+        await sidecarApi.updateTeachingPoint(id, { test_type: null });
+        queueUpsertAfterMutation("teaching_points", id).catch(() => {});
+      } catch {
+        setTeachingPoints((pts) =>
+          pts.map((tp) => (tp.id === id ? { ...tp, test_type: prev.test_type } : tp)),
+        );
+        showToast("error", "Failed to update teaching point type.");
+      }
+      return;
+    }
+
+    const resolved = resolveTypeId(rawInput);
+    if (!resolved) {
+      showToast("info", "No matching type found. Try picking from the suggestions.");
+      return;
+    }
+    if (resolved === prev.test_type) return;
+
+    setTeachingPoints((pts) =>
+      pts.map((tp) => (tp.id === id ? { ...tp, test_type: resolved } : tp)),
+    );
+    try {
+      await sidecarApi.updateTeachingPoint(id, { test_type: resolved });
+      queueUpsertAfterMutation("teaching_points", id).catch(() => {});
+    } catch {
+      setTeachingPoints((pts) =>
+        pts.map((tp) => (tp.id === id ? { ...tp, test_type: prev.test_type } : tp)),
+      );
+      showToast("error", "Failed to update teaching point type.");
+    }
+  };
+
   return (
     <details className="teaching-points-panel teaching-points-collapsible">
       <summary className="teaching-points-header">
@@ -112,6 +223,24 @@ export function TeachingPointsPanel({
             ? "Add personalized instructions that customize how AI generates letters. These points can be stylistic or clinical. Explify will remember and apply these to all future outputs."
             : "Add personalized instructions that customize how AI interprets and explains results. These points can be stylistic or clinical. Explify will remember and apply these to all future explanations."}
         </p>
+
+        {/* Filter dropdown */}
+        {uniqueTypes.length > 0 && (
+          <div className="teaching-points-filter-row">
+            <select
+              className="teaching-points-filter-select"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="">All teaching points</option>
+              <option value="__global__">Global only</option>
+              {uniqueTypes.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="teaching-point-input-row">
           <textarea
             className="teaching-point-input"
@@ -141,17 +270,65 @@ export function TeachingPointsPanel({
             </button>
           </div>
         </div>
-        {teachingPoints.length > 0 && (
+        {filteredTeachingPoints.length > 0 && (
           <div className="own-teaching-points">
             <span className="own-teaching-points-label">Your teaching points</span>
-            {teachingPoints.map((tp) => (
+            {filteredTeachingPoints.map((tp) => (
               <div key={tp.id} className="own-teaching-point-card">
                 <p className="own-teaching-point-text">{tp.text}</p>
                 <div className="own-teaching-point-meta">
-                  {tp.test_type ? (
-                    <span className="own-teaching-point-type">{tp.test_type}</span>
+                  {editingTypeId === tp.id ? (
+                    <>
+                      <input
+                        className="own-teaching-point-type-select"
+                        list={`tp-type-list-${tp.id}`}
+                        defaultValue={tp.test_type ? getDisplayName(tp.test_type) : ""}
+                        placeholder="Type or pick (blank = all)"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const val = (e.target as HTMLInputElement).value.trim() || null;
+                            handleTypeChange(tp.id, val);
+                          } else if (e.key === "Escape") {
+                            setEditingTypeId(null);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim() || null;
+                          handleTypeChange(tp.id, val);
+                        }}
+                      />
+                      <datalist id={`tp-type-list-${tp.id}`}>
+                        {allTypeOptions.map((t) => (
+                          <option key={t.id} value={t.name} />
+                        ))}
+                      </datalist>
+                    </>
+                  ) : tp.test_type ? (
+                    <>
+                      <span
+                        className="own-teaching-point-type"
+                        onClick={() => setEditingTypeId(tp.id)}
+                        title="Click to change type"
+                      >
+                        {tp.test_type}
+                      </span>
+                      <span
+                        className="own-teaching-point-type own-teaching-point-type--display"
+                        onClick={() => setEditingTypeId(tp.id)}
+                        title="Click to change type"
+                      >
+                        {getDisplayName(tp.test_type)}
+                      </span>
+                    </>
                   ) : (
-                    <span className="own-teaching-point-type own-teaching-point-type--global">All types</span>
+                    <span
+                      className="own-teaching-point-type own-teaching-point-type--global"
+                      onClick={() => setEditingTypeId(tp.id)}
+                      title="Click to change type"
+                    >
+                      All types
+                    </span>
                   )}
                   <button
                     className="own-teaching-point-delete"
@@ -164,10 +341,10 @@ export function TeachingPointsPanel({
             ))}
           </div>
         )}
-        {sharedTeachingPoints.length > 0 && (
+        {filteredSharedPoints.length > 0 && (
           <div className="shared-teaching-points">
             <span className="shared-teaching-points-label">Shared with you</span>
-            {sharedTeachingPoints.map((sp) => (
+            {filteredSharedPoints.map((sp) => (
               <div key={sp.sync_id} className="shared-teaching-point-card">
                 <p className="shared-teaching-point-text">{sp.text}</p>
                 <div className="shared-teaching-point-meta">

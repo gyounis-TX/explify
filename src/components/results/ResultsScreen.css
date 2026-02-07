@@ -344,6 +344,58 @@
   font-weight: 600;
 }
 
+.results-batch-tab--combined {
+  border-left: 2px solid var(--color-border);
+  background-color: var(--color-gray-50);
+}
+
+.results-batch-tab--combined.results-batch-tab--active {
+  background-color: var(--color-accent-50);
+  color: var(--color-accent-700);
+  border-left-color: var(--color-accent-400);
+}
+
+/* Combined Summary Panel */
+.combined-summary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-xl);
+}
+
+.combined-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.combined-summary-header h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.combined-summary-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  justify-content: center;
+}
+
+.combined-summary-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
 /* Export Toolbar */
 .export-toolbar {
   display: flex;
@@ -1244,6 +1296,17 @@
   background-color: var(--color-primary-50);
 }
 
+.results-back-btn--tertiary {
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.results-back-btn--tertiary:hover {
+  background-color: var(--color-gray-50);
+  color: var(--color-text);
+}
+
 /* Teaching Points Panel */
 .teaching-points-panel {
   background-color: var(--color-surface);
@@ -1357,6 +1420,39 @@
   margin: 0;
 }
 
+.teaching-points-filter-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.teaching-points-filter-select {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  min-width: 160px;
+}
+
+.teaching-points-filter-select:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+}
+
+.own-teaching-point-type-select {
+  padding: 1px 4px;
+  border: 1px solid var(--color-primary-300);
+  border-radius: 6px;
+  font-size: 0.7rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.own-teaching-point-type-select:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+}
 
 
 .teaching-point-input-row {
@@ -1520,6 +1616,17 @@
   background-color: var(--color-accent-50);
   padding: 1px 6px;
   border-radius: 8px;
+  cursor: pointer;
+}
+
+.own-teaching-point-type:hover {
+  border-bottom: 1px dotted var(--color-text-secondary);
+}
+
+.own-teaching-point-type--display {
+  background-color: transparent;
+  border: 1px solid var(--color-accent-200);
+  color: var(--color-accent-500);
 }
 
 .own-teaching-point-type--global {

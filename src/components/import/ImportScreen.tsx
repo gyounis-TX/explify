@@ -13,10 +13,23 @@ interface FileExtractionEntry {
   result?: ExtractionResult;
   error?: string;
   status: "pending" | "extracting" | "success" | "error";
+  detectionStatus?: DetectionStatus;
+  detectionResult?: DetectTypeResponse | null;
+  manualTestType?: string | null;
+}
+
+interface TextPasteEntry {
+  id: number;
+  label: string;
+  text: string;
 }
 
 function fileKey(file: File): string {
   return `${file.name}::${file.size}`;
+}
+
+function textEntryKey(entry: TextPasteEntry): string {
+  return `text::${entry.id}`;
 }
 
 // Module-level cache — survives component unmount during navigation.
@@ -39,6 +52,8 @@ interface ImportStateCache {
   detectionStatus: DetectionStatus;
   detectionResult: DetectTypeResponse | null;
   manualTestType: string | null;
+  textEntries: TextPasteEntry[];
+  textEntryNextId: number;
 }
 
 function freshCache(): ImportStateCache {
@@ -60,6 +75,8 @@ function freshCache(): ImportStateCache {
     detectionStatus: "idle",
     detectionResult: null,
     manualTestType: null,
+    textEntries: [],
+    textEntryNextId: 1,
   };
 }
 
@@ -72,6 +89,7 @@ export function clearImportCache(): void {
 
 const CATEGORY_LABELS: Record<string, string> = {
   cardiac: "Cardiac",
+  interventional: "Interventional / Procedures",
   vascular: "Vascular",
   lab: "Laboratory",
   imaging_ct: "CT Scans",
@@ -82,12 +100,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   neurophysiology: "Neurophysiology",
   endoscopy: "Endoscopy",
   pathology: "Pathology",
+  allergy: "Allergy / Immunology",
+  dermatology: "Dermatology",
 };
 
 const CATEGORY_ORDER = [
-  "cardiac", "vascular", "lab",
+  "cardiac", "interventional", "vascular", "lab",
   "imaging_ct", "imaging_mri", "imaging_ultrasound", "imaging_xray",
   "pulmonary", "neurophysiology", "endoscopy", "pathology",
+  "allergy", "dermatology",
 ];
 
 function groupTypesByCategory(types: TestTypeInfo[]): [string, TestTypeInfo[]][] {
@@ -132,6 +153,7 @@ export function ImportScreen() {
   const [result, setResult] = useState<ExtractionResult | null>(_cache.result);
   const [error, setError] = useState<string | null>(_cache.error);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
   const [templates, setTemplates] = useState<Template[]>([]);
   const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
   const [selectedTemplateValue, setSelectedTemplateValue] = useState(
@@ -156,6 +178,10 @@ export function ImportScreen() {
   const [scrubbedClinicalContext, setScrubbedClinicalContext] = useState<string | null>(_cache.scrubbedClinicalContext);
   const [isScrubbing, setIsScrubbing] = useState(false);
 
+  // Multi-text paste state
+  const [textEntries, setTextEntries] = useState<TextPasteEntry[]>(_cache.textEntries);
+  const [textEntryNextId, setTextEntryNextId] = useState(_cache.textEntryNextId);
+
   // Test type detection state
   const [testTypeHint, setTestTypeHint] = useState(_cache.testTypeHint);
   const [detectionStatus, setDetectionStatus] = useState<DetectionStatus>(_cache.detectionStatus);
@@ -166,6 +192,7 @@ export function ImportScreen() {
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [modalSelectedType, setModalSelectedType] = useState<string | null>(null);
   const [modalCustomType, setModalCustomType] = useState("");
+  const [modalEditingKey, setModalEditingKey] = useState<string | null>(null);
 
   // Track whether we've applied location state (to avoid re-applying on re-renders)
   const [appliedLocationState, setAppliedLocationState] = useState(false);
@@ -192,7 +219,7 @@ export function ImportScreen() {
       extractionResults, selectedResultKey, clinicalContext,
       selectedReasons, selectedTemplateValue, scrubbedText,
       scrubbedClinicalContext, testTypeHint, detectionStatus,
-      detectionResult, manualTestType,
+      detectionResult, manualTestType, textEntries, textEntryNextId,
     };
   });
 
@@ -250,8 +277,6 @@ export function ImportScreen() {
     setDetectionResult(null);
     setManualTestType(null);
     _cache = freshCache();
-    // Clear stale results so ResultsScreen doesn't restore a prior analysis.
-    try { sessionStorage.removeItem("explify_results_state"); } catch { /* ignore */ }
   }, []);
 
   // Fetch scrubbed preview when extraction succeeds
@@ -279,9 +304,11 @@ export function ImportScreen() {
     return () => { cancelled = true; };
   }, [result, clinicalContext]);
 
-  // Auto-detect test type when extraction succeeds
+  // Auto-detect test type when extraction succeeds (single report only)
   useEffect(() => {
     if (!result) return;
+    // Suppress in batch mode — each entry detects independently
+    if ([...extractionResults.values()].filter(e => e.status === "success").length > 1) return;
     let cancelled = false;
     setDetectionStatus("detecting");
     setManualTestType(null);
@@ -326,8 +353,10 @@ export function ImportScreen() {
       });
   }, [result, testTypeHint]);
 
-  // Auto-open type selection modal when detection is uncertain
+  // Auto-open type selection modal when detection is uncertain (single report only)
   useEffect(() => {
+    // Suppress in batch mode — cards have inline controls
+    if (extractionResults.size > 1) return;
     if (
       (detectionStatus === "low_confidence" || detectionStatus === "failed" || detectionStatus === "error") &&
       manualTestType == null
@@ -340,12 +369,19 @@ export function ImportScreen() {
       setModalCustomType("");
       setShowTypeModal(true);
     }
-  }, [detectionStatus, detectionResult, manualTestType]);
+  }, [detectionStatus, detectionResult, manualTestType, extractionResults.size]);
 
   const resolvedTestType =
     (manualTestType != null && manualTestType.trim() !== "" ? manualTestType.trim() : null) ??
     (testTypeHint.trim() || null) ??
     (detectionStatus === "success" ? detectionResult?.test_type ?? undefined : undefined);
+
+  /** Resolve test type for an individual batch entry. */
+  const resolveEntryTestType = (entry: FileExtractionEntry): string | undefined => {
+    if (entry.manualTestType != null && entry.manualTestType.trim() !== "") return entry.manualTestType.trim();
+    if (entry.detectionStatus === "success" && entry.detectionResult?.test_type) return entry.detectionResult.test_type;
+    return undefined;
+  };
 
   const validateFile = (file: File): string | null => {
     const name = file.name.toLowerCase();
@@ -377,11 +413,12 @@ export function ImportScreen() {
       }
       if (validFiles.length === 0) return;
       setError(null);
-      setSelectedFiles((prev) => [...prev, ...validFiles].slice(0, 5));
+      const maxFiles = 5 - textEntries.length;
+      setSelectedFiles((prev) => [...prev, ...validFiles].slice(0, maxFiles));
       setPastedText("");
       resetState();
     },
-    [resetState, showToast],
+    [resetState, showToast, textEntries.length],
   );
 
   const handleRemoveFile = useCallback(
@@ -434,40 +471,119 @@ export function ImportScreen() {
     setResult(null);
 
     try {
-      if (mode === "pdf") {
-        if (selectedFiles.length === 0) {
-          setError("No files selected.");
+      const nonEmptyText = textEntries.filter((e) => e.text.trim().length > 0);
+
+      if (selectedFiles.length > 0 || nonEmptyText.length > 1) {
+        // Batch mode: extract all files + text entries into one results Map
+        if (selectedFiles.length === 0 && nonEmptyText.length === 0) {
+          setError("No files or text entries to analyze.");
           setStatus("error");
           return;
         }
 
         const results = new Map<string, FileExtractionEntry>();
+
         // Initialize all as pending
         for (const file of selectedFiles) {
           results.set(fileKey(file), { status: "pending" });
+        }
+        for (const entry of nonEmptyText) {
+          results.set(textEntryKey(entry), { status: "pending" });
         }
         setExtractionResults(new Map(results));
 
         let lastSuccessKey: string | null = null;
 
+        // Extract files
         for (const file of selectedFiles) {
           const key = fileKey(file);
-          results.set(key, { status: "extracting" });
+          results.set(key, { status: "extracting", detectionStatus: "detecting" });
           setExtractionResults(new Map(results));
 
           try {
             const extractionResult = await sidecarApi.extractFile(file);
-            results.set(key, {
-              status: "success",
-              result: extractionResult,
-            });
+            results.set(key, { status: "success", result: extractionResult, detectionStatus: "detecting" });
             lastSuccessKey = key;
+            setExtractionResults(new Map(results));
+            // Fire non-blocking detection for this entry
+            const detKey = key;
+            sidecarApi
+              .detectTestType(extractionResult, testTypeHint || undefined)
+              .then((res) => {
+                setExtractionResults((prev) => {
+                  const next = new Map(prev);
+                  const entry = next.get(detKey);
+                  if (!entry) return prev;
+                  const ds: DetectionStatus = res.confidence >= 0.4 && res.test_type != null
+                    ? "success"
+                    : res.confidence > 0 && res.test_type != null
+                      ? "low_confidence"
+                      : "failed";
+                  next.set(detKey, { ...entry, detectionStatus: ds, detectionResult: res });
+                  return next;
+                });
+              })
+              .catch(() => {
+                setExtractionResults((prev) => {
+                  const next = new Map(prev);
+                  const entry = next.get(detKey);
+                  if (!entry) return prev;
+                  next.set(detKey, { ...entry, detectionStatus: "error" });
+                  return next;
+                });
+              });
           } catch (err) {
             const msg =
               err instanceof Error ? err.message : "Extraction failed.";
             results.set(key, { status: "error", error: msg });
+            setExtractionResults(new Map(results));
           }
+        }
+
+        // Extract text entries
+        for (const entry of nonEmptyText) {
+          const key = textEntryKey(entry);
+          results.set(key, { status: "extracting", detectionStatus: "detecting" });
           setExtractionResults(new Map(results));
+
+          try {
+            const extractionResult = await sidecarApi.extractText(entry.text);
+            extractionResult.filename = entry.label;
+            results.set(key, { status: "success", result: extractionResult, detectionStatus: "detecting" });
+            lastSuccessKey = key;
+            setExtractionResults(new Map(results));
+            // Fire non-blocking detection for this entry
+            const detKey = key;
+            sidecarApi
+              .detectTestType(extractionResult, testTypeHint || undefined)
+              .then((res) => {
+                setExtractionResults((prev) => {
+                  const next = new Map(prev);
+                  const ent = next.get(detKey);
+                  if (!ent) return prev;
+                  const ds: DetectionStatus = res.confidence >= 0.4 && res.test_type != null
+                    ? "success"
+                    : res.confidence > 0 && res.test_type != null
+                      ? "low_confidence"
+                      : "failed";
+                  next.set(detKey, { ...ent, detectionStatus: ds, detectionResult: res });
+                  return next;
+                });
+              })
+              .catch(() => {
+                setExtractionResults((prev) => {
+                  const next = new Map(prev);
+                  const ent = next.get(detKey);
+                  if (!ent) return prev;
+                  next.set(detKey, { ...ent, detectionStatus: "error" });
+                  return next;
+                });
+              });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Extraction failed.";
+            results.set(key, { status: "error", error: msg });
+            setExtractionResults(new Map(results));
+          }
         }
 
         // Count successes
@@ -476,11 +592,10 @@ export function ImportScreen() {
         );
         if (successes.length === 0) {
           setStatus("error");
-          setError("All file extractions failed.");
+          setError("All extractions failed.");
           return;
         }
 
-        // If single success, auto-select it
         if (successes.length === 1 && lastSuccessKey) {
           setSelectedResultKey(lastSuccessKey);
           setResult(successes[0].result!);
@@ -493,19 +608,21 @@ export function ImportScreen() {
 
         setStatus("success");
       } else {
-        if (!pastedText.trim()) {
+        // Single text: either textEntries[0] or pastedText
+        const text = nonEmptyText.length === 1 ? nonEmptyText[0].text : pastedText;
+        if (!text.trim()) {
           setError("Please enter some text.");
           setStatus("error");
           return;
         }
 
         // Classify the input
-        const classification = await sidecarApi.classifyInput(pastedText);
+        const classification = await sidecarApi.classifyInput(text);
 
         if (classification.classification === "question") {
           // Generate a letter and navigate to results in letter mode
           const letter = await sidecarApi.generateLetter({
-            prompt: pastedText.trim(),
+            prompt: text.trim(),
             letter_type: "general",
           });
           _cache = freshCache();
@@ -514,14 +631,14 @@ export function ImportScreen() {
               letterMode: true,
               letterId: letter.id,
               letterContent: letter.content,
-              letterPrompt: pastedText.trim(),
+              letterPrompt: text.trim(),
             },
           });
           return;
         }
 
         // It's a report — extract as before
-        const extractionResult = await sidecarApi.extractText(pastedText);
+        const extractionResult = await sidecarApi.extractText(text);
         setResult(extractionResult);
         setStatus("success");
       }
@@ -531,11 +648,10 @@ export function ImportScreen() {
       setStatus("error");
       showToast("error", msg);
     }
-  }, [mode, selectedFiles, pastedText, showToast, navigate]);
+  }, [selectedFiles, pastedText, textEntries, showToast, navigate]);
 
   const handleProceed = useCallback(() => {
     if (result && resolvedTestType) {
-      _cache = freshCache();
       const state: Record<string, unknown> = {
         extractionResult: result,
         clinicalContext: clinicalContext.trim() || undefined,
@@ -549,21 +665,27 @@ export function ImportScreen() {
       }
       // Collect all successful extraction results for batch processing
       const successfulResults: Array<{ key: string; result: ExtractionResult }> = [];
+      const testTypes: Record<string, string> = {};
       for (const [key, entry] of extractionResults) {
         if (entry.status === "success" && entry.result) {
           successfulResults.push({ key, result: entry.result });
+          const entryType = resolveEntryTestType(entry);
+          if (entryType) testTypes[key] = entryType;
         }
       }
       if (successfulResults.length > 1) {
         state.batchExtractionResults = successfulResults;
+        state.testTypes = testTypes;
       }
       navigate("/processing", { state });
     }
-  }, [navigate, result, selectedTemplateValue, clinicalContext, selectedReasons, resolvedTestType, extractionResults]);
+  }, [navigate, result, selectedTemplateValue, clinicalContext, selectedReasons, resolvedTestType, extractionResults, resolveEntryTestType]);
 
   const canExtract =
     status !== "extracting" &&
-    (selectedFiles.length > 0 || pastedText.trim().length > 0);
+    (selectedFiles.length > 0 ||
+      pastedText.trim().length > 0 ||
+      textEntries.some((e) => e.text.trim().length > 0));
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -597,8 +719,9 @@ export function ImportScreen() {
               onChange={handleInputChange}
               className="drop-zone-input"
             />
-            {selectedFiles.length > 0 ? (
+            {selectedFiles.length > 0 || textEntries.length > 0 ? (
               <div className="unified-file-display">
+                {/* File cards */}
                 {selectedFiles.map((file, idx) => (
                   <div key={fileKey(file)} className="file-list-item">
                     <span className="file-list-name">{file.name}</span>
@@ -625,26 +748,107 @@ export function ImportScreen() {
                     </button>
                   </div>
                 ))}
-                {selectedFiles.length < 5 && (
-                  <button
-                    type="button"
-                    className="batch-add-more-btn"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    + Add more files on this patient
-                  </button>
+
+                {/* Text entry cards */}
+                {textEntries.map((entry) => (
+                  <div key={entry.id} className="text-entry-card">
+                    <div className="text-entry-header">
+                      <input
+                        className="text-entry-label"
+                        value={entry.label}
+                        onChange={(e) => {
+                          setTextEntries((prev) =>
+                            prev.map((te) =>
+                              te.id === entry.id ? { ...te, label: e.target.value } : te
+                            )
+                          );
+                        }}
+                      />
+                      {(() => {
+                        const exEntry = extractionResults.get(textEntryKey(entry));
+                        return exEntry ? (
+                          <span className={`file-list-status file-list-status--${exEntry.status}`}>
+                            {exEntry.status === "pending" && "Pending"}
+                            {exEntry.status === "extracting" && "Extracting..."}
+                            {exEntry.status === "success" && "Done"}
+                            {exEntry.status === "error" && (exEntry.error ?? "Failed")}
+                          </span>
+                        ) : null;
+                      })()}
+                      <button
+                        className="file-list-remove"
+                        onClick={() => {
+                          setTextEntries((prev) => {
+                            const next = prev.filter((te) => te.id !== entry.id);
+                            if (next.length <= 1 && selectedFiles.length === 0) {
+                              // Demote to single-paste mode only when no files present
+                              setPastedText(next.length === 1 ? next[0].text : "");
+                              return [];
+                            }
+                            return next;
+                          });
+                          resetState();
+                        }}
+                        aria-label={`Remove ${entry.label}`}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                    <textarea
+                      className="text-entry-textarea"
+                      placeholder="Paste report text here..."
+                      value={entry.text}
+                      onChange={(e) => {
+                        setTextEntries((prev) =>
+                          prev.map((te) =>
+                            te.id === entry.id ? { ...te, text: e.target.value } : te
+                          )
+                        );
+                        resetState();
+                      }}
+                      rows={6}
+                    />
+                    <span className="char-count">
+                      {entry.text.length.toLocaleString()} characters
+                    </span>
+                  </div>
+                ))}
+
+                {/* Add buttons (when under cap) */}
+                {selectedFiles.length + textEntries.length < 5 && (
+                  <div className="batch-add-buttons">
+                    <button
+                      type="button"
+                      className="batch-add-more-btn"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      + Add file
+                    </button>
+                    <button
+                      type="button"
+                      className="batch-add-more-btn"
+                      onClick={() => {
+                        const nextId = textEntryNextId;
+                        setTextEntries((prev) => [
+                          ...prev,
+                          { id: nextId, label: `Report ${selectedFiles.length + prev.length + 1}`, text: "" },
+                        ]);
+                        setTextEntryNextId(nextId + 1);
+                      }}
+                    >
+                      + Add pasted report
+                    </button>
+                  </div>
                 )}
                 <p className="unified-file-hint">
-                  {selectedFiles.length === 1
-                    ? "Drop more files to add (up to 5)"
-                    : `${selectedFiles.length} files selected (up to 5)`}
+                  {`${selectedFiles.length + textEntries.length} of 5 reports`}
                 </p>
               </div>
             ) : (
               <>
                 <textarea
                   className="text-input"
-                  placeholder={"\u2022 Paste a test result\n\u2022 Drag and drop a PDF, JPG, PNG, or TXT file (up to 50 MB)\n\u2022 Ask for help explaining a question, topic, or situation to a patient"}
+                  placeholder={"\u2022 Paste a test result. Include header with title of test or lab\n\u2022 Drag and drop a PDF, JPG, PNG, or TXT file (up to 50 MB)\n\u2022 Ask for help explaining a question, topic, or situation to a patient"}
                   value={pastedText}
                   onChange={(e) => {
                     setPastedText(e.target.value);
@@ -656,13 +860,33 @@ export function ImportScreen() {
                   <span className="char-count">
                     {pastedText.length.toLocaleString()} characters
                   </span>
-                  <button
-                    type="button"
-                    className="browse-file-btn"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    or browse files
-                  </button>
+                  <div className="text-input-footer-right">
+                    {pastedText.trim().length > 0 && (
+                      <button
+                        type="button"
+                        className="batch-add-more-btn-inline"
+                        onClick={() => {
+                          const id1 = textEntryNextId;
+                          const id2 = textEntryNextId + 1;
+                          setTextEntries([
+                            { id: id1, label: "Report 1", text: pastedText },
+                            { id: id2, label: "Report 2", text: "" },
+                          ]);
+                          setTextEntryNextId(id2 + 1);
+                          setPastedText("");
+                        }}
+                      >
+                        + Add another report
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="browse-file-btn"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      or browse files
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -676,8 +900,8 @@ export function ImportScreen() {
             >
               {status === "extracting"
                 ? "Analyzing..."
-                : selectedFiles.length > 1
-                  ? `Analyze All (${selectedFiles.length} files)`
+                : selectedFiles.length + textEntries.length > 1
+                  ? `Analyze All (${selectedFiles.length + textEntries.length} reports)`
                   : "Analyze"}
             </button>
             <button
@@ -685,6 +909,8 @@ export function ImportScreen() {
               onClick={() => {
                 setSelectedFiles([]);
                 setPastedText("");
+                setTextEntries([]);
+                setTextEntryNextId(1);
                 setClinicalContext("");
                 resetState();
               }}
@@ -711,156 +937,300 @@ export function ImportScreen() {
             <div className="extraction-preview">
               <h3 className="preview-title">Extraction Complete</h3>
 
-              <div className="preview-stats">
-                <div className="stat">
-                  <span className="stat-label">Pages</span>
-                  <span className="stat-value">{result.total_pages}</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-label">Characters</span>
-                  <span className="stat-value">
-                    {result.total_chars.toLocaleString()}
-                  </span>
-                </div>
-                {result.detection && (
-                  <div className="stat">
-                    <span className="stat-label">Type</span>
-                    <span className="stat-value">
-                      {result.detection.overall_type}
-                    </span>
-                  </div>
-                )}
-                {result.tables.length > 0 && (
-                  <div className="stat">
-                    <span className="stat-label">Tables</span>
-                    <span className="stat-value">{result.tables.length}</span>
-                  </div>
-                )}
-              </div>
+              {/* Multi-result: collapsible cards for each extraction */}
+              {(() => {
+                const successEntries = [...extractionResults.entries()].filter(
+                  ([, e]) => e.status === "success",
+                );
+                if (successEntries.length > 1) {
+                  return (
+                    <div className="multi-preview-cards">
+                      {successEntries.map(([key, entry]) => {
+                        const r = entry.result!;
+                        const label = key.startsWith("text::")
+                          ? (textEntries.find(
+                              (te) => te.id === parseInt(key.slice(6), 10),
+                            )?.label ?? "Text")
+                          : key.split("::")[0];
+                        const isExpanded = expandedPreviews.has(key);
+                        const resolvedType = resolveEntryTestType(entry);
+                        return (
+                          <div key={key} className={`preview-card${isExpanded ? " preview-card--expanded" : ""}`}>
+                            <button
+                              className="preview-card-header"
+                              onClick={() => {
+                                setExpandedPreviews((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                            >
+                              <span className="preview-card-label">{label}</span>
+                              <span className="preview-card-stats">
+                                {r.total_pages} pg &middot; {r.total_chars.toLocaleString()} chars
+                              </span>
+                              <span className={`preview-card-chevron${isExpanded ? " preview-card-chevron--open" : ""}`}>
+                                &#9662;
+                              </span>
+                            </button>
+                            {/* Per-card detection badge */}
+                            <div className="preview-card-detection">
+                              {entry.detectionStatus === "detecting" && (
+                                <span className="detection-badge-inline">
+                                  <span className="spinner-inline" /> Detecting...
+                                </span>
+                              )}
+                              {entry.detectionStatus === "success" && entry.detectionResult && !entry.manualTestType && (
+                                <span className="detection-badge-inline">
+                                  <span className="detection-badge--success">
+                                    {entry.detectionResult.available_types.find(
+                                      (t) => t.test_type_id === entry.detectionResult!.test_type,
+                                    )?.display_name ?? entry.detectionResult.test_type}
+                                  </span>
+                                  <span className="detection-confidence">
+                                    {Math.round(entry.detectionResult.confidence * 100)}%
+                                  </span>
+                                  <button
+                                    className="redetect-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setModalEditingKey(key);
+                                      setModalSelectedType(entry.detectionResult?.test_type ?? null);
+                                      setModalCustomType("");
+                                      setShowTypeModal(true);
+                                    }}
+                                  >
+                                    Change
+                                  </button>
+                                </span>
+                              )}
+                              {entry.manualTestType && (
+                                <span className="detection-badge-inline">
+                                  <span className="detection-badge--success">
+                                    {entry.detectionResult?.available_types?.find(
+                                      (t) => t.test_type_id === entry.manualTestType,
+                                    )?.display_name ?? entry.manualTestType}
+                                  </span>
+                                  <button
+                                    className="redetect-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setModalEditingKey(key);
+                                      setModalSelectedType(entry.manualTestType ?? null);
+                                      setModalCustomType("");
+                                      setShowTypeModal(true);
+                                    }}
+                                  >
+                                    Change
+                                  </button>
+                                </span>
+                              )}
+                              {!entry.manualTestType && (entry.detectionStatus === "low_confidence" || entry.detectionStatus === "failed" || entry.detectionStatus === "error") && (
+                                <span className="detection-badge-inline">
+                                  <span className="detection-fallback-icon">{"\u26A0"}</span>
+                                  <span className="detection-fallback-text">
+                                    {entry.detectionStatus === "low_confidence" && entry.detectionResult
+                                      ? `Low: ${entry.detectionResult.available_types?.find(
+                                          (t) => t.test_type_id === entry.detectionResult!.test_type,
+                                        )?.display_name ?? entry.detectionResult.test_type}`
+                                      : "Not detected"}
+                                  </span>
+                                  <button
+                                    className="redetect-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setModalEditingKey(key);
+                                      if (entry.detectionStatus === "low_confidence" && entry.detectionResult?.test_type) {
+                                        setModalSelectedType(entry.detectionResult.test_type);
+                                      } else {
+                                        setModalSelectedType(null);
+                                      }
+                                      setModalCustomType("");
+                                      setShowTypeModal(true);
+                                    }}
+                                  >
+                                    Select type
+                                  </button>
+                                </span>
+                              )}
+                              {!resolvedType && entry.detectionStatus !== "detecting" && (
+                                <span className="detection-badge-inline detection-badge-inline--warning">
+                                  Type required
+                                </span>
+                              )}
+                            </div>
+                            {isExpanded && (
+                              <div className="preview-card-body">
+                                <pre className="preview-text">{r.full_text}</pre>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
 
-              {/* Detection Status */}
-              <div className="detection-status">
-                {detectionStatus === "detecting" && (
-                  <div className="detection-detecting">
-                    <div className="spinner" />
-                    <span>Detecting report type...</span>
-                  </div>
-                )}
-                {detectionStatus === "success" && detectionResult && (
-                  <div className="detection-success">
-                    {manualTestType == null ? (
-                      <>
-                        <span className="detection-badge--success">
-                          {detectionResult.available_types.find(
-                            (t) => t.test_type_id === detectionResult.test_type,
-                          )?.display_name ?? detectionResult.test_type}
+                // Single result — existing stats + text preview
+                return (
+                  <>
+                    <div className="preview-stats">
+                      <div className="stat">
+                        <span className="stat-label">Pages</span>
+                        <span className="stat-value">{result.total_pages}</span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-label">Characters</span>
+                        <span className="stat-value">
+                          {result.total_chars.toLocaleString()}
                         </span>
-                        <span className="detection-confidence">
-                          {Math.round(detectionResult.confidence * 100)}% confidence
-                          {detectionResult.detection_method === "llm" && " (AI-assisted)"}
-                        </span>
-                        <button
-                          className="redetect-btn"
-                          onClick={() => setManualTestType("")}
-                        >
-                          Change
-                        </button>
-                      </>
-                    ) : (
-                      <div className="detection-override">
-                        <input
-                          type="text"
-                          className="import-field-textarea"
-                          style={{ resize: "none", minHeight: "auto" }}
-                          placeholder='e.g., "calcium score", "stress test"'
-                          value={manualTestType}
-                          onChange={(e) =>
-                            setManualTestType(e.target.value || "")
-                          }
-                        />
-                        <button
-                          className="redetect-btn"
-                          onClick={() => setManualTestType(null)}
-                        >
-                          Cancel
-                        </button>
+                      </div>
+                      {result.detection && (
+                        <div className="stat">
+                          <span className="stat-label">Type</span>
+                          <span className="stat-value">
+                            {result.detection.overall_type}
+                          </span>
+                        </div>
+                      )}
+                      {result.tables.length > 0 && (
+                        <div className="stat">
+                          <span className="stat-label">Tables</span>
+                          <span className="stat-value">{result.tables.length}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {result.warnings.length > 0 && (
+                      <div className="preview-warnings">
+                        {result.warnings.map((w, i) => (
+                          <p key={i} className="warning-text">
+                            {w}
+                          </p>
+                        ))}
                       </div>
                     )}
-                  </div>
-                )}
-                {(detectionStatus === "low_confidence" ||
-                  detectionStatus === "failed" ||
-                  detectionStatus === "error") && (
-                  <div className="detection-fallback-compact">
-                    {manualTestType ? (
-                      <>
-                        <span className="detection-badge--success">
-                          {detectionResult?.available_types?.find(
-                            (t) => t.test_type_id === manualTestType,
-                          )?.display_name ?? manualTestType}
-                        </span>
-                        <button
-                          className="redetect-btn"
-                          onClick={() => {
-                            setModalSelectedType(manualTestType);
-                            setModalCustomType("");
-                            setShowTypeModal(true);
-                          }}
-                        >
-                          Change
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="detection-fallback-icon">{"\u26A0"}</span>
-                        <span className="detection-fallback-text">
-                          {detectionStatus === "low_confidence" && detectionResult
-                            ? `Low confidence: ${
-                                detectionResult.available_types?.find(
-                                  (t) => t.test_type_id === detectionResult.test_type,
-                                )?.display_name ?? detectionResult.test_type
-                              }`
-                            : "Report type not detected."}
-                        </span>
-                        <button
-                          className="redetect-btn"
-                          onClick={() => {
-                            if (detectionStatus === "low_confidence" && detectionResult?.test_type) {
-                              setModalSelectedType(detectionResult.test_type);
-                            }
-                            setShowTypeModal(true);
-                          }}
-                        >
-                          Select type
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              {result.warnings.length > 0 && (
-                <div className="preview-warnings">
-                  {result.warnings.map((w, i) => (
-                    <p key={i} className="warning-text">
-                      {w}
-                    </p>
-                  ))}
+                    <div className="preview-text-container">
+                      {isScrubbing ? (
+                        <div className="extraction-progress">
+                          <div className="spinner" />
+                          <p>Scrubbing PHI...</p>
+                        </div>
+                      ) : (
+                        <pre className="preview-text">
+                          {scrubbedText ?? result.full_text}
+                        </pre>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* Detection Status — hidden in batch mode (per-card badges used instead) */}
+              {[...extractionResults.values()].filter(e => e.status === "success").length <= 1 && (
+                <div className="detection-status">
+                  {detectionStatus === "detecting" && (
+                    <div className="detection-detecting">
+                      <div className="spinner" />
+                      <span>Detecting report type...</span>
+                    </div>
+                  )}
+                  {detectionStatus === "success" && detectionResult && (
+                    <div className="detection-success">
+                      {manualTestType == null ? (
+                        <>
+                          <span className="detection-badge--success">
+                            {detectionResult.available_types.find(
+                              (t) => t.test_type_id === detectionResult.test_type,
+                            )?.display_name ?? detectionResult.test_type}
+                          </span>
+                          <span className="detection-confidence">
+                            {Math.round(detectionResult.confidence * 100)}% confidence
+                            {detectionResult.detection_method === "llm" && " (AI-assisted)"}
+                          </span>
+                          <button
+                            className="redetect-btn"
+                            onClick={() => setManualTestType("")}
+                          >
+                            Change
+                          </button>
+                        </>
+                      ) : (
+                        <div className="detection-override">
+                          <input
+                            type="text"
+                            className="import-field-textarea"
+                            style={{ resize: "none", minHeight: "auto" }}
+                            placeholder='e.g., "calcium score", "stress test"'
+                            value={manualTestType}
+                            onChange={(e) =>
+                              setManualTestType(e.target.value || "")
+                            }
+                          />
+                          <button
+                            className="redetect-btn"
+                            onClick={() => setManualTestType(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(detectionStatus === "low_confidence" ||
+                    detectionStatus === "failed" ||
+                    detectionStatus === "error") && (
+                    <div className="detection-fallback-compact">
+                      {manualTestType ? (
+                        <>
+                          <span className="detection-badge--success">
+                            {detectionResult?.available_types?.find(
+                              (t) => t.test_type_id === manualTestType,
+                            )?.display_name ?? manualTestType}
+                          </span>
+                          <button
+                            className="redetect-btn"
+                            onClick={() => {
+                              setModalSelectedType(manualTestType);
+                              setModalCustomType("");
+                              setShowTypeModal(true);
+                            }}
+                          >
+                            Change
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="detection-fallback-icon">{"\u26A0"}</span>
+                          <span className="detection-fallback-text">
+                            {detectionStatus === "low_confidence" && detectionResult
+                              ? `Low confidence: ${
+                                  detectionResult.available_types?.find(
+                                    (t) => t.test_type_id === detectionResult.test_type,
+                                  )?.display_name ?? detectionResult.test_type
+                                }`
+                              : "Report type not detected."}
+                          </span>
+                          <button
+                            className="redetect-btn"
+                            onClick={() => {
+                              if (detectionStatus === "low_confidence" && detectionResult?.test_type) {
+                                setModalSelectedType(detectionResult.test_type);
+                              }
+                              setShowTypeModal(true);
+                            }}
+                          >
+                            Select type
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
-
-              <div className="preview-text-container">
-                {isScrubbing ? (
-                  <div className="extraction-progress">
-                    <div className="spinner" />
-                    <p>Scrubbing PHI...</p>
-                  </div>
-                ) : (
-                  <pre className="preview-text">
-                    {scrubbedText ?? result.full_text}
-                  </pre>
-                )}
-              </div>
 
               <p className="phi-notice">
                 No PHI is stored or sent to the AI. All identifiable information is redacted before processing.
@@ -869,7 +1239,14 @@ export function ImportScreen() {
               <button
                 className="proceed-btn"
                 onClick={handleProceed}
-                disabled={!resolvedTestType || detectionStatus === "detecting"}
+                disabled={(() => {
+                  const successEntries = [...extractionResults.values()].filter(e => e.status === "success");
+                  if (successEntries.length > 1) {
+                    // Batch mode: all successful entries must have a resolved type
+                    return successEntries.some(e => !resolveEntryTestType(e) || e.detectionStatus === "detecting");
+                  }
+                  return !resolvedTestType || detectionStatus === "detecting";
+                })()}
               >
                 Continue to Processing
               </button>
@@ -995,23 +1372,31 @@ export function ImportScreen() {
       </div>
 
       {/* Type Selection Modal */}
-      {showTypeModal && (
-        <div className="type-modal-backdrop" onClick={() => setShowTypeModal(false)}>
+      {showTypeModal && (() => {
+        // Resolve which detection result to show — entry-specific in batch mode, global otherwise
+        const modalDetection = modalEditingKey
+          ? extractionResults.get(modalEditingKey)?.detectionResult ?? detectionResult
+          : detectionResult;
+        const modalDetStatus = modalEditingKey
+          ? extractionResults.get(modalEditingKey)?.detectionStatus ?? detectionStatus
+          : detectionStatus;
+        return (
+        <div className="type-modal-backdrop" onClick={() => { setShowTypeModal(false); setModalEditingKey(null); }}>
           <div className="type-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="type-modal-title">Select Report Type</h3>
             <p className="type-modal-subtitle">
-              {detectionStatus === "low_confidence" && detectionResult
+              {modalDetStatus === "low_confidence" && modalDetection
                 ? `We detected this might be a ${
-                    detectionResult.available_types?.find(
-                      (t) => t.test_type_id === detectionResult.test_type,
-                    )?.display_name ?? detectionResult.test_type
-                  } (${Math.round(detectionResult.confidence * 100)}% confidence). Please confirm or select the correct type.`
+                    modalDetection.available_types?.find(
+                      (t) => t.test_type_id === modalDetection.test_type,
+                    )?.display_name ?? modalDetection.test_type
+                  } (${Math.round(modalDetection.confidence * 100)}% confidence). Please confirm or select the correct type.`
                 : "Could not automatically identify the report type. Please select the correct type below."}
             </p>
 
-            {detectionResult?.available_types && detectionResult.available_types.length > 0 && (
+            {modalDetection?.available_types && modalDetection.available_types.length > 0 && (
               <div className="type-modal-categories">
-                {groupTypesByCategory(detectionResult.available_types).map(([label, types]) => (
+                {groupTypesByCategory(modalDetection.available_types).map(([label, types]) => (
                   <div key={label} className="type-modal-category">
                     <span className="type-modal-category-label">{label}</span>
                     <div className="type-modal-category-buttons">
@@ -1054,7 +1439,7 @@ export function ImportScreen() {
             <div className="type-modal-actions">
               <button
                 className="type-modal-cancel"
-                onClick={() => setShowTypeModal(false)}
+                onClick={() => { setShowTypeModal(false); setModalEditingKey(null); }}
               >
                 Cancel
               </button>
@@ -1062,7 +1447,20 @@ export function ImportScreen() {
                 className="type-modal-confirm"
                 disabled={!modalSelectedType && !modalCustomType.trim()}
                 onClick={() => {
-                  setManualTestType(modalCustomType.trim() || modalSelectedType);
+                  const chosen = modalCustomType.trim() || modalSelectedType;
+                  if (modalEditingKey) {
+                    // Per-card modal: write to the specific entry
+                    setExtractionResults((prev) => {
+                      const next = new Map(prev);
+                      const entry = next.get(modalEditingKey);
+                      if (entry) next.set(modalEditingKey, { ...entry, manualTestType: chosen });
+                      return next;
+                    });
+                    setModalEditingKey(null);
+                  } else {
+                    // Global modal: existing single-report behavior
+                    setManualTestType(chosen);
+                  }
                   setShowTypeModal(false);
                 }}
               >
@@ -1071,7 +1469,8 @@ export function ImportScreen() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

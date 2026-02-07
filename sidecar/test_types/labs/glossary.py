@@ -178,18 +178,18 @@ LAB_GLOSSARY: dict[str, str] = {
         "stroke. It usually requires fasting for 9-12 hours before the test."
     ),
     "Total Cholesterol": (
-        "The total amount of cholesterol in your blood, including both 'good' "
-        "(HDL) and 'bad' (LDL) cholesterol. A lower total cholesterol is "
+        "The total amount of cholesterol in your blood, including both "
+        "HDL and LDL cholesterol. A lower total cholesterol is "
         "generally better for heart health."
     ),
     "HDL": (
-        "High-Density Lipoprotein -- often called 'good' cholesterol because "
-        "it helps remove other forms of cholesterol from your blood. Higher "
+        "High-Density Lipoprotein -- a protective form of cholesterol that "
+        "helps remove other forms of cholesterol from your blood. Higher "
         "HDL levels are associated with a lower risk of heart disease."
     ),
     "LDL": (
-        "Low-Density Lipoprotein -- often called 'bad' cholesterol because "
-        "high levels can lead to plaque buildup in your arteries, increasing "
+        "Low-Density Lipoprotein -- a form of cholesterol that, at "
+        "high levels, can lead to plaque buildup in your arteries, increasing "
         "the risk of heart attack and stroke."
     ),
     "Triglycerides": (
@@ -198,9 +198,110 @@ LAB_GLOSSARY: dict[str, str] = {
         "can increase your risk of heart disease."
     ),
     "VLDL": (
-        "Very Low-Density Lipoprotein -- a type of 'bad' cholesterol that "
+        "Very Low-Density Lipoprotein -- a form of cholesterol that "
         "carries triglycerides through your blood. High VLDL levels contribute "
         "to plaque buildup in your arteries."
+    ),
+    "Non-HDL Cholesterol": (
+        "Your total cholesterol minus your HDL. This single number captures "
+        "all the cholesterol types that can contribute to artery plaque "
+        "(LDL, VLDL, and others). It is often more useful than LDL alone, "
+        "especially when triglycerides are elevated."
+    ),
+    "Lipoprotein(a)": (
+        "A type of LDL particle with an extra protein attached. High levels "
+        "are a genetic risk factor for heart disease and stroke that does not "
+        "change much with diet or exercise. It is measured to help assess "
+        "your inherited cardiovascular risk."
+    ),
+    "Apolipoprotein B": (
+        "A protein found on LDL and other artery-clogging particles. Each "
+        "harmful cholesterol particle carries exactly one ApoB molecule, so "
+        "ApoB is a direct count of the total number of potentially harmful "
+        "particles in your blood. It can be a better predictor of heart "
+        "disease risk than LDL alone."
+    ),
+
+    # --- Expanded Lipid Profile (CardioIQ / NMR) ---
+    "LDL Particle Number": (
+        "The actual number of LDL particles in your blood, measured by NMR "
+        "spectroscopy. A high particle count means more particles are available "
+        "to enter artery walls, even if your LDL cholesterol level looks normal. "
+        "This is often a better predictor of heart disease risk than LDL alone."
+    ),
+    "Small LDL Particle Number": (
+        "The number of small, dense LDL particles. Small LDL particles are more "
+        "likely to penetrate artery walls and cause plaque buildup compared to "
+        "larger LDL particles. A high small LDL-P is associated with increased "
+        "cardiovascular risk."
+    ),
+    "LDL Particle Size": (
+        "The average diameter of your LDL particles. Larger particles (Pattern A, "
+        "20.5 nm or above) are considered less harmful. Smaller particles "
+        "(Pattern B, below 20.5 nm) are denser and more likely to contribute "
+        "to artery plaque."
+    ),
+    "Large HDL Particle Number": (
+        "The number of large HDL particles, which are the most effective at "
+        "removing cholesterol from artery walls. Higher numbers of large HDL "
+        "particles are associated with better cardiovascular protection."
+    ),
+    "Large VLDL Particle Number": (
+        "The number of large VLDL particles, which carry triglycerides. High "
+        "levels are associated with insulin resistance and increased "
+        "cardiovascular risk."
+    ),
+    "LP-IR Score": (
+        "Lipoprotein Insulin Resistance Score -- a number from 0 to 100 "
+        "calculated from your lipoprotein particle profile. Higher scores "
+        "indicate greater insulin resistance, which can increase your risk "
+        "of developing type 2 diabetes."
+    ),
+    "Small Dense LDL": (
+        "A subtype of LDL cholesterol made up of smaller, denser particles. "
+        "These particles are more easily oxidized and more likely to enter "
+        "artery walls, making them more harmful than larger LDL particles."
+    ),
+    "Lp-PLA2": (
+        "Lipoprotein-Associated Phospholipase A2 -- an enzyme produced by "
+        "inflammatory cells inside artery walls. High levels suggest active "
+        "inflammation within your arteries, which increases the risk of "
+        "plaque rupture and heart attack."
+    ),
+    "hs-CRP": (
+        "High-Sensitivity C-Reactive Protein -- a measure of low-level "
+        "inflammation in your body. Levels below 1.0 mg/L indicate low "
+        "cardiovascular risk, 1.0-3.0 average risk, and above 3.0 higher "
+        "risk. It is used alongside cholesterol to assess heart disease risk."
+    ),
+    "Homocysteine": (
+        "An amino acid in your blood that, at high levels, may damage the "
+        "lining of your arteries and promote blood clots. Elevated homocysteine "
+        "can be caused by low B12, folate, or B6 levels and is an independent "
+        "risk factor for heart disease."
+    ),
+    "Omega-3 Index": (
+        "The percentage of omega-3 fatty acids (EPA and DHA) in your red blood "
+        "cell membranes. An index of 8% or higher is associated with lower "
+        "cardiovascular risk. Below 4% is considered high risk."
+    ),
+    "Fasting Insulin": (
+        "The amount of insulin in your blood after fasting. Insulin helps move "
+        "sugar from your blood into your cells. High fasting insulin levels can "
+        "be an early sign of insulin resistance, even before blood sugar levels "
+        "become abnormal."
+    ),
+    "NMR LipoProfile": (
+        "A specialized blood test that uses nuclear magnetic resonance (NMR) "
+        "technology to measure the number and size of lipoprotein particles. "
+        "It provides more detailed information about cardiovascular risk than "
+        "a standard lipid panel."
+    ),
+    "CardioIQ": (
+        "An advanced cardiovascular testing panel by Quest Diagnostics that "
+        "includes markers beyond a standard lipid panel, such as ApoB, Lp(a), "
+        "LDL particle number, inflammation markers, and metabolic indicators "
+        "to provide a more comprehensive picture of heart disease risk."
     ),
 
     # --- Thyroid Panel ---

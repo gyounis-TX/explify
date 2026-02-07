@@ -38,6 +38,7 @@ def _build_system_prompt(registry_types: list[dict]) -> str:
     # Pretty labels for category headers
     category_labels = {
         "cardiac": "Cardiac",
+        "interventional": "Interventional / Procedures",
         "vascular": "Vascular",
         "lab": "Laboratory",
         "imaging_ct": "CT Imaging",
@@ -48,6 +49,8 @@ def _build_system_prompt(registry_types: list[dict]) -> str:
         "neurophysiology": "Neurophysiology",
         "endoscopy": "Endoscopy",
         "pathology": "Pathology",
+        "allergy": "Allergy / Immunology",
+        "dermatology": "Dermatology",
         "other": "Other",
     }
 

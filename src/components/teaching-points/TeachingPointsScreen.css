@@ -182,9 +182,37 @@
   border-radius: 10px;
 }
 
+.tp-card-type--display {
+  background-color: transparent;
+  border: 1px solid var(--color-primary-200);
+  color: var(--color-primary-500);
+}
+
 .tp-card-type--global {
   color: var(--color-text-secondary);
   background-color: var(--color-gray-100);
+}
+
+.tp-card-type--clickable {
+  cursor: pointer;
+}
+
+.tp-card-type--clickable:hover {
+  border-bottom: 1px dotted var(--color-text-secondary);
+}
+
+.tp-card-type-select {
+  padding: 1px 4px;
+  border: 1px solid var(--color-primary-300);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.tp-card-type-select:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
 }
 
 .tp-card-date {

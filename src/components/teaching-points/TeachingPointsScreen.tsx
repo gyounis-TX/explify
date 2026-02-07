@@ -23,6 +23,12 @@ export function TeachingPointsScreen() {
   const [editText, setEditText] = useState("");
   const [editScope, setEditScope] = useState<string | null>(null);
 
+  // Inline type-edit state (click badge to change type without full edit mode)
+  const [inlineTypeEditId, setInlineTypeEditId] = useState<number | null>(null);
+
+  // Valid test types from registry (for validation)
+  const [validTypes, setValidTypes] = useState<{ id: string; name: string }[]>([]);
+
   const fetchPoints = useCallback(async () => {
     try {
       const [pts, shared] = await Promise.all([
@@ -40,6 +46,7 @@ export function TeachingPointsScreen() {
 
   useEffect(() => {
     fetchPoints();
+    sidecarApi.listTestTypes().then(setValidTypes).catch(() => {});
   }, [fetchPoints]);
 
   useEffect(() => {
@@ -101,6 +108,88 @@ export function TeachingPointsScreen() {
     setEditText("");
     setEditScope(null);
   }, []);
+
+  // All valid types for the datalist (registry + any already used), with display names
+  const allTypeOptions = (() => {
+    const map = new Map<string, string>();
+    for (const t of validTypes) map.set(t.id, t.name);
+    for (const tp of teachingPoints) {
+      if (tp.test_type && !map.has(tp.test_type)) {
+        map.set(tp.test_type, tp.test_type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
+      }
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a[1].localeCompare(b[1]));
+  })();
+
+  /** Try to match free-text input to a valid registry type ID. */
+  const resolveTypeId = (input: string): string | null => {
+    if (!input) return null;
+    const lower = input.toLowerCase().replace(/[\s_-]+/g, "_");
+    // Exact match on ID
+    const exact = validTypes.find((t) => t.id === lower);
+    if (exact) return exact.id;
+    // Exact match on display name (case-insensitive)
+    const byName = validTypes.find((t) => t.name.toLowerCase() === input.toLowerCase());
+    if (byName) return byName.id;
+    // Partial match: input contained in name or ID
+    const partial = validTypes.find(
+      (t) => t.id.includes(lower) || t.name.toLowerCase().includes(input.toLowerCase()),
+    );
+    if (partial) return partial.id;
+    return null;
+  };
+
+  const getDisplayName = (typeId: string): string => {
+    const found = validTypes.find(t => t.id === typeId);
+    return found?.name ?? typeId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const handleInlineTypeChange = useCallback(
+    async (id: number, rawInput: string | null) => {
+      setInlineTypeEditId(null);
+      const prev = teachingPoints.find((tp) => tp.id === id);
+      if (!prev) return;
+
+      // Blank = "All types"
+      if (!rawInput) {
+        if (prev.test_type === null) return;
+        setTeachingPoints((pts) =>
+          pts.map((tp) => (tp.id === id ? { ...tp, test_type: null } : tp)),
+        );
+        try {
+          await sidecarApi.updateTeachingPoint(id, { test_type: null });
+          queueUpsertAfterMutation("teaching_points", id).catch(() => {});
+        } catch {
+          setTeachingPoints((pts) =>
+            pts.map((tp) => (tp.id === id ? { ...tp, test_type: prev.test_type } : tp)),
+          );
+          showToast("error", "Failed to update type.");
+        }
+        return;
+      }
+
+      const resolved = resolveTypeId(rawInput);
+      if (!resolved) {
+        showToast("info", "No matching type found. Try picking from the suggestions.");
+        return;
+      }
+      if (resolved === prev.test_type) return;
+
+      setTeachingPoints((pts) =>
+        pts.map((tp) => (tp.id === id ? { ...tp, test_type: resolved } : tp)),
+      );
+      try {
+        await sidecarApi.updateTeachingPoint(id, { test_type: resolved });
+        queueUpsertAfterMutation("teaching_points", id).catch(() => {});
+      } catch {
+        setTeachingPoints((pts) =>
+          pts.map((tp) => (tp.id === id ? { ...tp, test_type: prev.test_type } : tp)),
+        );
+        showToast("error", "Failed to update type.");
+      }
+    },
+    [teachingPoints, showToast, validTypes],
+  );
 
   const handleSaveEdit = useCallback(async () => {
     if (editingId === null || !editText.trim()) return;
@@ -235,10 +324,56 @@ export function TeachingPointsScreen() {
                     <div className="tp-card-body">
                       <p className="tp-card-text">{tp.text}</p>
                       <div className="tp-card-meta">
-                        {tp.test_type ? (
-                          <span className="tp-card-type">{tp.test_type}</span>
+                        {inlineTypeEditId === tp.id ? (
+                          <>
+                            <input
+                              className="tp-card-type-select"
+                              list={`tp-type-list-${tp.id}`}
+                              defaultValue={tp.test_type ? getDisplayName(tp.test_type) : ""}
+                              placeholder="Type or pick (blank = all)"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const val = (e.target as HTMLInputElement).value.trim() || null;
+                                  handleInlineTypeChange(tp.id, val);
+                                } else if (e.key === "Escape") {
+                                  setInlineTypeEditId(null);
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const val = e.target.value.trim() || null;
+                                handleInlineTypeChange(tp.id, val);
+                              }}
+                            />
+                            <datalist id={`tp-type-list-${tp.id}`}>
+                              {allTypeOptions.map((t) => (
+                                <option key={t.id} value={t.name} />
+                              ))}
+                            </datalist>
+                          </>
+                        ) : tp.test_type ? (
+                          <>
+                            <span
+                              className="tp-card-type tp-card-type--clickable"
+                              onClick={() => setInlineTypeEditId(tp.id)}
+                              title="Click to change type"
+                            >
+                              {tp.test_type}
+                            </span>
+                            <span
+                              className="tp-card-type tp-card-type--display tp-card-type--clickable"
+                              onClick={() => setInlineTypeEditId(tp.id)}
+                              title="Click to change type"
+                            >
+                              {getDisplayName(tp.test_type)}
+                            </span>
+                          </>
                         ) : (
-                          <span className="tp-card-type tp-card-type--global">
+                          <span
+                            className="tp-card-type tp-card-type--global tp-card-type--clickable"
+                            onClick={() => setInlineTypeEditId(tp.id)}
+                            title="Click to assign a type"
+                          >
                             All types
                           </span>
                         )}

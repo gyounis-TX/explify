@@ -123,6 +123,18 @@ export function TemplatesScreen() {
     }
   };
 
+  const handleToggleDefault = async (tpl: Template) => {
+    const newDefault = !tpl.is_default;
+    try {
+      await sidecarApi.updateTemplate(tpl.id, { is_default: newDefault });
+      queueUpsertAfterMutation("templates", tpl.id).catch(() => {});
+      fetchTemplates();
+      showToast("success", newDefault ? `"${tpl.name}" set as default for ${tpl.test_type}.` : "Default removed.");
+    } catch {
+      showToast("error", "Failed to update default.");
+    }
+  };
+
   const handleDelete = async (id: number) => {
     try {
       const tpl = templates.find((t) => t.id === id);
@@ -155,6 +167,11 @@ export function TemplatesScreen() {
     <div className="templates-screen">
       <header className="templates-header">
         <h2 className="templates-title">Templates</h2>
+        <p className="templates-description">
+          Reusable formatting presets that control the tone, structure, and
+          closing text of your explanations. Assign a template to a test type
+          to automatically apply it during analysis.
+        </p>
         <button className="templates-create-btn" onClick={openCreate}>
           New Template
         </button>
@@ -178,6 +195,9 @@ export function TemplatesScreen() {
                 {tpl.tone && (
                   <span className="template-badge">{tpl.tone}</span>
                 )}
+                {tpl.is_default ? (
+                  <span className="template-badge template-badge--default">Default</span>
+                ) : null}
               </div>
             </div>
             <div className="template-card-actions">
@@ -199,6 +219,15 @@ export function TemplatesScreen() {
                 </div>
               ) : (
                 <>
+                  {tpl.test_type && (
+                    <button
+                      className={`template-default-btn${tpl.is_default ? " template-default-btn--active" : ""}`}
+                      onClick={() => handleToggleDefault(tpl)}
+                      title={tpl.is_default ? "Remove as default" : `Set as default for ${tpl.test_type}`}
+                    >
+                      {tpl.is_default ? "Default" : "Set Default"}
+                    </button>
+                  )}
                   <button
                     className="template-edit-btn"
                     onClick={() => openEdit(tpl)}

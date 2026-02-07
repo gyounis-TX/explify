@@ -217,6 +217,13 @@ export function ResultsScreen() {
   const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(templateId);
 
+  // Combined synthesis state (batch "All Together" tab)
+  const [combinedSummary, setCombinedSummary] = useState<string | null>(null);
+  const [isGeneratingCombined, setIsGeneratingCombined] = useState(false);
+  const [combinedError, setCombinedError] = useState<string | null>(null);
+  const [isEditingCombined, setIsEditingCombined] = useState(false);
+  const [editedCombinedSummary, setEditedCombinedSummary] = useState("");
+
   // Test type override
   const [testTypeOverride, setTestTypeOverride] = useState<string | null>(null);
   const effectiveTestType = testTypeOverride?.trim() || currentResponse?.parsed_report.test_type || "";
@@ -307,12 +314,22 @@ export function ResultsScreen() {
     ]).then(([pts, shared]) => { setTeachingPoints(pts); setSharedTeachingPoints(shared); }).catch(() => {});
   }, [currentResponse, letterMode]);
 
-  // Load templates
+  // Load templates + auto-select default for current test type
   useEffect(() => {
     Promise.all([
       sidecarApi.listTemplates(),
       sidecarApi.listSharedTemplates().catch(() => [] as SharedTemplate[]),
-    ]).then(([res, shared]) => { setTemplates(res.items); setSharedTemplates(shared); }).catch(() => {});
+    ]).then(([res, shared]) => {
+      setTemplates(res.items);
+      setSharedTemplates(shared);
+      // Auto-select default template if none was explicitly chosen
+      if (selectedTemplateId == null && effectiveTestType) {
+        const defaultTpl = res.items.find(
+          (t) => t.is_default && t.test_type === effectiveTestType,
+        );
+        if (defaultTpl) setSelectedTemplateId(defaultTpl.id);
+      }
+    }).catch(() => {});
   }, []);
 
   // Load settings
@@ -336,6 +353,14 @@ export function ResultsScreen() {
         setPracticeProviders(s.practice_providers ?? []);
         setSmsEnabled(s.sms_summary_enabled ?? false);
         setUseAnalogies(s.use_analogies ?? true);
+        const defaultMode = s.default_comment_mode ?? "short";
+        if (defaultMode === "sms" && s.sms_summary_enabled) {
+          setCommentMode("sms");
+        } else if (defaultMode === "long") {
+          setCommentMode("long");
+        } else {
+          setCommentMode("short");
+        }
         const src = s.physician_name_source ?? "auto_extract";
         if (src === "custom" && s.custom_physician_name) setPhysicianOverride(s.custom_physician_name);
         else if (src === "generic") setPhysicianOverride("");
@@ -362,6 +387,8 @@ export function ResultsScreen() {
   // Batch tab switching
   useEffect(() => {
     if (!isBatchMode || !batchResponses) return;
+    // If on combined tab (index === batchResponses.length), don't update individual report state
+    if (activeResultTab >= batchResponses.length) return;
     setCurrentResponse(batchResponses[activeResultTab]);
     setShortCommentText(batchResponses[activeResultTab].explanation.overall_summary);
     setLongExplanationResponse(null);
@@ -417,6 +444,8 @@ export function ResultsScreen() {
       else setLongExplanationResponse(response);
       setCurrentResponse(response);
       logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
+      // Clear combined summary so it re-generates with updated data
+      setCombinedSummary(null);
       showToast("success", "Explanation regenerated.");
     } catch {
       showToast("error", "Failed to regenerate explanation.");
@@ -604,6 +633,33 @@ export function ResultsScreen() {
       setIsGeneratingSms(false);
     }
   }, [extractionResult, currentResponse, buildRequestParams, deepAnalysis, showToast]);
+
+  const generateCombinedSummary = useCallback(async () => {
+    if (!batchResponses || batchResponses.length < 2) return;
+    setIsGeneratingCombined(true);
+    setCombinedError(null);
+    try {
+      const result = await sidecarApi.synthesizeReports(
+        batchResponses,
+        batchLabels || batchResponses.map((_, i) => `Report ${i + 1}`),
+        clinicalContext,
+      );
+      setCombinedSummary(result.combined_summary);
+      setEditedCombinedSummary(result.combined_summary);
+      logUsage({
+        model_used: result.model_used,
+        input_tokens: result.input_tokens,
+        output_tokens: result.output_tokens,
+        request_type: "synthesize",
+      });
+    } catch (err) {
+      setCombinedError(
+        err instanceof Error ? err.message : "Failed to generate combined summary",
+      );
+    } finally {
+      setIsGeneratingCombined(false);
+    }
+  }, [batchResponses, batchLabels, clinicalContext]);
 
   // Auto-generate on tab switch
   useEffect(() => {
@@ -798,6 +854,12 @@ export function ResultsScreen() {
 
           <div className="results-nav-buttons">
             <button
+              className="results-back-btn results-back-btn--tertiary"
+              onClick={() => navigate("/")}
+            >
+              Back to Import
+            </button>
+            <button
               className="results-back-btn results-back-btn--secondary"
               onClick={() => {
                 clearImportCache();
@@ -806,7 +868,11 @@ export function ResultsScreen() {
             >
               New Report, Same Patient
             </button>
-            <button className="results-back-btn" onClick={() => { clearImportCache(); navigate("/"); }}>
+            <button className="results-back-btn" onClick={() => {
+              clearImportCache();
+              try { sessionStorage.removeItem("explify_results_state"); } catch { /* ignore */ }
+              navigate("/");
+            }}>
               Start Fresh (New Patient)
             </button>
           </div>
@@ -881,81 +947,174 @@ export function ResultsScreen() {
                 {batchLabels?.[idx] || `Report ${idx + 1}`}
               </button>
             ))}
-          </div>
-        )}
-
-        {canRefine && (
-          <div className="refine-toolbar">
-            <button className="refine-btn" onClick={handleRegenerate} disabled={isRegenerating}>
-              {isRegenerating ? "Regenerating\u2026" : "Regenerate"}
-            </button>
             <button
-              className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
-              onClick={() => setIsEditing(!isEditing)}
+              className={`results-batch-tab results-batch-tab--combined${activeResultTab === batchResponses.length ? " results-batch-tab--active" : ""}`}
+              onClick={() => {
+                setActiveResultTab(batchResponses.length);
+                if (!combinedSummary && !isGeneratingCombined) {
+                  generateCombinedSummary();
+                }
+              }}
             >
-              {isEditing ? "Stop Editing" : "Edit Text"}
+              All Together
             </button>
-            {isDirty && <span className="edit-indicator">Edited</span>}
           </div>
         )}
 
-        <CommentPanel
-          commentMode={commentMode}
-          setCommentMode={setCommentMode}
-          isEditing={isEditing}
-          editedSummary={editedSummary}
-          setEditedSummary={setEditedSummary}
-          onMarkDirty={markDirty}
-          commentPreviewText={commentPreviewText}
-          isGeneratingComment={isGeneratingComment}
-          isGeneratingLong={isGeneratingLong}
-          isGeneratingSms={isGeneratingSms}
-          onCopy={handleCopyComment}
-          onExportPdf={handleExportPdf}
-          isExporting={isExporting}
-          isLiked={isLiked}
-          onToggleLike={handleToggleLike}
-          smsEnabled={smsEnabled}
-        />
+        {isBatchMode && batchResponses && activeResultTab === batchResponses.length ? (
+          /* Combined "All Together" tab view */
+          <div className="combined-summary-panel">
+            {isGeneratingCombined && (
+              <div className="combined-summary-loading">
+                <div className="spinner" />
+                <span>Generating combined summary...</span>
+              </div>
+            )}
+            {combinedError && (
+              <div className="import-error">
+                <p>{combinedError}</p>
+                <button className="refine-btn" onClick={generateCombinedSummary}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {combinedSummary && !isGeneratingCombined && (
+              <>
+                <div className="combined-summary-header">
+                  <h3>Combined Summary</h3>
+                </div>
+                {isEditingCombined ? (
+                  <textarea
+                    className="summary-textarea"
+                    value={editedCombinedSummary}
+                    onChange={(e) => setEditedCombinedSummary(e.target.value)}
+                    rows={12}
+                  />
+                ) : (
+                  <div className="comment-preview">
+                    {editedCombinedSummary}
+                  </div>
+                )}
+                <span className="comment-char-count">
+                  {editedCombinedSummary.length} chars
+                </span>
+                <div className="combined-summary-actions">
+                  <button
+                    className="comment-copy-btn"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(editedCombinedSummary);
+                        showToast("success", "Combined summary copied.");
+                      } catch {
+                        showToast("error", "Failed to copy.");
+                      }
+                    }}
+                  >
+                    Copy to Clipboard
+                  </button>
+                  <button
+                    className={`edit-toggle-btn${isEditingCombined ? " edit-toggle-btn--active" : ""}`}
+                    onClick={() => setIsEditingCombined(!isEditingCombined)}
+                  >
+                    {isEditingCombined ? "Done Editing" : "Edit"}
+                  </button>
+                  <button
+                    className="refine-btn"
+                    onClick={generateCombinedSummary}
+                    disabled={isGeneratingCombined}
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          /* Individual report tab view */
+          <>
+            {canRefine && (
+              <div className="refine-toolbar">
+                <button className="refine-btn" onClick={handleRegenerate} disabled={isRegenerating}>
+                  {isRegenerating ? "Regenerating\u2026" : "Regenerate"}
+                </button>
+                <button
+                  className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
+                  onClick={() => setIsEditing(!isEditing)}
+                >
+                  {isEditing ? "Stop Editing" : "Edit Text"}
+                </button>
+                {isDirty && <span className="edit-indicator">Edited</span>}
+              </div>
+            )}
 
-        {sectionSettings.include_key_findings && (
-          <KeyFindingsPanel
-            findings={displayFindings}
-            isEditing={isEditing}
-            editedFindings={editedFindings}
-            onEditFinding={handleEditFinding}
-            glossary={glossary}
-          />
+            <CommentPanel
+              commentMode={commentMode}
+              setCommentMode={setCommentMode}
+              isEditing={isEditing}
+              editedSummary={editedSummary}
+              setEditedSummary={setEditedSummary}
+              onMarkDirty={markDirty}
+              commentPreviewText={commentPreviewText}
+              isGeneratingComment={isGeneratingComment}
+              isGeneratingLong={isGeneratingLong}
+              isGeneratingSms={isGeneratingSms}
+              onCopy={handleCopyComment}
+              onExportPdf={handleExportPdf}
+              isExporting={isExporting}
+              isLiked={isLiked}
+              onToggleLike={handleToggleLike}
+              smsEnabled={smsEnabled}
+            />
+
+            {sectionSettings.include_key_findings && (
+              <KeyFindingsPanel
+                findings={displayFindings}
+                isEditing={isEditing}
+                editedFindings={editedFindings}
+                onEditFinding={handleEditFinding}
+                glossary={glossary}
+              />
+            )}
+
+            {sectionSettings.include_measurements && (
+              <MeasurementsTable
+                measurements={explanation.measurements}
+                measurementMap={measurementMap}
+                glossary={glossary}
+              />
+            )}
+
+            <footer className="results-footer">
+              <span className="results-meta">
+                Model: {currentResponse.model_used} | Tokens:{" "}
+                {currentResponse.input_tokens} in / {currentResponse.output_tokens} out
+              </span>
+              {currentResponse.validation_warnings.length > 0 && (
+                <details className="validation-warnings">
+                  <summary>Validation Warnings ({currentResponse.validation_warnings.length})</summary>
+                  <ul>
+                    {currentResponse.validation_warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </footer>
+
+            <TeachingPointsPanel {...teachingProps} />
+          </>
         )}
-
-        {sectionSettings.include_measurements && (
-          <MeasurementsTable
-            measurements={explanation.measurements}
-            measurementMap={measurementMap}
-            glossary={glossary}
-          />
-        )}
-
-        <footer className="results-footer">
-          <span className="results-meta">
-            Model: {currentResponse.model_used} | Tokens:{" "}
-            {currentResponse.input_tokens} in / {currentResponse.output_tokens} out
-          </span>
-          {currentResponse.validation_warnings.length > 0 && (
-            <details className="validation-warnings">
-              <summary>Validation Warnings ({currentResponse.validation_warnings.length})</summary>
-              <ul>
-                {currentResponse.validation_warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </footer>
-
-        <TeachingPointsPanel {...teachingProps} />
 
         <div className="results-nav-buttons">
+          <button
+            className="results-back-btn results-back-btn--tertiary"
+            onClick={() => {
+              if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
+              navigate("/");
+            }}
+          >
+            Back to Import
+          </button>
           <button
             className="results-back-btn results-back-btn--secondary"
             onClick={() => {
@@ -971,6 +1130,7 @@ export function ResultsScreen() {
             onClick={() => {
               if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
               clearImportCache();
+              try { sessionStorage.removeItem("explify_results_state"); } catch { /* ignore */ }
               navigate("/");
             }}
           >

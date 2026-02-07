@@ -73,6 +73,8 @@ class ExplainRequest(BaseModel):
     anxiety_level: Optional[int] = Field(default=None, ge=0, le=3)
     quick_reasons: Optional[list[str]] = None
     use_analogies: Optional[bool] = None
+    include_lifestyle_recommendations: Optional[bool] = None
+    avoid_openings: Optional[list[str]] = None
 
 
 # --- Response sub-models ---
@@ -146,12 +148,14 @@ class AppSettings(BaseModel):
     physician_name_source: PhysicianNameSourceEnum = PhysicianNameSourceEnum.AUTO_EXTRACT
     custom_physician_name: Optional[str] = None
     practice_providers: list[str] = Field(default_factory=list)
-    short_comment_char_limit: Optional[int] = Field(default=1000, ge=500, le=4000)
+    short_comment_char_limit: Optional[int] = Field(default=1000, ge=500, le=5000)
     sms_summary_enabled: bool = False
     sms_summary_char_limit: int = Field(default=300, ge=100, le=500)
+    default_comment_mode: str = "short"
     footer_type: FooterTypeEnum = FooterTypeEnum.EXPLIFY_BRANDING
     custom_footer_text: Optional[str] = None
     use_analogies: bool = True
+    include_lifestyle_recommendations: bool = True
     custom_phrases: list[str] = Field(default_factory=list)
 
 
@@ -177,10 +181,12 @@ class SettingsUpdate(BaseModel):
     physician_name_source: Optional[PhysicianNameSourceEnum] = None
     custom_physician_name: Optional[str] = None
     practice_providers: Optional[list[str]] = None
-    short_comment_char_limit: Optional[int] = Field(default=None, ge=500, le=4000)
+    short_comment_char_limit: Optional[int] = Field(default=None, ge=500, le=5000)
     sms_summary_enabled: Optional[bool] = None
     sms_summary_char_limit: Optional[int] = Field(default=None, ge=100, le=500)
+    default_comment_mode: Optional[str] = None
     footer_type: Optional[FooterTypeEnum] = None
     custom_footer_text: Optional[str] = None
     use_analogies: Optional[bool] = None
+    include_lifestyle_recommendations: Optional[bool] = None
     custom_phrases: Optional[list[str]] = None

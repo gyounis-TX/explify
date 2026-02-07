@@ -1,9 +1,32 @@
 .settings-screen {
-  max-width: 600px;
+  max-width: 1200px;
 }
 
 .settings-header {
   margin-bottom: var(--space-xl);
+}
+
+.settings-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+  align-items: start;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-full-width {
+  margin-top: var(--space-lg);
+}
+
+@media (max-width: 900px) {
+  .settings-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settings-title {

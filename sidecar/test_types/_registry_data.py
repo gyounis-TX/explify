@@ -18,6 +18,7 @@ from .extractors.mammography import (
     MAMMOGRAPHY_REFERENCE_RANGES,
     MAMMOGRAPHY_GLOSSARY,
 )
+from .labs.lab_extractor import extract_lab_measurements
 
 # ---------------------------------------------------------------------------
 # Cardiac
@@ -68,6 +69,60 @@ _CARDIAC: list[GenericTestType] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Interventional / Procedures
+# ---------------------------------------------------------------------------
+_INTERVENTIONAL: list[GenericTestType] = [
+    GenericTestType("pci", "PCI / Coronary Intervention", [
+        "percutaneous coronary intervention", "stent", "ptca",
+        "drug-eluting stent", "bare metal stent", "balloon angioplasty",
+    ], category="interventional"),
+    GenericTestType("ep_study", "EP Study / Ablation", [
+        "electrophysiology", "ablation", "pulmonary vein isolation",
+        "ep study", "electrophysiology study", "catheter ablation",
+        "radiofrequency ablation", "cryoablation",
+    ], category="interventional"),
+    GenericTestType("pacemaker_check", "Pacemaker / ICD Check", [
+        "pacemaker", "icd", "device interrogation",
+        "pacemaker check", "icd check", "device check",
+        "crt", "cardiac resynchronization",
+    ], category="interventional"),
+    GenericTestType("ffr_ifr", "FFR / iFR", [
+        "fractional flow reserve", "pressure wire", "ffr", "ifr",
+        "instantaneous wave-free ratio",
+    ], category="interventional"),
+    GenericTestType("ivus", "IVUS", [
+        "intravascular ultrasound", "ivus",
+    ], category="interventional"),
+    GenericTestType("peripheral_intervention", "Peripheral Angiogram / Intervention", [
+        "pta", "peripheral stent", "iliac stent", "sfa",
+        "peripheral angiogram", "peripheral angioplasty",
+        "lower extremity angiogram", "upper extremity angiogram",
+    ], category="interventional"),
+    GenericTestType("aortogram", "Aortogram", [
+        "aortogram", "aortography",
+    ], category="interventional"),
+    GenericTestType("venogram", "Venogram", [
+        "venogram", "venography",
+    ], category="interventional"),
+    GenericTestType("embolization", "Embolization Procedure", [
+        "embolization", "coil embolization", "tace",
+        "y-90", "yttrium-90", "radioembolization",
+    ], category="interventional"),
+    GenericTestType("tips", "TIPS Procedure", [
+        "tips", "portosystemic shunt",
+        "transjugular intrahepatic portosystemic",
+    ], category="interventional"),
+    GenericTestType("ivc_filter", "IVC Filter", [
+        "ivc filter", "retrievable filter",
+        "inferior vena cava filter",
+    ], category="interventional"),
+    GenericTestType("fistulogram", "Dialysis Access Intervention", [
+        "fistulogram", "av fistula", "dialysis access",
+        "arteriovenous fistula", "graft thrombectomy",
+    ], category="interventional"),
+]
+
+# ---------------------------------------------------------------------------
 # CT Imaging
 # ---------------------------------------------------------------------------
 _IMAGING_CT: list[GenericTestType] = [
@@ -85,6 +140,8 @@ _IMAGING_CT: list[GenericTestType] = [
     GenericTestType("cta", "CT Angiography", [
         "ct angiography", "cta pulmonary", "cta aorta", "cta carotid",
         "cta renal", "cta extremity", "cta runoff", "ct angiogram",
+        "cta mesenteric", "cta visceral", "cta iliac", "cta peripheral",
+        "cta lower extremity", "cta upper extremity",
     ], specialty="radiology", category="imaging_ct"),
 ]
 
@@ -102,6 +159,8 @@ _IMAGING_MRI: list[GenericTestType] = [
     GenericTestType("mra", "MR Angiography", [
         "mra", "mr angiography", "magnetic resonance angiography",
         "mra brain", "mra neck", "mra aorta", "mra renal",
+        "mra carotid", "mra mesenteric", "mra visceral",
+        "mra peripheral", "mra iliac", "mra runoff",
     ], specialty="radiology", category="imaging_mri"),
 ]
 
@@ -116,6 +175,22 @@ _IMAGING_ULTRASOUND: list[GenericTestType] = [
     GenericTestType("abdominal_aorta", "Abdominal Aorta Ultrasound", [
         "abdominal aorta", "aaa screening", "aortic aneurysm",
         "aortic ultrasound", "aortic diameter",
+    ], category="imaging_ultrasound"),
+    GenericTestType("upper_extremity_arterial_duplex", "Upper Extremity Arterial Duplex", [
+        "upper extremity arterial", "arm arterial duplex",
+        "subclavian duplex", "brachial duplex",
+    ], category="imaging_ultrasound"),
+    GenericTestType("upper_extremity_venous_duplex", "Upper Extremity Venous Duplex", [
+        "upper extremity venous", "arm venous duplex",
+        "subclavian vein", "axillary vein duplex",
+    ], category="imaging_ultrasound"),
+    GenericTestType("mesenteric_doppler", "Mesenteric Doppler", [
+        "mesenteric doppler", "celiac doppler", "sma doppler",
+        "mesenteric duplex", "celiac artery duplex",
+    ], category="imaging_ultrasound"),
+    GenericTestType("aortic_stent_surveillance", "Aortic Stent Surveillance", [
+        "evar surveillance", "aortic stent graft", "endoleak",
+        "aortic stent surveillance", "tevar surveillance",
     ], category="imaging_ultrasound"),
     GenericTestType("ultrasound", "Ultrasound", [
         "ultrasound", "sonography", "sonogram",
@@ -220,11 +295,199 @@ _PATHOLOGY: list[GenericTestType] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Vascular
+# ---------------------------------------------------------------------------
+_VASCULAR: list[GenericTestType] = [
+    GenericTestType("carotid_duplex", "Carotid Duplex", [
+        "carotid duplex", "carotid ultrasound", "carotid doppler",
+        "carotid stenosis", "ica velocity", "cca",
+    ], specialty="vascular", category="vascular"),
+    GenericTestType("lower_extremity_arterial_duplex", "Lower Extremity Arterial Duplex", [
+        "lower extremity arterial", "leg arterial duplex",
+        "femoral duplex", "popliteal duplex", "tibial duplex",
+        "peripheral arterial duplex",
+    ], specialty="vascular", category="vascular"),
+    GenericTestType("lower_extremity_venous_duplex", "Lower Extremity Venous Duplex", [
+        "lower extremity venous", "leg venous duplex", "dvt",
+        "deep vein thrombosis", "femoral vein", "popliteal vein",
+        "venous duplex lower", "venous insufficiency",
+    ], specialty="vascular", category="vascular"),
+    GenericTestType("abi", "Ankle-Brachial Index", [
+        "ankle brachial index", "abi", "ankle-brachial",
+        "segmental pressures", "pulse volume recording", "pvr",
+    ], specialty="vascular", category="vascular"),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — General
+# ---------------------------------------------------------------------------
+_LAB_GENERAL: list[GenericTestType] = [
+    GenericTestType("cbc", "Complete Blood Count", [
+        "complete blood count", "cbc", "hemoglobin", "hematocrit",
+        "white blood cell", "wbc", "platelet count", "mcv", "mch",
+    ], specialty="internal_medicine", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("bmp", "Basic Metabolic Panel", [
+        "basic metabolic panel", "bmp", "sodium", "potassium",
+        "chloride", "bicarbonate", "bun", "creatinine", "glucose",
+    ], specialty="internal_medicine", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("cmp", "Comprehensive Metabolic Panel", [
+        "comprehensive metabolic panel", "cmp", "total protein",
+        "albumin", "bilirubin", "alkaline phosphatase", "alt", "ast",
+    ], specialty="internal_medicine", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("urinalysis", "Urinalysis", [
+        "urinalysis", "urine analysis", "urine dipstick",
+        "specific gravity", "urine protein", "urine glucose",
+    ], specialty="internal_medicine", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("coagulation", "Coagulation Panel", [
+        "coagulation", "pt", "inr", "ptt", "aptt",
+        "prothrombin time", "fibrinogen", "d-dimer",
+    ], specialty="internal_medicine", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — Endocrine
+# ---------------------------------------------------------------------------
+_LAB_ENDOCRINE: list[GenericTestType] = [
+    GenericTestType("thyroid_panel", "Thyroid Panel", [
+        "thyroid panel", "tsh", "free t4", "free t3",
+        "thyroid function", "thyroid stimulating",
+    ], specialty="endocrinology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("hba1c", "HbA1c", [
+        "hba1c", "hemoglobin a1c", "glycated hemoglobin",
+        "a1c", "glycosylated hemoglobin",
+    ], specialty="endocrinology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("cortisol", "Cortisol", [
+        "cortisol", "am cortisol", "cortisol level",
+        "acth stimulation", "dexamethasone suppression",
+    ], specialty="endocrinology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("hormone_panel", "Hormone Panel", [
+        "hormone panel", "testosterone", "estradiol",
+        "fsh", "lh", "prolactin", "dhea", "igf-1",
+    ], specialty="endocrinology", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — Rheumatology
+# ---------------------------------------------------------------------------
+_LAB_RHEUMATOLOGY: list[GenericTestType] = [
+    GenericTestType("ana_panel", "ANA Panel", [
+        "ana panel", "antinuclear antibody", "ana",
+        "anti-dsdna", "ena panel", "smith antibody",
+    ], specialty="rheumatology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("rheumatoid_panel", "Rheumatoid Panel", [
+        "rheumatoid factor", "anti-ccp", "rheumatoid panel",
+        "cyclic citrullinated peptide",
+    ], specialty="rheumatology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("inflammatory_markers", "Inflammatory Markers", [
+        "esr", "crp", "sed rate", "c-reactive protein",
+        "erythrocyte sedimentation rate", "inflammatory markers",
+    ], specialty="rheumatology", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — Hematology
+# ---------------------------------------------------------------------------
+_LAB_HEMATOLOGY: list[GenericTestType] = [
+    GenericTestType("iron_studies", "Iron Studies", [
+        "iron studies", "ferritin", "iron saturation", "tibc",
+        "serum iron", "transferrin saturation",
+    ], specialty="hematology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("hemoglobin_electrophoresis", "Hemoglobin Electrophoresis", [
+        "hemoglobin electrophoresis", "hb electrophoresis",
+        "sickle cell screen", "thalassemia screen",
+    ], specialty="hematology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("tumor_markers", "Tumor Markers", [
+        "tumor markers", "psa", "cea", "ca-125", "ca 19-9",
+        "afp", "beta hcg", "ldh tumor",
+    ], specialty="hematology", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — Hepatology
+# ---------------------------------------------------------------------------
+_LAB_HEPATOLOGY: list[GenericTestType] = [
+    GenericTestType("hepatic_panel", "Hepatic Panel", [
+        "hepatic panel", "liver function", "hepatic function",
+        "ggtp", "ggt", "direct bilirubin", "indirect bilirubin",
+    ], specialty="hepatology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("hepatitis_serology", "Hepatitis Serology", [
+        "hepatitis serology", "hepatitis b", "hepatitis c",
+        "hbsag", "anti-hbs", "anti-hcv", "hcv rna", "hbv dna",
+    ], specialty="hepatology", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — Nephrology
+# ---------------------------------------------------------------------------
+_LAB_NEPHROLOGY: list[GenericTestType] = [
+    GenericTestType("renal_function", "Renal Function Panel", [
+        "renal function", "renal panel", "gfr", "egfr",
+        "cystatin c", "urine albumin creatinine ratio",
+        "microalbumin", "24-hour urine protein",
+    ], specialty="nephrology", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("urine_studies", "Urine Studies", [
+        "urine studies", "24-hour urine", "urine electrolytes",
+        "urine osmolality", "urine sodium", "fractional excretion",
+    ], specialty="nephrology", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Laboratory — Infectious Disease
+# ---------------------------------------------------------------------------
+_LAB_INFECTIOUS: list[GenericTestType] = [
+    GenericTestType("blood_cultures", "Blood Cultures", [
+        "blood cultures", "blood culture", "bacteremia",
+        "gram stain", "sensitivity", "susceptibility",
+    ], specialty="infectious_disease", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("sti_panel", "STI Panel", [
+        "sti panel", "std panel", "chlamydia", "gonorrhea",
+        "syphilis", "rpr", "vdrl", "hiv", "herpes",
+    ], specialty="infectious_disease", category="lab", measurement_extractor=extract_lab_measurements),
+    GenericTestType("serology_panel", "Serology Panel", [
+        "serology panel", "igg", "igm", "titer",
+        "antibody panel", "immunoglobulin", "quantiferon",
+        "tb gold", "lyme serology",
+    ], specialty="infectious_disease", category="lab", measurement_extractor=extract_lab_measurements),
+]
+
+# ---------------------------------------------------------------------------
+# Allergy
+# ---------------------------------------------------------------------------
+_ALLERGY: list[GenericTestType] = [
+    GenericTestType("allergy_testing", "Allergy Testing", [
+        "allergy testing", "skin prick test", "allergen",
+        "rast test", "specific ige", "allergy panel",
+        "environmental allergies", "food allergies",
+    ], specialty="allergy", category="allergy"),
+    GenericTestType("immunoglobulins", "Immunoglobulins", [
+        "immunoglobulins", "ige total", "iga", "igg subclasses",
+        "immunoglobulin levels", "immune deficiency panel",
+    ], specialty="allergy", category="allergy"),
+]
+
+# ---------------------------------------------------------------------------
+# Dermatology
+# ---------------------------------------------------------------------------
+_DERMATOLOGY: list[GenericTestType] = [
+    GenericTestType("skin_biopsy", "Skin Biopsy", [
+        "skin biopsy", "punch biopsy", "shave biopsy",
+        "dermatopathology", "melanoma", "basal cell",
+        "squamous cell", "actinic keratosis",
+    ], specialty="dermatology", category="dermatology"),
+    GenericTestType("patch_testing", "Patch Testing", [
+        "patch testing", "contact dermatitis", "patch test",
+        "allergen patch", "true test",
+    ], specialty="dermatology", category="dermatology"),
+]
+
+# ---------------------------------------------------------------------------
 # Public export — order matters: more-specific types first so that keyword
 # detection naturally prefers them over broad modality-level types.
 # ---------------------------------------------------------------------------
 GENERIC_TYPES: list[GenericTestType] = [
     *_CARDIAC,
+    *_INTERVENTIONAL,
+    *_VASCULAR,
     *_IMAGING_CT,
     *_IMAGING_MRI,
     *_IMAGING_ULTRASOUND,
@@ -233,4 +496,13 @@ GENERIC_TYPES: list[GenericTestType] = [
     *_NEUROPHYSIOLOGY,
     *_ENDOSCOPY,
     *_PATHOLOGY,
+    *_LAB_GENERAL,
+    *_LAB_ENDOCRINE,
+    *_LAB_RHEUMATOLOGY,
+    *_LAB_HEMATOLOGY,
+    *_LAB_HEPATOLOGY,
+    *_LAB_NEPHROLOGY,
+    *_LAB_INFECTIOUS,
+    *_ALLERGY,
+    *_DERMATOLOGY,
 ]

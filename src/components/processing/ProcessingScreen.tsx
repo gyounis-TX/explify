@@ -144,6 +144,7 @@ export function ProcessingScreen() {
     testType?: string;
     quickReasons?: string[];
     batchExtractionResults?: Array<{ key: string; result: ExtractionResult }>;
+    testTypes?: Record<string, string>;
   } | null;
   const extractionResult = locationState?.extractionResult;
   const templateId = locationState?.templateId;
@@ -152,6 +153,7 @@ export function ProcessingScreen() {
   const testType = locationState?.testType;
   const quickReasons = locationState?.quickReasons;
   const batchExtractionResults = locationState?.batchExtractionResults;
+  const testTypes = locationState?.testTypes;
   const isBatchMode = batchExtractionResults != null && batchExtractionResults.length > 1;
 
   const { showToast } = useToast();
@@ -284,6 +286,7 @@ export function ProcessingScreen() {
     async function processBatch() {
       const responses: ExplainResponse[] = [];
       const labels: string[] = [];
+      const usedOpenings: string[] = [];
 
       for (let i = 0; i < batchExtractionResults!.length; i++) {
         const br = batchExtractionResults![i];
@@ -298,12 +301,13 @@ export function ProcessingScreen() {
         try {
           const stream = sidecarApi.explainReportStream({
             extraction_result: br.result,
-            test_type: testType,
+            test_type: testTypes?.[br.key] ?? testType,
             template_id: templateId,
             shared_template_sync_id: sharedTemplateSyncId,
             clinical_context: clinicalContext,
             short_comment: true,
             quick_reasons: quickReasons,
+            avoid_openings: usedOpenings.length > 0 ? usedOpenings : undefined,
           });
 
           let fileResponse: ExplainResponse | null = null;
@@ -347,8 +351,13 @@ export function ProcessingScreen() {
           }
 
           if (fileResponse) {
+            // Extract the opening sentence to avoid repetition in next reports
+            const summary = fileResponse.explanation.overall_summary;
+            const firstSentence = summary.split(/[.!?]\s/)[0]?.trim();
+            if (firstSentence) usedOpenings.push(firstSentence);
+
             responses.push(fileResponse);
-            labels.push(filename);
+            labels.push(fileResponse.parsed_report.test_type_display || filename);
             logUsage({
               model_used: fileResponse.model_used,
               input_tokens: fileResponse.input_tokens,

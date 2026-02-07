@@ -13,7 +13,7 @@ from storage.database import get_db
 from storage.keychain import get_keychain
 
 # Non-secret settings stored in SQLite
-_DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "footer_type", "custom_footer_text")
+_DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "default_comment_mode", "footer_type", "custom_footer_text")
 # Keys that store JSON-encoded lists
 _JSON_LIST_KEYS = {"quick_reasons", "next_steps_options", "practice_providers"}
 # Secret keys stored in OS keychain
@@ -76,6 +76,7 @@ def get_settings() -> AppSettings:
         sms_summary_char_limit=int(all_db["sms_summary_char_limit"])
         if "sms_summary_char_limit" in all_db
         else 300,
+        default_comment_mode=all_db.get("default_comment_mode", "short"),
         footer_type=FooterTypeEnum(all_db["footer_type"])
         if "footer_type" in all_db
         else FooterTypeEnum.EXPLIFY_BRANDING,

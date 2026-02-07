@@ -4,7 +4,7 @@ interface UsageEntry {
   model_used: string;
   input_tokens: number;
   output_tokens: number;
-  request_type: "explain" | "letter";
+  request_type: "explain" | "letter" | "synthesize";
   deep_analysis?: boolean;
 }
 

@@ -171,6 +171,8 @@ export interface ExplainRequest {
   anxiety_level?: number;
   quick_reasons?: string[];
   use_analogies?: boolean;
+  include_lifestyle_recommendations?: boolean;
+  avoid_openings?: string[];
 }
 
 export interface ExplainResponse {
@@ -212,9 +214,11 @@ export interface AppSettings {
   short_comment_char_limit: number | null;
   sms_summary_enabled: boolean;
   sms_summary_char_limit: number;
+  default_comment_mode: "short" | "long" | "sms";
   footer_type: FooterType;
   custom_footer_text: string | null;
   use_analogies: boolean;
+  include_lifestyle_recommendations: boolean;
   custom_phrases: string[];
 }
 
@@ -241,9 +245,11 @@ export interface SettingsUpdate {
   short_comment_char_limit?: number | null;
   sms_summary_enabled?: boolean;
   sms_summary_char_limit?: number;
+  default_comment_mode?: "short" | "long" | "sms";
   footer_type?: FooterType;
   custom_footer_text?: string | null;
   use_analogies?: boolean;
+  include_lifestyle_recommendations?: boolean;
   custom_phrases?: string[];
 }
 
@@ -260,6 +266,7 @@ export interface Template {
   updated_at: string;
   sync_id?: string;
   is_builtin?: boolean | number;
+  is_default?: boolean | number;
 }
 
 export interface TemplateCreateRequest {
@@ -268,6 +275,7 @@ export interface TemplateCreateRequest {
   tone?: string;
   structure_instructions?: string;
   closing_text?: string;
+  is_default?: boolean;
 }
 
 export interface TemplateUpdateRequest {
@@ -276,6 +284,7 @@ export interface TemplateUpdateRequest {
   tone?: string;
   structure_instructions?: string;
   closing_text?: string;
+  is_default?: boolean;
 }
 
 export interface TemplateListResponse {

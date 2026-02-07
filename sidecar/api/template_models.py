@@ -15,6 +15,7 @@ class TemplateCreateRequest(BaseModel):
     tone: Optional[str] = None
     structure_instructions: Optional[str] = None
     closing_text: Optional[str] = None
+    is_default: Optional[bool] = False
 
 
 class TemplateUpdateRequest(BaseModel):
@@ -25,6 +26,7 @@ class TemplateUpdateRequest(BaseModel):
     tone: Optional[str] = None
     structure_instructions: Optional[str] = None
     closing_text: Optional[str] = None
+    is_default: Optional[bool] = None
 
 
 class TemplateResponse(BaseModel):
@@ -40,6 +42,7 @@ class TemplateResponse(BaseModel):
     updated_at: str
     sync_id: Optional[str] = None
     is_builtin: Optional[bool] = False
+    is_default: Optional[bool] = False
 
 
 class TemplateListResponse(BaseModel):

@@ -563,6 +563,132 @@ REFERENCE_RANGES: dict[str, RangeThresholds] = {
         unit="mg/dL",
     ),
 
+    # Non-HDL Cholesterol: optimal <130 mg/dL
+    "NON_HDL": RangeThresholds(
+        normal_max=130.0,
+        mild_max=160.0,
+        moderate_max=190.0,
+        severe_high=220.0,
+        unit="mg/dL",
+    ),
+    # Lipoprotein(a): desirable <75 nmol/L; >125 high risk
+    "LPA": RangeThresholds(
+        normal_max=75.0,
+        mild_max=125.0,
+        moderate_max=200.0,
+        severe_high=250.0,
+        unit="nmol/L",
+    ),
+    # Apolipoprotein B: desirable <90 mg/dL; <65 for very high risk
+    "APOB": RangeThresholds(
+        normal_max=90.0,
+        mild_max=120.0,
+        moderate_max=150.0,
+        severe_high=180.0,
+        unit="mg/dL",
+    ),
+
+    # ===== Expanded Lipid Profile (CardioIQ / NMR LipoProfile) =====
+
+    # LDL Particle Number: desirable <1000 nmol/L
+    "LDL_P": RangeThresholds(
+        normal_max=1000.0,
+        mild_max=1299.0,
+        moderate_max=1599.0,
+        severe_high=2000.0,
+        unit="nmol/L",
+    ),
+    # Small LDL-P: desirable <527 nmol/L
+    "SMALL_LDL_P": RangeThresholds(
+        normal_max=527.0,
+        mild_max=839.0,
+        moderate_max=1100.0,
+        severe_high=1400.0,
+        unit="nmol/L",
+    ),
+    # LDL Particle Size: Pattern A >=20.5 nm (large buoyant); Pattern B <20.5 nm (small dense)
+    "LDL_SIZE": RangeThresholds(
+        normal_min=20.5,
+        mild_min=20.0,
+        moderate_min=19.5,
+        severe_low=19.0,
+        unit="nm",
+    ),
+    # Large HDL-P: desirable >=7.2 umol/L (higher is better)
+    "LARGE_HDL_P": RangeThresholds(
+        normal_min=7.2,
+        mild_min=5.0,
+        moderate_min=3.0,
+        severe_low=1.5,
+        unit="umol/L",
+    ),
+    # Large VLDL-P: desirable <=2.7 nmol/L (lower is better)
+    "LARGE_VLDL_P": RangeThresholds(
+        normal_max=2.7,
+        mild_max=5.0,
+        moderate_max=8.0,
+        severe_high=12.0,
+        unit="nmol/L",
+    ),
+    # LP-IR Score: desirable <=27
+    "LP_IR": RangeThresholds(
+        normal_max=27.0,
+        mild_max=44.0,
+        moderate_max=63.0,
+        severe_high=80.0,
+        unit="",
+    ),
+    # Small Dense LDL: optimal <26 mg/dL
+    "SDLDL": RangeThresholds(
+        normal_max=26.0,
+        mild_max=40.0,
+        moderate_max=55.0,
+        severe_high=70.0,
+        unit="mg/dL",
+    ),
+    # Lp-PLA2: desirable <200 ng/mL (vascular inflammation marker)
+    "LP_PLA2": RangeThresholds(
+        normal_max=200.0,
+        mild_max=235.0,
+        moderate_max=300.0,
+        severe_high=400.0,
+        unit="ng/mL",
+    ),
+    # hs-CRP: low risk <1.0, average 1.0-3.0, high >3.0 mg/L
+    "HSCRP": RangeThresholds(
+        normal_max=1.0,
+        mild_max=3.0,
+        moderate_max=10.0,
+        severe_high=20.0,
+        unit="mg/L",
+    ),
+    # Homocysteine: normal 5-15 umol/L
+    "HCY": RangeThresholds(
+        normal_min=5.0,
+        normal_max=15.0,
+        mild_max=20.0,
+        moderate_max=30.0,
+        severe_high=50.0,
+        unit="umol/L",
+    ),
+    # Omega-3 Index: desirable >=8%, intermediate 4-8%, low <4%
+    "OMEGA3": RangeThresholds(
+        normal_min=8.0,
+        mild_min=4.0,
+        moderate_min=2.0,
+        severe_low=1.0,
+        unit="%",
+    ),
+    # Fasting Insulin: normal 2.6-24.9 uIU/mL
+    "INSULIN": RangeThresholds(
+        normal_min=2.6,
+        normal_max=24.9,
+        mild_max=30.0,
+        moderate_max=50.0,
+        severe_high=80.0,
+        unit="uIU/mL",
+    ),
+
     # ===== Thyroid Panel =====
 
     # TSH: normal 0.4-4.0 uIU/mL

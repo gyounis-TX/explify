@@ -63,6 +63,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     timersRef.current.set(id, timer);
   }, []);
 
+  // Global Cmd+Z / Ctrl+Z handler — triggers the most recent undo toast
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        // Don't intercept if user is typing in an input/textarea
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) {
+          return;
+        }
+        const undoToast = [...toasts].reverse().find((t) => t.type === "undo" && t.onUndo);
+        if (undoToast) {
+          e.preventDefault();
+          undoToast.onUndo!();
+          removeToast(undoToast.id);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toasts, removeToast]);
+
   return (
     <ToastContext.Provider value={{ showToast, showUndoToast }}>
       {children}
@@ -111,7 +132,7 @@ function ToastItem({
       <div className="toast toast--undo">
         <span className="toast-undo-message">{toast.message}</span>
         <button className="toast-undo-btn" onClick={onUndo}>
-          Undo
+          Undo <kbd className="toast-undo-kbd">{navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl+"}Z</kbd>
         </button>
         <div className="toast-undo-progress">
           <div

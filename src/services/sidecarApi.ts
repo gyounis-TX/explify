@@ -358,6 +358,8 @@ class SidecarApi {
       body.quick_reasons = request.quick_reasons;
     if (request.use_analogies != null)
       body.use_analogies = request.use_analogies;
+    if (request.avoid_openings != null)
+      body.avoid_openings = request.avoid_openings;
 
     const response = await fetch(`${baseUrl}/analyze/explain-stream`, {
       method: "POST",
@@ -489,6 +491,23 @@ class SidecarApi {
       await this.handleErrorResponse(response);
     }
     return response.json();
+  }
+
+  async listTestTypes(): Promise<{ id: string; name: string }[]> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/test-types`);
+    if (!response.ok) return [];
+    return response.json();
+  }
+
+  async getDefaultTemplate(testType: string): Promise<Template | null> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(
+      `${baseUrl}/templates/default/${encodeURIComponent(testType)}`,
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.template ?? null;
   }
 
   // --- History ---
@@ -931,6 +950,33 @@ class SidecarApi {
         older_response: olderResponse,
         newer_date: newerDate,
         older_date: olderDate,
+      }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+  // --- Synthesis ---
+
+  async synthesizeReports(
+    responses: ExplainResponse[],
+    labels: string[],
+    clinicalContext?: string,
+  ): Promise<{
+    combined_summary: string;
+    model_used: string;
+    input_tokens: number;
+    output_tokens: number;
+  }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/analyze/synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        responses,
+        labels,
+        clinical_context: clinicalContext ?? "",
       }),
     });
     if (!response.ok) {
