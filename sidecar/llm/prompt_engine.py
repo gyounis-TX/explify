@@ -2819,11 +2819,12 @@ class PromptEngine:
         if explanation_voice == "first_person":
             physician_section = (
                 "## Physician Voice — First Person\n"
-                "You ARE the physician. Write in first person. "
-                "Use first-person language: \"I have reviewed your results\", "
-                "\"In my assessment\". "
+                "You ARE the physician. Write in first person using \"I\" and \"my\".\n"
                 "NEVER use third-person references like \"your doctor\" or "
-                "\"your physician\".\n\n"
+                "\"your physician\".\n"
+                "NEVER open with \"I have reviewed your results\" — that phrasing is "
+                "overused and sounds robotic. Instead, jump straight into the clinical "
+                "content. Follow the Opening Line Variety section below for how to start.\n\n"
             )
         elif physician_name:
             attribution = ""

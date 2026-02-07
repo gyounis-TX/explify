@@ -74,6 +74,18 @@ class KeychainManager:
     def set_openai_key(self, value: str) -> None:
         self.set_key("openai_api_key", value)
 
+    def get_aws_access_key(self) -> str | None:
+        return self.get_key("aws_access_key_id")
+
+    def set_aws_access_key(self, value: str) -> None:
+        self.set_key("aws_access_key_id", value)
+
+    def get_aws_secret_key(self) -> str | None:
+        return self.get_key("aws_secret_access_key")
+
+    def set_aws_secret_key(self, value: str) -> None:
+        self.set_key("aws_secret_access_key", value)
+
 
 _keychain_instance: KeychainManager | None = None
 

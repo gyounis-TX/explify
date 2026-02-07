@@ -13,6 +13,7 @@ from api.analysis_models import ParsedReport, SeverityStatus
 class LLMProviderEnum(str, Enum):
     CLAUDE = "claude"
     OPENAI = "openai"
+    BEDROCK = "bedrock"
 
 
 class LiteracyLevelEnum(str, Enum):
@@ -127,6 +128,9 @@ class AppSettings(BaseModel):
     llm_provider: LLMProviderEnum = LLMProviderEnum.CLAUDE
     claude_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_region: str = "us-east-1"
     claude_model: Optional[str] = None
     openai_model: Optional[str] = None
     literacy_level: LiteracyLevelEnum = LiteracyLevelEnum.GRADE_8
@@ -165,6 +169,9 @@ class SettingsUpdate(BaseModel):
     llm_provider: Optional[LLMProviderEnum] = None
     claude_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_region: Optional[str] = None
     claude_model: Optional[str] = None
     openai_model: Optional[str] = None
     literacy_level: Optional[LiteracyLevelEnum] = None

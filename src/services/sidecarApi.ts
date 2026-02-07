@@ -648,7 +648,7 @@ class SidecarApi {
 
   async getRawApiKey(
     provider: string,
-  ): Promise<{ provider: string; key: string }> {
+  ): Promise<{ provider: string; key?: string; credentials?: { access_key: string; secret_key: string; region: string } }> {
     const baseUrl = await this.ensureInitialized();
     const response = await fetch(`${baseUrl}/settings/raw-key/${provider}`, {
       cache: "no-store",

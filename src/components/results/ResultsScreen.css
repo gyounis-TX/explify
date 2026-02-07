@@ -215,6 +215,17 @@
   text-align: right;
 }
 
+.comment-test-type {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.comment-test-type-value {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
 .comment-copy-btn {
   padding: var(--space-sm) var(--space-md);
   background-color: var(--color-primary-600);

@@ -18,6 +18,11 @@ from .extractors.mammography import (
     MAMMOGRAPHY_REFERENCE_RANGES,
     MAMMOGRAPHY_GLOSSARY,
 )
+from .extractors.cardiac_pet import (
+    extract_cardiac_pet_measurements,
+    CARDIAC_PET_REFERENCE_RANGES,
+    CARDIAC_PET_GLOSSARY,
+)
 from .labs.lab_extractor import extract_lab_measurements
 
 # ---------------------------------------------------------------------------
@@ -40,6 +45,17 @@ _CARDIAC: list[GenericTestType] = [
         "holter", "ambulatory monitor", "24-hour monitor", "48-hour monitor",
         "event monitor", "continuous monitoring",
     ], category="cardiac"),
+    GenericTestType("cardiac_pet", "Cardiac PET / PET-CT", [
+        "cardiac pet", "pet/ct", "pet-ct", "pet ct",
+        "rb-82", "rubidium", "positron",
+        "n-13 ammonia", "ammonia pet",
+        "myocardial blood flow", "mbf", "coronary flow reserve", "cfr",
+        "myocardial perfusion pet", "positron emission",
+    ], category="cardiac",
+        measurement_extractor=extract_cardiac_pet_measurements,
+        reference_ranges=CARDIAC_PET_REFERENCE_RANGES,
+        glossary=CARDIAC_PET_GLOSSARY,
+    ),
     GenericTestType("nuclear_stress", "Nuclear Stress Test", [
         "nuclear stress", "myocardial perfusion", "spect", "sestamibi",
         "lexiscan", "adenosine stress", "regadenoson", "persantine",

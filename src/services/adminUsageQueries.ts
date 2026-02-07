@@ -20,6 +20,7 @@ export interface RegisteredUser {
   user_id: string;
   email: string;
   created_at: string;
+  app_version: string | null;
 }
 
 export async function fetchUsageSummary(

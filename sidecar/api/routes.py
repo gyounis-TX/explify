@@ -643,10 +643,10 @@ async def explain_report(request: ExplainRequest = Body(...)):
     llm_provider = LLMProvider(provider_str)
     model_override = (
         settings.claude_model
-        if provider_str == "claude"
+        if provider_str in ("claude", "bedrock")
         else settings.openai_model
     )
-    if request.deep_analysis and provider_str == "claude":
+    if request.deep_analysis and provider_str in ("claude", "bedrock"):
         from llm.client import CLAUDE_DEEP_MODEL
         model_override = CLAUDE_DEEP_MODEL
     client = LLMClient(
@@ -915,10 +915,10 @@ async def _explain_stream_gen(request: ExplainRequest):
         llm_provider = LLMProvider(provider_str)
         model_override = (
             settings.claude_model
-            if provider_str == "claude"
+            if provider_str in ("claude", "bedrock")
             else settings.openai_model
         )
-        if request.deep_analysis and provider_str == "claude":
+        if request.deep_analysis and provider_str in ("claude", "bedrock"):
             from llm.client import CLAUDE_DEEP_MODEL
             model_override = CLAUDE_DEEP_MODEL
 
@@ -1073,7 +1073,7 @@ async def compare_reports(body: dict = Body(...)):
         )
 
     model_override = (
-        settings.claude_model if provider_str == "claude" else settings.openai_model
+        settings.claude_model if provider_str in ("claude", "bedrock") else settings.openai_model
     )
     client = LLMClient(
         provider=LLMProvider(provider_str),
@@ -1205,7 +1205,7 @@ async def synthesize_reports(body: dict = Body(...)):
     )
 
     model_override = (
-        settings.claude_model if provider_str == "claude" else settings.openai_model
+        settings.claude_model if provider_str in ("claude", "bedrock") else settings.openai_model
     )
     client = LLMClient(
         provider=LLMProvider(provider_str),
@@ -1282,6 +1282,8 @@ async def get_settings():
     settings = settings_store.get_settings()
     settings.claude_api_key = _mask_api_key(settings.claude_api_key)
     settings.openai_api_key = _mask_api_key(settings.openai_api_key)
+    settings.aws_access_key_id = _mask_api_key(settings.aws_access_key_id)
+    settings.aws_secret_access_key = _mask_api_key(settings.aws_secret_access_key)
     return settings
 
 
@@ -1291,6 +1293,8 @@ async def update_settings(update: SettingsUpdate = Body(...)):
     updated = settings_store.update_settings(update)
     updated.claude_api_key = _mask_api_key(updated.claude_api_key)
     updated.openai_api_key = _mask_api_key(updated.openai_api_key)
+    updated.aws_access_key_id = _mask_api_key(updated.aws_access_key_id)
+    updated.aws_secret_access_key = _mask_api_key(updated.aws_secret_access_key)
     return updated
 
 
@@ -1502,6 +1506,9 @@ async def get_raw_key(provider: str):
     key = settings_store.get_api_key_for_provider(provider)
     if not key:
         raise HTTPException(status_code=404, detail=f"No key configured for {provider}")
+    # Bedrock returns a dict; other providers return a string
+    if isinstance(key, dict):
+        return {"provider": provider, "credentials": key}
     return {"provider": provider, "key": key}
 
 
@@ -1738,7 +1745,7 @@ async def generate_letter(request: LetterGenerateRequest = Body(...)):
 
     llm_provider = LLMProvider(provider_str)
     model_override = (
-        settings.claude_model if provider_str == "claude" else settings.openai_model
+        settings.claude_model if provider_str in ("claude", "bedrock") else settings.openai_model
     )
     client = LLMClient(
         provider=llm_provider,

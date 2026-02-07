@@ -116,7 +116,7 @@ export interface ParseRequest {
 
 // --- Phase 4: LLM Explanation Types ---
 
-export type LLMProvider = "claude" | "openai";
+export type LLMProvider = "claude" | "openai" | "bedrock";
 export type LiteracyLevel = "grade_4" | "grade_6" | "grade_8" | "grade_12" | "clinical";
 export type ExplanationVoice = "first_person" | "third_person";
 export type PhysicianNameSource = "auto_extract" | "custom" | "generic";
@@ -195,6 +195,9 @@ export interface AppSettings {
   llm_provider: LLMProvider;
   claude_api_key: string | null;
   openai_api_key: string | null;
+  aws_access_key_id: string | null;
+  aws_secret_access_key: string | null;
+  aws_region: string;
   claude_model: string | null;
   openai_model: string | null;
   literacy_level: LiteracyLevel;
@@ -226,6 +229,9 @@ export interface SettingsUpdate {
   llm_provider?: LLMProvider;
   claude_api_key?: string;
   openai_api_key?: string;
+  aws_access_key_id?: string;
+  aws_secret_access_key?: string;
+  aws_region?: string;
   claude_model?: string;
   openai_model?: string;
   literacy_level?: LiteracyLevel;

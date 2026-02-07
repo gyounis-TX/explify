@@ -13,11 +13,11 @@ from storage.database import get_db
 from storage.keychain import get_keychain
 
 # Non-secret settings stored in SQLite
-_DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "default_comment_mode", "footer_type", "custom_footer_text")
+_DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "default_comment_mode", "footer_type", "custom_footer_text", "aws_region")
 # Keys that store JSON-encoded lists
 _JSON_LIST_KEYS = {"quick_reasons", "next_steps_options", "practice_providers"}
 # Secret keys stored in OS keychain
-_SECRET_KEYS = ("claude_api_key", "openai_api_key")
+_SECRET_KEYS = ("claude_api_key", "openai_api_key", "aws_access_key_id", "aws_secret_access_key")
 
 
 def get_settings() -> AppSettings:
@@ -42,6 +42,9 @@ def get_settings() -> AppSettings:
         else LLMProviderEnum.CLAUDE,
         claude_api_key=keychain.get_claude_key(),
         openai_api_key=keychain.get_openai_key(),
+        aws_access_key_id=keychain.get_aws_access_key(),
+        aws_secret_access_key=keychain.get_aws_secret_key(),
+        aws_region=all_db.get("aws_region", "us-east-1"),
         claude_model=all_db.get("claude_model"),
         openai_model=all_db.get("openai_model"),
         literacy_level=LiteracyLevelEnum(all_db["literacy_level"])
@@ -104,6 +107,18 @@ def update_settings(update: SettingsUpdate) -> AppSettings:
             keychain.delete_key("openai_api_key")
         else:
             keychain.set_openai_key(val)
+    if "aws_access_key_id" in update_data:
+        val = update_data.pop("aws_access_key_id")
+        if val is None:
+            keychain.delete_key("aws_access_key_id")
+        else:
+            keychain.set_aws_access_key(val)
+    if "aws_secret_access_key" in update_data:
+        val = update_data.pop("aws_secret_access_key")
+        if val is None:
+            keychain.delete_key("aws_secret_access_key")
+        else:
+            keychain.set_aws_secret_key(val)
 
     # Persist non-secret settings in SQLite
     for key in _DB_KEYS:
@@ -124,11 +139,27 @@ def update_settings(update: SettingsUpdate) -> AppSettings:
     return get_settings()
 
 
-def get_api_key_for_provider(provider: str) -> str | None:
-    """Get the API key for the given provider."""
+def get_api_key_for_provider(provider: str) -> str | dict | None:
+    """Get the API key for the given provider.
+
+    For Bedrock, returns a dict with access_key, secret_key, and region.
+    For other providers, returns a string API key or None.
+    """
     keychain = get_keychain()
     if provider == "claude":
         return keychain.get_claude_key()
     elif provider == "openai":
         return keychain.get_openai_key()
+    elif provider == "bedrock":
+        access_key = keychain.get_aws_access_key()
+        secret_key = keychain.get_aws_secret_key()
+        if not access_key or not secret_key:
+            return None
+        db = get_db()
+        region = db.get_all_settings().get("aws_region", "us-east-1")
+        return {
+            "access_key": access_key,
+            "secret_key": secret_key,
+            "region": region,
+        }
     return None

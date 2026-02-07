@@ -63,6 +63,8 @@ const SYNC_TABLES: SyncTable[] = [
 const EXCLUDED_SETTINGS_KEYS = new Set([
   "claude_api_key",
   "openai_api_key",
+  "aws_access_key_id",
+  "aws_secret_access_key",
   "api_key",
 ]);
 
@@ -129,13 +131,27 @@ export async function pullRemoteData(): Promise<void> {
     }
   }
 
-  // Pull shared config (admin-deployed API keys)
+  // Pull shared config (admin-deployed API keys / credentials)
   try {
     const sharedConfig = await pullSharedConfig();
+    const configUpdate: Record<string, string> = {};
     if (sharedConfig.claude_api_key) {
-      await sidecarApi.updateSettings({
-        claude_api_key: sharedConfig.claude_api_key,
-      });
+      configUpdate.claude_api_key = sharedConfig.claude_api_key;
+    }
+    if (sharedConfig.aws_access_key_id) {
+      configUpdate.aws_access_key_id = sharedConfig.aws_access_key_id;
+    }
+    if (sharedConfig.aws_secret_access_key) {
+      configUpdate.aws_secret_access_key = sharedConfig.aws_secret_access_key;
+    }
+    if (sharedConfig.aws_region) {
+      configUpdate.aws_region = sharedConfig.aws_region;
+    }
+    if (sharedConfig.llm_provider) {
+      configUpdate.llm_provider = sharedConfig.llm_provider;
+    }
+    if (Object.keys(configUpdate).length > 0) {
+      await sidecarApi.updateSettings(configUpdate);
     }
   } catch (err) {
     console.error("Failed to pull shared config:", err);
@@ -382,4 +398,29 @@ export async function fullSync(): Promise<void> {
   await pushAllLocal();
   await pullRemoteData();
   await pushQueuedChanges();
+  await reportAppVersion();
+}
+
+async function reportAppVersion(): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const session = await getSession();
+  if (!session?.user?.id) return;
+
+  try {
+    const { getVersion } = await import("@tauri-apps/api/app");
+    const version = await getVersion();
+    await supabase.from("settings").upsert(
+      {
+        user_id: session.user.id,
+        key: "app_version",
+        value: version,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,key" },
+    );
+  } catch (err) {
+    console.error("Failed to report app version:", err);
+  }
 }

@@ -15,6 +15,7 @@ interface CommentPanelProps {
   isLiked: boolean;
   onToggleLike: () => void;
   smsEnabled: boolean;
+  testTypeDisplay?: string;
 }
 
 export function CommentPanel({
@@ -34,6 +35,7 @@ export function CommentPanel({
   isLiked,
   onToggleLike,
   smsEnabled,
+  testTypeDisplay,
 }: CommentPanelProps) {
   const isLoading =
     (isGeneratingComment && commentMode === "short") ||
@@ -96,6 +98,12 @@ export function CommentPanel({
         <div className="comment-preview">{commentPreviewText}</div>
       )}
       <span className="comment-char-count">{commentPreviewText.length} chars</span>
+      {testTypeDisplay && (
+        <div className="comment-test-type">
+          <span className="comment-test-type-label">Identified as:</span>{" "}
+          <span className="comment-test-type-value">{testTypeDisplay}</span>
+        </div>
+      )}
       <button className="comment-copy-btn" onClick={onCopy}>
         Copy to Clipboard
       </button>

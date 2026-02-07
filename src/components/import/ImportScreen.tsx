@@ -139,6 +139,7 @@ export function ImportScreen() {
   const location = useLocation();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const extractionResultsRef = useRef<Map<string, FileExtractionEntry>>(new Map());
 
   // Check for preserved context from "Same Patient" navigation
   const locationState = location.state as {
@@ -221,6 +222,7 @@ export function ImportScreen() {
       scrubbedClinicalContext, testTypeHint, detectionStatus,
       detectionResult, manualTestType, textEntries, textEntryNextId,
     };
+    extractionResultsRef.current = extractionResults;
   });
 
   useEffect(() => {
@@ -379,7 +381,7 @@ export function ImportScreen() {
   /** Resolve test type for an individual batch entry. */
   const resolveEntryTestType = (entry: FileExtractionEntry): string | undefined => {
     if (entry.manualTestType != null && entry.manualTestType.trim() !== "") return entry.manualTestType.trim();
-    if (entry.detectionStatus === "success" && entry.detectionResult?.test_type) return entry.detectionResult.test_type;
+    if ((entry.detectionStatus === "success" || entry.detectionStatus === "low_confidence") && entry.detectionResult?.test_type) return entry.detectionResult.test_type;
     return undefined;
   };
 
@@ -482,108 +484,94 @@ export function ImportScreen() {
         }
 
         const results = new Map<string, FileExtractionEntry>();
+        const prevResults = extractionResultsRef.current;
 
-        // Initialize all as pending
+        // Initialize all as pending (reuse cached extractions)
         for (const file of selectedFiles) {
-          results.set(fileKey(file), { status: "pending" });
+          const key = fileKey(file);
+          const cached = prevResults.get(key);
+          results.set(key, cached?.status === "success" && cached.result ? cached : { status: "pending" });
         }
         for (const entry of nonEmptyText) {
-          results.set(textEntryKey(entry), { status: "pending" });
+          const key = textEntryKey(entry);
+          const cached = prevResults.get(key);
+          results.set(key, cached?.status === "success" && cached.result ? cached : { status: "pending" });
         }
         setExtractionResults(new Map(results));
 
         let lastSuccessKey: string | null = null;
 
-        // Extract files
+        // Phase 1: Extract all files (sequential, skip already-extracted)
         for (const file of selectedFiles) {
           const key = fileKey(file);
-          results.set(key, { status: "extracting", detectionStatus: "detecting" });
+          const existing = results.get(key);
+          if (existing?.status === "success" && existing.result) {
+            lastSuccessKey = key;
+            continue;
+          }
+
+          results.set(key, { status: "extracting" });
           setExtractionResults(new Map(results));
 
           try {
             const extractionResult = await sidecarApi.extractFile(file);
-            results.set(key, { status: "success", result: extractionResult, detectionStatus: "detecting" });
+            results.set(key, { status: "success", result: extractionResult });
             lastSuccessKey = key;
             setExtractionResults(new Map(results));
-            // Fire non-blocking detection for this entry
-            const detKey = key;
-            sidecarApi
-              .detectTestType(extractionResult, testTypeHint || undefined)
-              .then((res) => {
-                setExtractionResults((prev) => {
-                  const next = new Map(prev);
-                  const entry = next.get(detKey);
-                  if (!entry) return prev;
-                  const ds: DetectionStatus = res.confidence >= 0.4 && res.test_type != null
-                    ? "success"
-                    : res.confidence > 0 && res.test_type != null
-                      ? "low_confidence"
-                      : "failed";
-                  next.set(detKey, { ...entry, detectionStatus: ds, detectionResult: res });
-                  return next;
-                });
-              })
-              .catch(() => {
-                setExtractionResults((prev) => {
-                  const next = new Map(prev);
-                  const entry = next.get(detKey);
-                  if (!entry) return prev;
-                  next.set(detKey, { ...entry, detectionStatus: "error" });
-                  return next;
-                });
-              });
-          } catch (err) {
-            const msg =
-              err instanceof Error ? err.message : "Extraction failed.";
-            results.set(key, { status: "error", error: msg });
-            setExtractionResults(new Map(results));
-          }
-        }
-
-        // Extract text entries
-        for (const entry of nonEmptyText) {
-          const key = textEntryKey(entry);
-          results.set(key, { status: "extracting", detectionStatus: "detecting" });
-          setExtractionResults(new Map(results));
-
-          try {
-            const extractionResult = await sidecarApi.extractText(entry.text);
-            extractionResult.filename = entry.label;
-            results.set(key, { status: "success", result: extractionResult, detectionStatus: "detecting" });
-            lastSuccessKey = key;
-            setExtractionResults(new Map(results));
-            // Fire non-blocking detection for this entry
-            const detKey = key;
-            sidecarApi
-              .detectTestType(extractionResult, testTypeHint || undefined)
-              .then((res) => {
-                setExtractionResults((prev) => {
-                  const next = new Map(prev);
-                  const ent = next.get(detKey);
-                  if (!ent) return prev;
-                  const ds: DetectionStatus = res.confidence >= 0.4 && res.test_type != null
-                    ? "success"
-                    : res.confidence > 0 && res.test_type != null
-                      ? "low_confidence"
-                      : "failed";
-                  next.set(detKey, { ...ent, detectionStatus: ds, detectionResult: res });
-                  return next;
-                });
-              })
-              .catch(() => {
-                setExtractionResults((prev) => {
-                  const next = new Map(prev);
-                  const ent = next.get(detKey);
-                  if (!ent) return prev;
-                  next.set(detKey, { ...ent, detectionStatus: "error" });
-                  return next;
-                });
-              });
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Extraction failed.";
             results.set(key, { status: "error", error: msg });
             setExtractionResults(new Map(results));
           }
+        }
+
+        // Phase 1b: Extract all text entries (sequential, skip already-extracted)
+        for (const entry of nonEmptyText) {
+          const key = textEntryKey(entry);
+          const existing = results.get(key);
+          if (existing?.status === "success" && existing.result) {
+            lastSuccessKey = key;
+            continue;
+          }
+
+          results.set(key, { status: "extracting" });
+          setExtractionResults(new Map(results));
+
+          try {
+            const extractionResult = await sidecarApi.extractText(entry.text);
+            extractionResult.filename = entry.label;
+            results.set(key, { status: "success", result: extractionResult });
+            lastSuccessKey = key;
+            setExtractionResults(new Map(results));
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Extraction failed.";
+            results.set(key, { status: "error", error: msg });
+            setExtractionResults(new Map(results));
+          }
+        }
+
+        // Phase 2: Detect types sequentially (no concurrent sidecar calls)
+        const keysToDetect = [...results.entries()]
+          .filter(([, e]) => e.status === "success" && e.result && !e.detectionResult)
+          .map(([k]) => k);
+
+        for (const detKey of keysToDetect) {
+          const entry = results.get(detKey)!;
+          results.set(detKey, { ...entry, detectionStatus: "detecting" });
+          setExtractionResults(new Map(results));
+
+          try {
+            const res = await sidecarApi.detectTestType(entry.result!, testTypeHint || undefined);
+            const ds: DetectionStatus = res.confidence >= 0.4 && res.test_type != null
+              ? "success"
+              : res.confidence > 0 && res.test_type != null
+                ? "low_confidence"
+                : "failed";
+            results.set(detKey, { ...results.get(detKey)!, detectionStatus: ds, detectionResult: res });
+          } catch {
+            results.set(detKey, { ...results.get(detKey)!, detectionStatus: "error" });
+          }
+          setExtractionResults(new Map(results));
         }
 
         // Count successes
@@ -651,11 +639,31 @@ export function ImportScreen() {
   }, [selectedFiles, pastedText, textEntries, showToast, navigate]);
 
   const handleProceed = useCallback(() => {
-    if (result && resolvedTestType) {
+    // Collect all successful extraction results
+    const successfulResults: Array<{ key: string; result: ExtractionResult }> = [];
+    const testTypes: Record<string, string> = {};
+    for (const [key, entry] of extractionResults) {
+      if (entry.status === "success" && entry.result) {
+        successfulResults.push({ key, result: entry.result });
+        const entryType = resolveEntryTestType(entry);
+        if (entryType) testTypes[key] = entryType;
+      }
+    }
+
+    // Batch mode: derive primary type from first entry
+    const isBatch = successfulResults.length > 1;
+    const effectiveTestType = isBatch
+      ? (testTypes[successfulResults[0].key] ?? resolvedTestType)
+      : resolvedTestType;
+    const effectiveResult = isBatch
+      ? (successfulResults[0].result ?? result)
+      : result;
+
+    if (effectiveResult && effectiveTestType) {
       const state: Record<string, unknown> = {
-        extractionResult: result,
+        extractionResult: effectiveResult,
         clinicalContext: clinicalContext.trim() || undefined,
-        testType: resolvedTestType,
+        testType: effectiveTestType,
         quickReasons: selectedReasons.size > 0 ? Array.from(selectedReasons) : undefined,
       };
       if (selectedTemplateValue.startsWith("own:")) {
@@ -663,17 +671,7 @@ export function ImportScreen() {
       } else if (selectedTemplateValue.startsWith("shared:")) {
         state.sharedTemplateSyncId = selectedTemplateValue.slice(7);
       }
-      // Collect all successful extraction results for batch processing
-      const successfulResults: Array<{ key: string; result: ExtractionResult }> = [];
-      const testTypes: Record<string, string> = {};
-      for (const [key, entry] of extractionResults) {
-        if (entry.status === "success" && entry.result) {
-          successfulResults.push({ key, result: entry.result });
-          const entryType = resolveEntryTestType(entry);
-          if (entryType) testTypes[key] = entryType;
-        }
-      }
-      if (successfulResults.length > 1) {
+      if (isBatch) {
         state.batchExtractionResults = successfulResults;
         state.testTypes = testTypes;
       }
@@ -1242,8 +1240,8 @@ export function ImportScreen() {
                 disabled={(() => {
                   const successEntries = [...extractionResults.values()].filter(e => e.status === "success");
                   if (successEntries.length > 1) {
-                    // Batch mode: all successful entries must have a resolved type
-                    return successEntries.some(e => !resolveEntryTestType(e) || e.detectionStatus === "detecting");
+                    // Batch mode: block only while detection is still running
+                    return successEntries.some(e => e.detectionStatus === "detecting");
                   }
                   return !resolvedTestType || detectionStatus === "detecting";
                 })()}

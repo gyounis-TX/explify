@@ -823,6 +823,16 @@ export function ResultsScreen() {
             <h2 className="results-title">Generated Letter</h2>
           </header>
 
+          <div className="refine-toolbar">
+            <button
+              className="refine-btn"
+              onClick={handleRefineLetter}
+              disabled={isRefiningLetter}
+            >
+              {isRefiningLetter ? "Regenerating\u2026" : "Regenerate"}
+            </button>
+          </div>
+
           <div className="results-comment-panel">
             <div className="comment-panel-header">
               <h3>Result Comment</h3>
@@ -1058,6 +1068,7 @@ export function ResultsScreen() {
               isLiked={isLiked}
               onToggleLike={handleToggleLike}
               smsEnabled={smsEnabled}
+              testTypeDisplay={effectiveTestTypeDisplay}
             />
 
             {sectionSettings.include_key_findings && (

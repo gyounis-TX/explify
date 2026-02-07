@@ -59,6 +59,9 @@ export function AdminScreen() {
   const [provider, setProvider] = useState<LLMProvider>("claude");
   const [claudeKey, setClaudeKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
+  const [awsAccessKey, setAwsAccessKey] = useState("");
+  const [awsSecretKey, setAwsSecretKey] = useState("");
+  const [awsRegion, setAwsRegion] = useState("us-east-1");
   const [claudeModel, setClaudeModel] = useState("");
   const [openaiModel, setOpenaiModel] = useState("");
 
@@ -78,6 +81,7 @@ export function AdminScreen() {
         setProvider(s.llm_provider);
         setClaudeModel(s.claude_model ?? "");
         setOpenaiModel(s.openai_model ?? "");
+        setAwsRegion(s.aws_region ?? "us-east-1");
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Failed to load settings";
@@ -126,6 +130,7 @@ export function AdminScreen() {
         llm_provider: provider,
         claude_model: claudeModel.trim() || null,
         openai_model: openaiModel.trim() || null,
+        aws_region: awsRegion,
       };
       if (claudeKey.trim()) {
         update.claude_api_key = claudeKey.trim();
@@ -133,12 +138,20 @@ export function AdminScreen() {
       if (openaiKey.trim()) {
         update.openai_api_key = openaiKey.trim();
       }
+      if (awsAccessKey.trim()) {
+        update.aws_access_key_id = awsAccessKey.trim();
+      }
+      if (awsSecretKey.trim()) {
+        update.aws_secret_access_key = awsSecretKey.trim();
+      }
 
       const updated = await sidecarApi.updateSettings(update);
       setSettings(updated);
       setSuccess(true);
       setClaudeKey("");
       setOpenaiKey("");
+      setAwsAccessKey("");
+      setAwsSecretKey("");
       showToast("success", "AI model settings saved.");
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -149,14 +162,26 @@ export function AdminScreen() {
     } finally {
       setSaving(false);
     }
-  }, [provider, claudeKey, openaiKey, claudeModel, openaiModel, showToast]);
+  }, [provider, claudeKey, openaiKey, awsAccessKey, awsSecretKey, awsRegion, claudeModel, openaiModel, showToast]);
 
   const handleDeployKey = useCallback(async () => {
     setDeploying(true);
     try {
-      const { key } = await sidecarApi.getRawApiKey("claude");
-      await deploySharedKey("claude_api_key", key);
-      showToast("success", "Claude API key deployed to all users.");
+      if (provider === "bedrock") {
+        const result = await sidecarApi.getRawApiKey("bedrock");
+        if (!result.credentials) throw new Error("No AWS credentials configured.");
+        await deploySharedKey("aws_access_key_id", result.credentials.access_key);
+        await deploySharedKey("aws_secret_access_key", result.credentials.secret_key);
+        await deploySharedKey("aws_region", result.credentials.region);
+        await deploySharedKey("llm_provider", "bedrock");
+        showToast("success", "AWS Bedrock credentials deployed to all users.");
+      } else {
+        const { key } = await sidecarApi.getRawApiKey("claude");
+        if (!key) throw new Error("No Claude API key configured.");
+        await deploySharedKey("claude_api_key", key);
+        await deploySharedKey("llm_provider", "claude");
+        showToast("success", "Claude API key deployed to all users.");
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to deploy key";
@@ -164,7 +189,7 @@ export function AdminScreen() {
     } finally {
       setDeploying(false);
     }
-  }, [showToast]);
+  }, [provider, showToast]);
 
   if (loading) {
     return (
@@ -194,55 +219,129 @@ export function AdminScreen() {
             Claude (Anthropic)
           </button>
           <button
+            className={`provider-btn ${provider === "bedrock" ? "provider-btn--active" : ""}`}
+            onClick={() => setProvider("bedrock")}
+          >
+            AWS Bedrock
+          </button>
+          <button
             className={`provider-btn ${provider === "openai" ? "provider-btn--active" : ""}`}
             onClick={() => setProvider("openai")}
           >
             OpenAI
           </button>
         </div>
+        {provider === "bedrock" && (
+          <p className="settings-description" style={{ marginTop: "var(--space-sm)" }}>
+            Uses Claude models via AWS Bedrock. Covered under your AWS BAA for HIPAA compliance.
+          </p>
+        )}
       </section>
 
-      {/* API Keys */}
+      {/* API Keys / AWS Credentials */}
       <section className="settings-section">
-        <h3 className="settings-section-title">API Keys</h3>
-        <div className="form-group">
-          <label className="form-label">
-            Claude API Key
-            {settings?.claude_api_key && (
-              <span className="key-status key-status--set">Configured</span>
-            )}
-          </label>
-          <input
-            type="password"
-            className="form-input"
-            placeholder={
-              settings?.claude_api_key
-                ? "Enter new key to replace"
-                : "sk-ant-..."
-            }
-            value={claudeKey}
-            onChange={(e) => setClaudeKey(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">
-            OpenAI API Key
-            {settings?.openai_api_key && (
-              <span className="key-status key-status--set">Configured</span>
-            )}
-          </label>
-          <input
-            type="password"
-            className="form-input"
-            placeholder={
-              settings?.openai_api_key
-                ? "Enter new key to replace"
-                : "sk-..."
-            }
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-          />
-        </div>
+        <h3 className="settings-section-title">
+          {provider === "bedrock" ? "AWS Credentials" : "API Keys"}
+        </h3>
+
+        {provider === "bedrock" ? (
+          <>
+            <div className="form-group">
+              <label className="form-label">
+                AWS Access Key ID
+                {settings?.aws_access_key_id && (
+                  <span className="key-status key-status--set">Configured</span>
+                )}
+              </label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder={
+                  settings?.aws_access_key_id
+                    ? "Enter new key to replace"
+                    : "AKIA..."
+                }
+                value={awsAccessKey}
+                onChange={(e) => setAwsAccessKey(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">
+                AWS Secret Access Key
+                {settings?.aws_secret_access_key && (
+                  <span className="key-status key-status--set">Configured</span>
+                )}
+              </label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder={
+                  settings?.aws_secret_access_key
+                    ? "Enter new key to replace"
+                    : "Secret access key"
+                }
+                value={awsSecretKey}
+                onChange={(e) => setAwsSecretKey(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">AWS Region</label>
+              <select
+                className="form-input"
+                value={awsRegion}
+                onChange={(e) => setAwsRegion(e.target.value)}
+              >
+                <option value="us-east-1">US East (N. Virginia)</option>
+                <option value="us-west-2">US West (Oregon)</option>
+                <option value="eu-west-1">EU West (Ireland)</option>
+                <option value="eu-central-1">EU Central (Frankfurt)</option>
+                <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+              </select>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="form-group">
+              <label className="form-label">
+                Claude API Key
+                {settings?.claude_api_key && (
+                  <span className="key-status key-status--set">Configured</span>
+                )}
+              </label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder={
+                  settings?.claude_api_key
+                    ? "Enter new key to replace"
+                    : "sk-ant-..."
+                }
+                value={claudeKey}
+                onChange={(e) => setClaudeKey(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">
+                OpenAI API Key
+                {settings?.openai_api_key && (
+                  <span className="key-status key-status--set">Configured</span>
+                )}
+              </label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder={
+                  settings?.openai_api_key
+                    ? "Enter new key to replace"
+                    : "sk-..."
+                }
+                value={openaiKey}
+                onChange={(e) => setOpenaiKey(e.target.value)}
+              />
+            </div>
+          </>
+        )}
       </section>
 
       {/* Model Override */}
@@ -254,26 +353,30 @@ export function AdminScreen() {
         >
           Leave blank to use the default model for each provider.
         </p>
-        <div className="form-group">
-          <label className="form-label">Claude Model</label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g. claude-sonnet-4-20250514"
-            value={claudeModel}
-            onChange={(e) => setClaudeModel(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">OpenAI Model</label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g. gpt-4o"
-            value={openaiModel}
-            onChange={(e) => setOpenaiModel(e.target.value)}
-          />
-        </div>
+        {provider !== "openai" && (
+          <div className="form-group">
+            <label className="form-label">Claude Model</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. claude-sonnet-4-20250514"
+              value={claudeModel}
+              onChange={(e) => setClaudeModel(e.target.value)}
+            />
+          </div>
+        )}
+        {provider === "openai" && (
+          <div className="form-group">
+            <label className="form-label">OpenAI Model</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. gpt-4o"
+              value={openaiModel}
+              onChange={(e) => setOpenaiModel(e.target.value)}
+            />
+          </div>
+        )}
       </section>
 
       {/* Save */}
@@ -289,8 +392,9 @@ export function AdminScreen() {
       <section className="settings-section admin-deploy-section">
         <h3 className="settings-section-title">Deploy API Key</h3>
         <p className="settings-description">
-          Push your locally configured Claude API key to all users via Supabase.
-          Users will receive the key automatically on their next sync.
+          {provider === "bedrock"
+            ? "Push your AWS Bedrock credentials to all users via Supabase. Users will receive the credentials and provider setting automatically on their next sync."
+            : "Push your locally configured Claude API key to all users via Supabase. Users will receive the key automatically on their next sync."}
         </p>
         <button
           className="deploy-btn"
@@ -299,7 +403,9 @@ export function AdminScreen() {
         >
           {deploying
             ? "Deploying..."
-            : "Deploy Claude Key to All Users"}
+            : provider === "bedrock"
+              ? "Deploy AWS Credentials to All Users"
+              : "Deploy Claude Key to All Users"}
         </button>
       </section>
 
@@ -379,6 +485,7 @@ export function AdminScreen() {
                 <thead>
                   <tr>
                     <th>Email</th>
+                    <th>Version</th>
                     <th>Signed Up</th>
                     <th>Queries</th>
                     <th>Sonnet Tokens</th>
@@ -397,6 +504,7 @@ export function AdminScreen() {
                     return (
                       <tr key={user.user_id}>
                         <td>{user.email}</td>
+                        <td>{user.app_version ?? "—"}</td>
                         <td>
                           {new Date(user.created_at).toLocaleDateString()}
                         </td>
@@ -446,7 +554,7 @@ export function AdminScreen() {
                           </>
                         ) : (
                           <>
-                            <td colSpan={7} className="no-usage">
+                            <td colSpan={8} className="no-usage">
                               No usage data
                             </td>
                           </>
