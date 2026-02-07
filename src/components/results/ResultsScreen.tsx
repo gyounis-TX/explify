@@ -4,7 +4,6 @@ import type {
   ExplainResponse,
   ExtractionResult,
   MeasurementExplanation,
-  FindingExplanation,
   ParsedMeasurement,
   LiteracyLevel,
   ExplanationVoice,
@@ -18,54 +17,13 @@ import { sidecarApi } from "../../services/sidecarApi";
 import { logUsage } from "../../services/usageTracker";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
-import { GlossaryTooltip } from "./GlossaryTooltip";
 import { clearImportCache } from "../import/ImportScreen";
+import { CommentPanel } from "./CommentPanel";
+import { KeyFindingsPanel } from "./KeyFindingsPanel";
+import { MeasurementsTable } from "./MeasurementsTable";
+import { RefinementSidebar } from "./RefinementSidebar";
+import { TeachingPointsPanel } from "./TeachingPointsPanel";
 import "./ResultsScreen.css";
-
-const SEVERITY_LABELS: Record<string, string> = {
-  normal: "Normal",
-  mildly_abnormal: "Mildly Abnormal",
-  moderately_abnormal: "Moderately Abnormal",
-  severely_abnormal: "Severely Abnormal",
-  critical: "CRITICAL",
-  undetermined: "Undetermined",
-};
-
-const SEVERITY_ICONS: Record<string, string> = {
-  normal: "\u2713",
-  mildly_abnormal: "\u26A0",
-  moderately_abnormal: "\u25B2",
-  severely_abnormal: "\u2716",
-  critical: "\u26A0\u26A0",  // Double warning for critical
-  undetermined: "\u2014",
-};
-
-const FINDING_SEVERITY_COLORS: Record<string, string> = {
-  normal: "var(--color-accent-600)",
-  mild: "#d97706",
-  moderate: "#ea580c",
-  severe: "#dc2626",
-  informational: "var(--color-primary-600)",
-};
-
-const FINDING_SEVERITY_ICONS: Record<string, string> = {
-  normal: "\u2713",
-  mild: "\u26A0",
-  moderate: "\u25B2",
-  severe: "\u2716",
-  informational: "\u24D8",
-};
-
-const TONE_LABELS = ["", "Concerning", "Straightforward", "Neutral", "Reassuring", "Very Reassuring"];
-const DETAIL_LABELS = ["", "Minimal", "Concise", "Moderate", "Detailed", "Very Detailed"];
-
-const LITERACY_OPTIONS: { value: LiteracyLevel; label: string }[] = [
-  { value: "grade_4", label: "Grade 4" },
-  { value: "grade_6", label: "Grade 6" },
-  { value: "grade_8", label: "Grade 8" },
-  { value: "grade_12", label: "Grade 12" },
-  { value: "clinical", label: "Clinical" },
-];
 
 function replacePhysician(text: string, physicianName?: string): string {
   if (!physicianName) return text;
@@ -149,10 +107,11 @@ export function ResultsScreen() {
     letterId?: number;
     letterContent?: string;
     letterPrompt?: string;
+    batchResponses?: ExplainResponse[];
+    batchLabels?: string[];
   } | null;
 
   // Restore from sessionStorage if location.state is empty (e.g. after Settings round-trip).
-  // If locationState carries a fresh explainResponse, this is a NEW report — ignore stale session.
   const session = locationState?.explainResponse ? null : loadSessionState();
   const initialResponse = (locationState?.explainResponse
     ?? session?.explainResponse as ExplainResponse | undefined) ?? null;
@@ -163,6 +122,12 @@ export function ResultsScreen() {
   const clinicalContext = locationState?.clinicalContext ?? (session?.clinicalContext as string | undefined);
   const quickReasons = locationState?.quickReasons ?? (session?.quickReasons as string[] | undefined);
 
+  // Batch mode state
+  const batchResponses = locationState?.batchResponses;
+  const batchLabels = locationState?.batchLabels;
+  const isBatchMode = batchResponses != null && batchResponses.length > 1;
+  const [activeResultTab, setActiveResultTab] = useState(0);
+
   // Letter mode state
   const letterMode = locationState?.letterMode ?? false;
   const [letterContent, setLetterContent] = useState(locationState?.letterContent ?? "");
@@ -171,9 +136,8 @@ export function ResultsScreen() {
   const [isRefiningLetter, setIsRefiningLetter] = useState(false);
   const [letterRefineText, setLetterRefineText] = useState("");
 
-  const { showToast } = useToast();
-  const [currentResponse, setCurrentResponse] =
-    useState<ExplainResponse | null>(initialResponse);
+  const { showToast, showUndoToast } = useToast();
+  const [currentResponse, setCurrentResponse] = useState<ExplainResponse | null>(initialResponse);
   const [glossary, setGlossary] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [isLiked, setIsLiked] = useState(
@@ -193,7 +157,7 @@ export function ResultsScreen() {
   const [detailSlider, setDetailSlider] = useState(3);
   const [isSpanish, setIsSpanish] = useState(false);
 
-  // Comment panel state — default to short since that's what we generate first
+  // Comment panel state
   const [commentMode, setCommentMode] = useState<"long" | "short" | "sms">("short");
   const [shortCommentText, setShortCommentText] = useState<string | null>(
     initialResponse?.explanation?.overall_summary ?? null,
@@ -207,42 +171,34 @@ export function ResultsScreen() {
   const [isGeneratingSms, setIsGeneratingSms] = useState(false);
   const [smsEnabled, setSmsEnabled] = useState(false);
 
-  // Deep analysis state
+  // Deep analysis & mode toggles
   const [deepAnalysis, setDeepAnalysis] = useState(false);
-
-  // High anxiety mode — maximizes reassurance and avoids alarming language
   const [highAnxietyMode, setHighAnxietyMode] = useState(false);
-
-  // Analogy mode — includes size comparisons and everyday analogies
+  const [anxietyLevel, setAnxietyLevel] = useState(0);
   const [useAnalogies, setUseAnalogies] = useState(true);
 
-  // Physician voice & attribution state
+  // Physician voice & attribution
   const [explanationVoice, setExplanationVoice] = useState<ExplanationVoice>("third_person");
   const [nameDrop, setNameDrop] = useState(true);
   const [practiceProviders, setPracticeProviders] = useState<string[]>([]);
   const [physicianOverride, setPhysicianOverride] = useState<string | null>(null);
 
-  // Next steps state
+  // Next steps
   const [nextStepsOptions, setNextStepsOptions] = useState<string[]>([]);
-  const [checkedNextSteps, setCheckedNextSteps] = useState<Set<string>>(
-    new Set(["No comment"]),
-  );
+  const [checkedNextSteps, setCheckedNextSteps] = useState<Set<string>>(new Set(["No comment"]));
 
-  // Refinement state
-  const [selectedLiteracy, setSelectedLiteracy] =
-    useState<LiteracyLevel>("grade_8");
+  // Refinement
+  const [selectedLiteracy, setSelectedLiteracy] = useState<LiteracyLevel>("grade_8");
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [refinementInstruction, setRefinementInstruction] = useState("");
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editedSummary, setEditedSummary] = useState("");
-  const [editedFindings, setEditedFindings] = useState<
-    { finding: string; explanation: string }[]
-  >([]);
+  const [editedFindings, setEditedFindings] = useState<{ finding: string; explanation: string }[]>([]);
   const [isDirty, setIsDirty] = useState(false);
 
-  // Settings loaded flag — gate footer rendering until we have real values
+  // Settings loaded flag
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Extracted text state
@@ -256,76 +212,61 @@ export function ResultsScreen() {
   const [sharedTeachingPoints, setSharedTeachingPoints] = useState<SharedTeachingPoint[]>([]);
   const [newTeachingPoint, setNewTeachingPoint] = useState("");
 
-  // Template selection state
+  // Template selection
   const [templates, setTemplates] = useState<Template[]>([]);
   const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(templateId);
 
-  // Test type override — lets the user correct a misdetected type
+  // Test type override
   const [testTypeOverride, setTestTypeOverride] = useState<string | null>(null);
   const effectiveTestType = testTypeOverride?.trim() || currentResponse?.parsed_report.test_type || "";
   const effectiveTestTypeDisplay = testTypeOverride?.trim()
     ? testTypeOverride.trim().replace(/\b\w/g, (c) => c.toUpperCase())
     : currentResponse?.parsed_report.test_type_display || "this type";
 
-  // Draft auto-save key and debounce ref
+  // Draft auto-save
   const draftKey = historyId ? `draft:${historyId}` : null;
   const draftSaveRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // ---------------------------------------------------------------------------
+  // Effects
+  // ---------------------------------------------------------------------------
 
   // Sync edit state when response changes
   useEffect(() => {
     if (!currentResponse) return;
     const expl = currentResponse.explanation;
 
-    // Check for saved draft before overwriting
     if (draftKey) {
       const savedDraft = localStorage.getItem(draftKey);
       if (savedDraft) {
         try {
           const draft = JSON.parse(savedDraft);
-          // Use draft if it exists and has content
           if (draft.summary && draft.summary !== expl.overall_summary) {
             setEditedSummary(draft.summary);
             setIsDirty(true);
             setIsEditing(true);
-            // Restore findings if present
             if (draft.findings) {
               setEditedFindings(draft.findings);
             } else {
-              setEditedFindings(
-                expl.key_findings.map((f) => ({
-                  finding: f.finding,
-                  explanation: f.explanation,
-                })),
-              );
+              setEditedFindings(expl.key_findings.map((f) => ({ finding: f.finding, explanation: f.explanation })));
             }
             return;
           }
-        } catch {
-          // Invalid draft, ignore
-        }
+        } catch { /* Invalid draft, ignore */ }
       }
     }
 
     setEditedSummary(expl.overall_summary);
-    setEditedFindings(
-      expl.key_findings.map((f) => ({
-        finding: f.finding,
-        explanation: f.explanation,
-      })),
-    );
+    setEditedFindings(expl.key_findings.map((f) => ({ finding: f.finding, explanation: f.explanation })));
     setIsDirty(false);
     setIsEditing(false);
   }, [currentResponse, draftKey]);
 
-  // Auto-save draft when editing (debounced)
+  // Auto-save draft when editing
   useEffect(() => {
     if (!draftKey || !isDirty) return;
-
-    if (draftSaveRef.current) {
-      clearTimeout(draftSaveRef.current);
-    }
-
+    if (draftSaveRef.current) clearTimeout(draftSaveRef.current);
     draftSaveRef.current = setTimeout(() => {
       localStorage.setItem(draftKey, JSON.stringify({
         summary: editedSummary,
@@ -333,42 +274,29 @@ export function ResultsScreen() {
         savedAt: new Date().toISOString(),
       }));
     }, 2000);
-
-    return () => {
-      if (draftSaveRef.current) {
-        clearTimeout(draftSaveRef.current);
-      }
-    };
+    return () => { if (draftSaveRef.current) clearTimeout(draftSaveRef.current); };
   }, [draftKey, editedSummary, editedFindings, isDirty]);
 
-  // Clear draft after successful copy
   const clearDraft = useCallback(() => {
-    if (draftKey) {
-      localStorage.removeItem(draftKey);
-    }
+    if (draftKey) localStorage.removeItem(draftKey);
   }, [draftKey]);
 
+  // Load glossary
   useEffect(() => {
     if (!currentResponse) return;
-    const testType = currentResponse.parsed_report.test_type;
     sidecarApi
-      .getGlossary(testType)
+      .getGlossary(currentResponse.parsed_report.test_type)
       .then((res) => setGlossary(res.glossary))
-      .catch(() => {
-        showToast("error", "Could not load glossary for tooltips.");
-      });
+      .catch(() => showToast("error", "Could not load glossary for tooltips."));
   }, [currentResponse, showToast]);
 
+  // Load teaching points
   useEffect(() => {
     if (letterMode) {
-      // In letter mode, load global teaching points (no test type filter)
       Promise.all([
         sidecarApi.listTeachingPoints(),
         sidecarApi.listSharedTeachingPoints().catch(() => [] as SharedTeachingPoint[]),
-      ]).then(([pts, shared]) => {
-        setTeachingPoints(pts);
-        setSharedTeachingPoints(shared);
-      }).catch(() => {});
+      ]).then(([pts, shared]) => { setTeachingPoints(pts); setSharedTeachingPoints(shared); }).catch(() => {});
       return;
     }
     if (!currentResponse) return;
@@ -376,23 +304,18 @@ export function ResultsScreen() {
     Promise.all([
       sidecarApi.listTeachingPoints(testType),
       sidecarApi.listSharedTeachingPoints(testType).catch(() => [] as SharedTeachingPoint[]),
-    ]).then(([pts, shared]) => {
-      setTeachingPoints(pts);
-      setSharedTeachingPoints(shared);
-    }).catch(() => {});
+    ]).then(([pts, shared]) => { setTeachingPoints(pts); setSharedTeachingPoints(shared); }).catch(() => {});
   }, [currentResponse, letterMode]);
 
-  // Fetch templates for template selector
+  // Load templates
   useEffect(() => {
     Promise.all([
       sidecarApi.listTemplates(),
       sidecarApi.listSharedTemplates().catch(() => [] as SharedTemplate[]),
-    ]).then(([res, shared]) => {
-      setTemplates(res.items);
-      setSharedTemplates(shared);
-    }).catch(() => {});
+    ]).then(([res, shared]) => { setTemplates(res.items); setSharedTemplates(shared); }).catch(() => {});
   }, []);
 
+  // Load settings
   useEffect(() => {
     sidecarApi
       .getSettings()
@@ -414,19 +337,14 @@ export function ResultsScreen() {
         setSmsEnabled(s.sms_summary_enabled ?? false);
         setUseAnalogies(s.use_analogies ?? true);
         const src = s.physician_name_source ?? "auto_extract";
-        if (src === "custom" && s.custom_physician_name) {
-          setPhysicianOverride(s.custom_physician_name);
-        } else if (src === "generic") {
-          setPhysicianOverride("");
-        }
+        if (src === "custom" && s.custom_physician_name) setPhysicianOverride(s.custom_physician_name);
+        else if (src === "generic") setPhysicianOverride("");
         setSettingsLoaded(true);
       })
-      .catch(() => {
-        setSettingsLoaded(true);
-      });
+      .catch(() => setSettingsLoaded(true));
   }, []);
 
-  // Persist state to sessionStorage so it survives Settings round-trips
+  // Session persistence
   useEffect(() => {
     if (!currentResponse) return;
     saveSessionState({
@@ -441,7 +359,45 @@ export function ResultsScreen() {
     });
   }, [currentResponse, fromHistory, extractionResult, selectedTemplateId, historyId, isLiked, clinicalContext, quickReasons]);
 
+  // Batch tab switching
+  useEffect(() => {
+    if (!isBatchMode || !batchResponses) return;
+    setCurrentResponse(batchResponses[activeResultTab]);
+    setShortCommentText(batchResponses[activeResultTab].explanation.overall_summary);
+    setLongExplanationResponse(null);
+    setSmsText(null);
+    setIsDirty(false);
+    setIsEditing(false);
+  }, [activeResultTab, isBatchMode, batchResponses]);
+
   const canRefine = !fromHistory && extractionResult != null;
+
+  // ---------------------------------------------------------------------------
+  // Shared request params builder
+  // ---------------------------------------------------------------------------
+  const buildRequestParams = useCallback((overrides: Record<string, unknown> = {}) => ({
+    extraction_result: extractionResult!,
+    test_type: effectiveTestType,
+    literacy_level: selectedLiteracy,
+    template_id: selectedTemplateId,
+    clinical_context: clinicalContext,
+    tone_preference: toneSlider,
+    detail_preference: detailSlider,
+    next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+    explanation_voice: explanationVoice,
+    name_drop: nameDrop,
+    physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
+    deep_analysis: deepAnalysis || undefined,
+    high_anxiety_mode: highAnxietyMode || undefined,
+    anxiety_level: anxietyLevel || undefined,
+    quick_reasons: quickReasons,
+    use_analogies: useAnalogies,
+    ...overrides,
+  }), [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, deepAnalysis, highAnxietyMode, anxietyLevel, quickReasons, useAnalogies]);
+
+  // ---------------------------------------------------------------------------
+  // Callbacks
+  // ---------------------------------------------------------------------------
 
   const handleRegenerate = useCallback(async () => {
     if (!extractionResult) return;
@@ -449,65 +405,36 @@ export function ResultsScreen() {
     const isShort = commentMode === "short";
     const isSms = commentMode === "sms";
     try {
-      const response = await sidecarApi.explainReport({
-        extraction_result: extractionResult,
-        test_type: effectiveTestType,
-        literacy_level: selectedLiteracy,
-        template_id: selectedTemplateId,
-        clinical_context: clinicalContext,
-        tone_preference: toneSlider,
-        detail_preference: detailSlider,
-        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+      const response = await sidecarApi.explainReport(buildRequestParams({
         short_comment: isShort,
         sms_summary: isSms,
-        explanation_voice: explanationVoice,
-        name_drop: nameDrop,
-        physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
         include_key_findings: (isShort || isSms) ? true : sectionSettings.include_key_findings,
         include_measurements: (isShort || isSms) ? true : sectionSettings.include_measurements,
         refinement_instruction: refinementInstruction.trim() || undefined,
-        deep_analysis: deepAnalysis || undefined,
-        high_anxiety_mode: highAnxietyMode || undefined,
-        quick_reasons: quickReasons,
-        use_analogies: useAnalogies,
-      });
-      if (isSms) {
-        setSmsText(response.explanation.overall_summary);
-      } else if (isShort) {
-        setShortCommentText(response.explanation.overall_summary);
-      } else {
-        setLongExplanationResponse(response);
-      }
+      }));
+      if (isSms) setSmsText(response.explanation.overall_summary);
+      else if (isShort) setShortCommentText(response.explanation.overall_summary);
+      else setLongExplanationResponse(response);
       setCurrentResponse(response);
-      logUsage({
-        model_used: response.model_used,
-        input_tokens: response.input_tokens,
-        output_tokens: response.output_tokens,
-        request_type: "explain",
-        deep_analysis: deepAnalysis,
-      });
+      logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
       showToast("success", "Explanation regenerated.");
     } catch {
       showToast("error", "Failed to regenerate explanation.");
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, deepAnalysis, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, commentMode, buildRequestParams, sectionSettings, refinementInstruction, deepAnalysis, showToast]);
 
   const handleTranslateToggle = useCallback(async () => {
     const translatingToSpanish = !isSpanish;
 
-    // Letter mode: translate via generateLetter
     if (letterMode) {
       setIsRefiningLetter(true);
       try {
         const translatePrompt = translatingToSpanish
           ? `${letterPrompt}\n\nTranslate the entire letter into Spanish. Keep all medical values and units in their original form. Use simple, patient-friendly Spanish.`
           : letterPrompt;
-        const refined = await sidecarApi.generateLetter({
-          prompt: translatePrompt,
-          letter_type: "general",
-        });
+        const refined = await sidecarApi.generateLetter({ prompt: translatePrompt, letter_type: "general" });
         setLetterContent(refined.content);
         setIsSpanish(translatingToSpanish);
         showToast("success", translatingToSpanish ? "Translated to Spanish." : "Translated to English.");
@@ -524,45 +451,20 @@ export function ResultsScreen() {
     const isShort = commentMode === "short";
     const isSms = commentMode === "sms";
     try {
-      const response = await sidecarApi.explainReport({
-        extraction_result: extractionResult,
-        test_type: effectiveTestType,
-        literacy_level: selectedLiteracy,
-        template_id: selectedTemplateId,
-        clinical_context: clinicalContext,
-        tone_preference: toneSlider,
-        detail_preference: detailSlider,
-        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+      const response = await sidecarApi.explainReport(buildRequestParams({
         short_comment: isShort,
         sms_summary: isSms,
-        explanation_voice: explanationVoice,
-        name_drop: nameDrop,
-        physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
         include_key_findings: (isShort || isSms) ? true : sectionSettings.include_key_findings,
         include_measurements: (isShort || isSms) ? true : sectionSettings.include_measurements,
         refinement_instruction: translatingToSpanish
           ? "Translate the entire explanation into Spanish. Keep all medical values and units in their original form. Use simple, patient-friendly Spanish."
           : undefined,
-        deep_analysis: deepAnalysis || undefined,
-        high_anxiety_mode: highAnxietyMode || undefined,
-        quick_reasons: quickReasons,
-        use_analogies: useAnalogies,
-      });
-      if (isSms) {
-        setSmsText(response.explanation.overall_summary);
-      } else if (isShort) {
-        setShortCommentText(response.explanation.overall_summary);
-      } else {
-        setLongExplanationResponse(response);
-      }
+      }));
+      if (isSms) setSmsText(response.explanation.overall_summary);
+      else if (isShort) setShortCommentText(response.explanation.overall_summary);
+      else setLongExplanationResponse(response);
       setCurrentResponse(response);
-      logUsage({
-        model_used: response.model_used,
-        input_tokens: response.input_tokens,
-        output_tokens: response.output_tokens,
-        request_type: "explain",
-        deep_analysis: deepAnalysis,
-      });
+      logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
       setIsSpanish(translatingToSpanish);
       showToast("success", translatingToSpanish ? "Translated to Spanish." : "Translated to English.");
     } catch {
@@ -570,7 +472,7 @@ export function ResultsScreen() {
     } finally {
       setIsRegenerating(false);
     }
-  }, [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, commentMode, isSpanish, explanationVoice, nameDrop, physicianOverride, sectionSettings, deepAnalysis, highAnxietyMode, useAnalogies, showToast, letterMode, letterPrompt]);
+  }, [extractionResult, commentMode, isSpanish, buildRequestParams, sectionSettings, deepAnalysis, showToast, letterMode, letterPrompt]);
 
   const handleExportPdf = useCallback(async () => {
     if (!currentResponse) return;
@@ -614,7 +516,6 @@ export function ResultsScreen() {
     let id = historyId;
     try {
       if (id == null) {
-        // Auto-save to history first
         const detail = await sidecarApi.saveHistory({
           test_type: effectiveTestType,
           test_type_display: currentResponse.parsed_report.test_type_display,
@@ -638,222 +539,112 @@ export function ResultsScreen() {
       await sidecarApi.toggleHistoryLiked(id, newLiked);
       setIsLiked(newLiked);
       queueUpsertAfterMutation("history", id).catch(() => {});
-      showToast(
-        "success",
-        newLiked
-          ? "Will process more like this in the future."
-          : "Like removed.",
-      );
+      showToast("success", newLiked ? "Will process more like this in the future." : "Like removed.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       showToast("error", `Failed to update like status: ${msg}`);
     }
-  }, [currentResponse, historyId, isLiked, toneSlider, detailSlider, showToast]);
+  }, [currentResponse, historyId, isLiked, effectiveTestType, toneSlider, detailSlider, showToast]);
 
-  const markDirty = () => {
-    if (!isDirty) setIsDirty(true);
-  };
+  const markDirty = () => { if (!isDirty) setIsDirty(true); };
 
-  // Generate short comment on demand
+  // On-demand comment generators
   const generateShortComment = useCallback(async () => {
     if (!extractionResult || !currentResponse) return;
     setIsGeneratingComment(true);
     try {
-      const response = await sidecarApi.explainReport({
-        extraction_result: extractionResult,
-        test_type: effectiveTestType,
-        literacy_level: selectedLiteracy,
-        template_id: selectedTemplateId,
-        clinical_context: clinicalContext,
-        tone_preference: toneSlider,
-        detail_preference: detailSlider,
-        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+      const response = await sidecarApi.explainReport(buildRequestParams({
         short_comment: true,
-        explanation_voice: explanationVoice,
-        name_drop: nameDrop,
-        physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
         include_key_findings: true,
         include_measurements: true,
-        deep_analysis: deepAnalysis || undefined,
-        high_anxiety_mode: highAnxietyMode || undefined,
-        quick_reasons: quickReasons,
-        use_analogies: useAnalogies,
-      });
+      }));
       setShortCommentText(response.explanation.overall_summary);
-      logUsage({
-        model_used: response.model_used,
-        input_tokens: response.input_tokens,
-        output_tokens: response.output_tokens,
-        request_type: "explain",
-        deep_analysis: deepAnalysis,
-      });
+      logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
     } catch {
       showToast("error", "Failed to generate short comment.");
     } finally {
       setIsGeneratingComment(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, selectedTemplateId, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, currentResponse, buildRequestParams, deepAnalysis, showToast]);
 
-  // Generate long explanation on demand when user switches to "long" tab
   const generateLongExplanation = useCallback(async () => {
     if (!extractionResult || !currentResponse) return;
     setIsGeneratingLong(true);
     try {
-      const response = await sidecarApi.explainReport({
-        extraction_result: extractionResult,
-        test_type: effectiveTestType,
-        literacy_level: selectedLiteracy,
-        template_id: selectedTemplateId,
-        clinical_context: clinicalContext,
-        tone_preference: toneSlider,
-        detail_preference: detailSlider,
-        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+      const response = await sidecarApi.explainReport(buildRequestParams({
         short_comment: false,
-        explanation_voice: explanationVoice,
-        name_drop: nameDrop,
-        physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
         include_key_findings: sectionSettings.include_key_findings,
         include_measurements: sectionSettings.include_measurements,
         refinement_instruction: refinementInstruction.trim() || undefined,
-        deep_analysis: deepAnalysis || undefined,
-        high_anxiety_mode: highAnxietyMode || undefined,
-        quick_reasons: quickReasons,
-        use_analogies: useAnalogies,
-      });
+      }));
       setLongExplanationResponse(response);
-      logUsage({
-        model_used: response.model_used,
-        input_tokens: response.input_tokens,
-        output_tokens: response.output_tokens,
-        request_type: "explain",
-        deep_analysis: deepAnalysis,
-      });
+      logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
     } catch {
       showToast("error", "Failed to generate detailed explanation.");
     } finally {
       setIsGeneratingLong(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, sectionSettings, refinementInstruction, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, currentResponse, buildRequestParams, sectionSettings, refinementInstruction, deepAnalysis, showToast]);
 
-  // Generate SMS summary on demand
   const generateSmsText = useCallback(async () => {
     if (!extractionResult || !currentResponse) return;
     setIsGeneratingSms(true);
     try {
-      const response = await sidecarApi.explainReport({
-        extraction_result: extractionResult,
-        test_type: effectiveTestType,
-        literacy_level: selectedLiteracy,
-        template_id: selectedTemplateId,
-        clinical_context: clinicalContext,
-        tone_preference: toneSlider,
-        detail_preference: detailSlider,
-        next_steps: [...checkedNextSteps].filter(s => s !== "No comment"),
+      const response = await sidecarApi.explainReport(buildRequestParams({
         sms_summary: true,
-        explanation_voice: explanationVoice,
-        name_drop: nameDrop,
-        physician_name_override: physicianOverride !== null ? (physicianOverride || "") : undefined,
         include_key_findings: true,
         include_measurements: true,
-        deep_analysis: deepAnalysis || undefined,
-        high_anxiety_mode: highAnxietyMode || undefined,
-        quick_reasons: quickReasons,
-        use_analogies: useAnalogies,
-      });
+      }));
       setSmsText(response.explanation.overall_summary);
-      logUsage({
-        model_used: response.model_used,
-        input_tokens: response.input_tokens,
-        output_tokens: response.output_tokens,
-        request_type: "explain",
-        deep_analysis: deepAnalysis,
-      });
+      logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
     } catch {
       setSmsText("");
       showToast("error", "Failed to generate SMS summary.");
     } finally {
       setIsGeneratingSms(false);
     }
-  }, [extractionResult, currentResponse, selectedLiteracy, selectedTemplateId, clinicalContext, quickReasons, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, highAnxietyMode, useAnalogies, showToast]);
+  }, [extractionResult, currentResponse, buildRequestParams, deepAnalysis, showToast]);
 
-  // Generate on-demand when user switches tabs and content isn't cached
+  // Auto-generate on tab switch
   useEffect(() => {
-    if (commentMode === "short" && shortCommentText === null && extractionResult && currentResponse && !isGeneratingComment) {
-      generateShortComment();
-    }
+    if (commentMode === "short" && shortCommentText === null && extractionResult && currentResponse && !isGeneratingComment) generateShortComment();
   }, [commentMode, shortCommentText, extractionResult, currentResponse, isGeneratingComment, generateShortComment]);
 
   useEffect(() => {
-    if (commentMode === "long" && longExplanationResponse === null && extractionResult && currentResponse && !isGeneratingLong) {
-      generateLongExplanation();
-    }
+    if (commentMode === "long" && longExplanationResponse === null && extractionResult && currentResponse && !isGeneratingLong) generateLongExplanation();
   }, [commentMode, longExplanationResponse, extractionResult, currentResponse, isGeneratingLong, generateLongExplanation]);
 
   useEffect(() => {
-    if (commentMode === "sms" && smsText === null && extractionResult && currentResponse && !isGeneratingSms) {
-      generateSmsText();
-    }
+    if (commentMode === "sms" && smsText === null && extractionResult && currentResponse && !isGeneratingSms) generateSmsText();
   }, [commentMode, smsText, extractionResult, currentResponse, isGeneratingSms, generateSmsText]);
 
-  // Compute preview text for comment panel
+  // Compute preview text
   const commentPreviewText = (() => {
     const physician = physicianOverride ?? currentResponse?.physician_name;
-    if (commentMode === "sms") {
-      return replacePhysician(smsText ?? "", physician);
-    }
+    if (commentMode === "sms") return replacePhysician(smsText ?? "", physician);
     if (commentMode === "short") {
       const base = replacePhysician(shortCommentText ?? "", physician);
-      if (computedFooter) {
-        return base + "\n\n" + computedFooter;
-      }
-      return base;
+      return computedFooter ? base + "\n\n" + computedFooter : base;
     }
-    // Long mode: use edited text if dirty, otherwise use the dedicated long explanation
     const longSource = longExplanationResponse ?? currentResponse;
     if (!longSource) return "";
     const expl = longSource.explanation;
-    // Use editedSummary if the user has made edits
-    const summary = replacePhysician(
-      isDirty ? editedSummary : expl.overall_summary,
-      physician,
-    );
-    // Use editedFindings if the user has made edits
+    const summary = replacePhysician(isDirty ? editedSummary : expl.overall_summary, physician);
     const findings = (isDirty ? editedFindings : expl.key_findings).map((f) => ({
       finding: f.finding,
       explanation: replacePhysician(f.explanation, physician),
     }));
-    return buildCopyText(
-      summary,
-      findings,
-      expl.measurements,
-      computedFooter,
-      sectionSettings.include_key_findings,
-      sectionSettings.include_measurements,
-      [...checkedNextSteps],
-    );
+    return buildCopyText(summary, findings, expl.measurements, computedFooter, sectionSettings.include_key_findings, sectionSettings.include_measurements, [...checkedNextSteps]);
   })();
 
   const handleCopyComment = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(commentPreviewText);
       showToast("success", "Copied to clipboard.");
-
-      // Track that this explanation was copied
       if (historyId) {
-        // Fire-and-forget: mark as copied
-        sidecarApi.markHistoryCopied(historyId).catch(() => {
-          // Silently ignore errors
-        });
-
-        // If the user edited the text, save their edited version
-        if (isDirty && commentMode === "long") {
-          sidecarApi.saveEditedText(historyId, editedSummary).catch(() => {
-            // Silently ignore errors
-          });
-        }
+        sidecarApi.markHistoryCopied(historyId).catch(() => {});
+        if (isDirty && commentMode === "long") sidecarApi.saveEditedText(historyId, editedSummary).catch(() => {});
       }
-
-      // Clear draft after successful copy
       clearDraft();
     } catch {
       showToast("error", "Failed to copy to clipboard.");
@@ -885,16 +676,9 @@ export function ResultsScreen() {
     setIsRefiningLetter(true);
     try {
       const parts = [letterPrompt];
-      if (refinementInstruction.trim()) {
-        parts.push(`\n\nRefinement: ${refinementInstruction.trim()}`);
-      }
-      if (letterRefineText.trim()) {
-        parts.push(`\n\nAdditional refinement: ${letterRefineText.trim()}`);
-      }
-      const refined = await sidecarApi.generateLetter({
-        prompt: parts.join(""),
-        letter_type: "general",
-      });
+      if (refinementInstruction.trim()) parts.push(`\n\nRefinement: ${refinementInstruction.trim()}`);
+      if (letterRefineText.trim()) parts.push(`\n\nAdditional refinement: ${letterRefineText.trim()}`);
+      const refined = await sidecarApi.generateLetter({ prompt: parts.join(""), letter_type: "general" });
       setLetterContent(refined.content);
       setLetterRefineText("");
       showToast("success", "Letter refined.");
@@ -905,6 +689,82 @@ export function ResultsScreen() {
     }
   }, [letterPrompt, letterRefineText, refinementInstruction, showToast]);
 
+  const handleEditFinding = useCallback((index: number, field: "finding" | "explanation", value: string) => {
+    const updated = [...editedFindings];
+    updated[index] = { ...updated[index], [field]: value };
+    setEditedFindings(updated);
+    markDirty();
+  }, [editedFindings]);
+
+  // ---------------------------------------------------------------------------
+  // Shared sidebar props
+  // ---------------------------------------------------------------------------
+  const sidebarProps = {
+    refinementInstruction,
+    setRefinementInstruction,
+    selectedTemplateId,
+    setSelectedTemplateId,
+    templates,
+    sharedTemplates,
+    selectedLiteracy,
+    setSelectedLiteracy,
+    toneSlider,
+    setToneSlider,
+    detailSlider,
+    setDetailSlider,
+    highAnxietyMode,
+    setHighAnxietyMode,
+    anxietyLevel,
+    setAnxietyLevel,
+    useAnalogies,
+    setUseAnalogies,
+    deepAnalysis,
+    setDeepAnalysis,
+    sectionSettings,
+    setSectionSettings,
+    explanationVoice,
+    setExplanationVoice,
+    nameDrop,
+    setNameDrop,
+    practiceProviders,
+    physicianOverride,
+    setPhysicianOverride,
+    currentResponse,
+    nextStepsOptions,
+    checkedNextSteps,
+    setCheckedNextSteps,
+    isRegenerating,
+    isSpanish,
+    onRegenerate: handleRegenerate,
+    onTranslateToggle: handleTranslateToggle,
+    extractionResult,
+    showExtractedText,
+    setShowExtractedText,
+    showReportType,
+    setShowReportType,
+    scrubbedText,
+    setScrubbedText,
+    isScrubbing,
+    setIsScrubbing,
+  } as const;
+
+  const teachingProps = {
+    teachingPoints,
+    setTeachingPoints,
+    sharedTeachingPoints,
+    newTeachingPoint,
+    setNewTeachingPoint,
+    effectiveTestType,
+    effectiveTestTypeDisplay,
+    testTypeOverride,
+    setTestTypeOverride,
+    showToast,
+    showUndoToast,
+  } as const;
+
+  // ---------------------------------------------------------------------------
+  // Letter mode render
+  // ---------------------------------------------------------------------------
   if (letterMode) {
     return (
       <div className="results-screen">
@@ -913,7 +773,6 @@ export function ResultsScreen() {
             <h2 className="results-title">Generated Letter</h2>
           </header>
 
-          {/* Letter Comment Panel */}
           <div className="results-comment-panel">
             <div className="comment-panel-header">
               <h3>Result Comment</h3>
@@ -935,390 +794,54 @@ export function ResultsScreen() {
             </button>
           </div>
 
-          {/* Teaching Points */}
-          <details className="teaching-points-panel teaching-points-collapsible">
-            <summary className="teaching-points-header">
-              <h3>Teaching Points</h3>
-              {(teachingPoints.length + sharedTeachingPoints.length) > 0 && (
-                <span className="teaching-points-count">{teachingPoints.length + sharedTeachingPoints.length}</span>
-              )}
-            </summary>
-            <div className="teaching-points-body">
-              <p className="teaching-points-desc">
-                Add personalized instructions that customize how AI generates letters.
-                These points can be stylistic or clinical. Explify will remember and apply these to all future outputs.
-              </p>
-              <div className="teaching-point-input-row">
-                <textarea
-                  className="teaching-point-input"
-                  placeholder="e.g. Always use a warm, conversational tone"
-                  value={newTeachingPoint}
-                  onChange={(e) => setNewTeachingPoint(e.target.value)}
-                  rows={3}
-                />
-                <div className="teaching-point-save-row">
-                  <button
-                    className="teaching-point-save-btn"
-                    disabled={!newTeachingPoint.trim()}
-                    onClick={async () => {
-                      if (!newTeachingPoint.trim()) return;
-                      try {
-                        const tp = await sidecarApi.createTeachingPoint({
-                          text: newTeachingPoint.trim(),
-                        });
-                        setTeachingPoints((prev) => [tp, ...prev]);
-                        setNewTeachingPoint("");
-                        queueUpsertAfterMutation("teaching_points", tp.id).catch(() => {});
-                      } catch {
-                        showToast("error", "Failed to save teaching point.");
-                      }
-                    }}
-                  >
-                    Save for all types
-                  </button>
-                </div>
-              </div>
-              {teachingPoints.length > 0 && (
-                <div className="own-teaching-points">
-                  <span className="own-teaching-points-label">Your teaching points</span>
-                  {teachingPoints.map((tp) => (
-                    <div key={tp.id} className="own-teaching-point-card">
-                      <p className="own-teaching-point-text">{tp.text}</p>
-                      <div className="own-teaching-point-meta">
-                        {tp.test_type ? (
-                          <span className="own-teaching-point-type">{tp.test_type}</span>
-                        ) : (
-                          <span className="own-teaching-point-type own-teaching-point-type--global">All types</span>
-                        )}
-                        <button
-                          className="own-teaching-point-delete"
-                          onClick={async () => {
-                            try {
-                              await sidecarApi.deleteTeachingPoint(tp.id);
-                              setTeachingPoints((prev) => prev.filter((p) => p.id !== tp.id));
-                            } catch {
-                              showToast("error", "Failed to delete teaching point.");
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {sharedTeachingPoints.length > 0 && (
-                <div className="shared-teaching-points">
-                  <span className="shared-teaching-points-label">Shared with you</span>
-                  {sharedTeachingPoints.map((sp) => (
-                    <div key={sp.sync_id} className="shared-teaching-point-card">
-                      <p className="shared-teaching-point-text">{sp.text}</p>
-                      <div className="shared-teaching-point-meta">
-                        <span className="shared-teaching-point-sharer">
-                          Shared by {sp.sharer_email}
-                        </span>
-                        {sp.test_type ? (
-                          <span className="shared-teaching-point-type">{sp.test_type}</span>
-                        ) : (
-                          <span className="shared-teaching-point-type shared-teaching-point-type--global">All types</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </details>
+          <TeachingPointsPanel {...teachingProps} letterMode />
 
           <div className="results-nav-buttons">
             <button
               className="results-back-btn results-back-btn--secondary"
               onClick={() => {
                 clearImportCache();
-                navigate("/", {
-                  state: {
-                    preservedClinicalContext: clinicalContext,
-                    preservedQuickReasons: quickReasons,
-                  },
-                });
+                navigate("/", { state: { preservedClinicalContext: clinicalContext, preservedQuickReasons: quickReasons } });
               }}
             >
               New Report, Same Patient
             </button>
-            <button
-              className="results-back-btn"
-              onClick={() => {
-                clearImportCache();
-                navigate("/");
-              }}
-            >
+            <button className="results-back-btn" onClick={() => { clearImportCache(); navigate("/"); }}>
               Start Fresh (New Patient)
             </button>
           </div>
         </div>
 
-        {/* Right Column — Refine + Settings */}
-        <div className="results-right-column">
-          {/* Refine Panel */}
-          <div className="results-refine-panel">
-            <h3>Refine Context</h3>
-            <textarea
-              className="refine-textarea"
-              placeholder="e.g., Make it shorter, add more detail, emphasize dietary changes..."
-              value={refinementInstruction}
-              onChange={(e) => setRefinementInstruction(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          {/* Result Settings Panel */}
-          <div className="results-settings-panel">
-            <h3>Result Settings</h3>
-
-            {/* Template Selector */}
-            <div className="settings-panel-label">
-              <span>Template</span>
-              <select
-                className="template-select"
-                value={selectedTemplateId ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedTemplateId(val ? Number(val) : undefined);
-                }}
-              >
-                <option value="">No template</option>
-                {templates.length > 0 && (
-                  <optgroup label="Your Templates">
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {sharedTemplates.length > 0 && (
-                  <optgroup label="Shared Templates">
-                    {sharedTemplates.map((t) => (
-                      <option key={`shared-${t.id}`} value={t.id}>{t.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-
-            <div className="settings-panel-label">
-              <span>Literacy</span>
-              <div className="literacy-tabs">
-                {LITERACY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={`literacy-tab-btn ${selectedLiteracy === opt.value ? "literacy-tab-btn--active" : ""}`}
-                    onClick={() => setSelectedLiteracy(opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="quick-sliders">
-              <div className="quick-slider-group">
-                <label className="quick-slider-label">
-                  Tone
-                  <span className="quick-slider-value">
-                    {highAnxietyMode ? "High Anxiety Mode" : TONE_LABELS[toneSlider]}
-                  </span>
-                </label>
-                <div className="quick-slider-row">
-                  <span className="quick-slider-end">Concerning</span>
-                  <input
-                    type="range"
-                    className="preference-slider"
-                    min={1}
-                    max={5}
-                    step={1}
-                    value={highAnxietyMode ? 5 : toneSlider}
-                    onChange={(e) => setToneSlider(Number(e.target.value))}
-                    disabled={highAnxietyMode}
-                  />
-                  <span className="quick-slider-end">Very Reassuring</span>
-                </div>
-                <label className="high-anxiety-toggle">
-                  <input
-                    type="checkbox"
-                    checked={highAnxietyMode}
-                    onChange={(e) => {
-                      setHighAnxietyMode(e.target.checked);
-                      if (e.target.checked) setToneSlider(5);
-                    }}
-                  />
-                  <span className="high-anxiety-label">High Anxiety Patient</span>
-                  <span className="high-anxiety-hint">
-                    Extra reassurance, avoids alarming language
-                  </span>
-                </label>
-                <label className="high-anxiety-toggle">
-                  <input
-                    type="checkbox"
-                    checked={useAnalogies}
-                    onChange={(e) => setUseAnalogies(e.target.checked)}
-                  />
-                  <span className="high-anxiety-label">Use Analogies</span>
-                  <span className="high-anxiety-hint">
-                    Size comparisons and everyday examples
-                  </span>
-                </label>
-              </div>
-              <div className="quick-slider-group">
-                <label className="quick-slider-label">
-                  Detail
-                  <span className="quick-slider-value">{DETAIL_LABELS[detailSlider]}</span>
-                </label>
-                <div className="quick-slider-row">
-                  <span className="quick-slider-end">Minimal</span>
-                  <input
-                    type="range"
-                    className="preference-slider"
-                    min={1}
-                    max={5}
-                    step={1}
-                    value={detailSlider}
-                    onChange={(e) => setDetailSlider(Number(e.target.value))}
-                  />
-                  <span className="quick-slider-end">Very Detailed</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Voice */}
-            <div className="quick-voice-section">
-              <span className="quick-actions-label">Voice:</span>
-              <div className="quick-voice-toggle">
-                <button
-                  className={`physician-picker-btn ${explanationVoice === "first_person" ? "physician-picker-btn--active" : ""}`}
-                  onClick={() => setExplanationVoice("first_person")}
-                >
-                  1st Person
-                </button>
-                <button
-                  className={`physician-picker-btn ${explanationVoice === "third_person" ? "physician-picker-btn--active" : ""}`}
-                  onClick={() => setExplanationVoice("third_person")}
-                >
-                  3rd Person
-                </button>
-              </div>
-            </div>
-
-            {/* Physician */}
-            {explanationVoice === "third_person" && (
-              <div className="quick-voice-section">
-                <span className="quick-actions-label">Physician:</span>
-                <div className="quick-voice-toggle">
-                  {practiceProviders.map((name) => (
-                    <button
-                      key={name}
-                      className={`physician-picker-btn ${physicianOverride === name ? "physician-picker-btn--active" : ""}`}
-                      onClick={() => setPhysicianOverride(name)}
-                    >
-                      {name}
-                    </button>
-                  ))}
-                  <button
-                    className={`physician-picker-btn ${physicianOverride === "" || physicianOverride === null ? "physician-picker-btn--active" : ""}`}
-                    onClick={() => setPhysicianOverride("")}
-                  >
-                    Generic
-                  </button>
-                </div>
-                <label className="quick-toggle" style={{ marginTop: "var(--space-xs)" }}>
-                  <input
-                    type="checkbox"
-                    checked={nameDrop}
-                    onChange={(e) => setNameDrop(e.target.checked)}
-                  />
-                  <span>Name drop</span>
-                </label>
-              </div>
-            )}
-
-            {/* Next Steps */}
-            <div className="settings-panel-next-steps">
-              <span className="quick-actions-label">Next Steps:</span>
-              <div className="next-steps-checks">
-                <label className="next-step-check">
-                  <input
-                    type="checkbox"
-                    checked={checkedNextSteps.has("No comment")}
-                    onChange={() => {
-                      setCheckedNextSteps(new Set(["No comment"]));
-                    }}
-                  />
-                  <span>No comment</span>
-                </label>
-                {nextStepsOptions.map((option) => (
-                  <label key={option} className="next-step-check">
-                    <input
-                      type="checkbox"
-                      checked={checkedNextSteps.has(option)}
-                      onChange={() => {
-                        setCheckedNextSteps((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(option)) {
-                            next.delete(option);
-                            if (next.size === 0) next.add("No comment");
-                          } else {
-                            next.add(option);
-                            next.delete("No comment");
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="quick-actions-buttons">
-              <button
-                className="quick-action-btn"
-                onClick={handleRefineLetter}
-                disabled={isRefiningLetter}
-              >
-                {isRefiningLetter ? "Regenerating\u2026" : "Apply"}
-              </button>
-              <button
-                className="quick-action-btn"
-                onClick={handleTranslateToggle}
-                disabled={isRefiningLetter}
-              >
-                {isSpanish ? "Translate to English" : "Translate to Spanish"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RefinementSidebar
+          {...sidebarProps}
+          letterMode
+          isRefiningLetter={isRefiningLetter}
+          onRefineLetter={handleRefineLetter}
+        />
       </div>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // No results render
+  // ---------------------------------------------------------------------------
   if (!currentResponse) {
     return (
       <div className="results-main-panel">
         <h2 className="results-title">No Results</h2>
         <p className="results-empty">
-          No analysis results found. Please import and process a report
-          first.
+          No analysis results found. Please import and process a report first.
         </p>
-        <button
-          className="results-back-btn"
-          onClick={() => navigate("/")}
-        >
+        <button className="results-back-btn" onClick={() => navigate("/")}>
           Back to Import
         </button>
       </div>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Report mode render
+  // ---------------------------------------------------------------------------
   const { explanation, parsed_report } = currentResponse;
   const activePhysician = physicianOverride ?? currentResponse?.physician_name;
   const rawFindings = isDirty
@@ -1342,777 +865,121 @@ export function ResultsScreen() {
   return (
     <div className={`results-screen${!canRefine ? " results-screen--single-column" : ""}`}>
       <div className="results-main-panel">
-      <header className="results-header">
-        <h2 className="results-title">Explanation</h2>
-        {fromHistory && (
-          <span className="results-from-history">Viewed from history</span>
+        <header className="results-header">
+          <h2 className="results-title">Explanation</h2>
+          {fromHistory && <span className="results-from-history">Viewed from history</span>}
+        </header>
+
+        {isBatchMode && batchResponses && (
+          <div className="results-batch-tabs">
+            {batchResponses.map((_, idx) => (
+              <button
+                key={idx}
+                className={`results-batch-tab${idx === activeResultTab ? " results-batch-tab--active" : ""}`}
+                onClick={() => setActiveResultTab(idx)}
+              >
+                {batchLabels?.[idx] || `Report ${idx + 1}`}
+              </button>
+            ))}
+          </div>
         )}
-      </header>
 
-      {/* Refine Toolbar */}
-      {canRefine && (
-        <div className="refine-toolbar">
-          <button
-            className="refine-btn"
-            onClick={handleRegenerate}
-            disabled={isRegenerating}
-          >
-            {isRegenerating ? "Regenerating\u2026" : "Regenerate"}
-          </button>
-          <button
-            className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            {isEditing ? "Stop Editing" : "Edit Text"}
-          </button>
-          {isDirty && <span className="edit-indicator">Edited</span>}
-        </div>
-      )}
-
-      {/* Comment Panel */}
-      <div className="results-comment-panel">
-        <div className="comment-panel-header">
-          <h3>Result Comment</h3>
-          <button
-            className={`like-btn${isLiked ? " like-btn--active" : ""}`}
-            onClick={handleToggleLike}
-          >
-            {isLiked ? "\u2665 Liked" : "\u2661 Like"}
-          </button>
-        </div>
-        <div className="comment-type-toggle">
-          <button
-            className={`comment-type-btn${commentMode === "short" ? " comment-type-btn--active" : ""}`}
-            onClick={() => setCommentMode("short")}
-          >
-            Short Comment
-          </button>
-          <button
-            className={`comment-type-btn${commentMode === "long" ? " comment-type-btn--active" : ""}`}
-            onClick={() => setCommentMode("long")}
-          >
-            Long Comment
-          </button>
-          {smsEnabled && (
-            <button
-              className={`comment-type-btn${commentMode === "sms" ? " comment-type-btn--active" : ""}`}
-              onClick={() => setCommentMode("sms")}
-            >
-              SMS
+        {canRefine && (
+          <div className="refine-toolbar">
+            <button className="refine-btn" onClick={handleRegenerate} disabled={isRegenerating}>
+              {isRegenerating ? "Regenerating\u2026" : "Regenerate"}
             </button>
-          )}
-        </div>
-        {isEditing && (
-          <textarea
-            className="summary-textarea"
-            value={editedSummary}
-            onChange={(e) => {
-              setEditedSummary(e.target.value);
-              markDirty();
-            }}
-            rows={6}
-          />
-        )}
-        {(isGeneratingComment && commentMode === "short") || (isGeneratingLong && commentMode === "long") || (isGeneratingSms && commentMode === "sms") ? (
-          <div className="comment-generating">
-            {commentMode === "sms" ? "Generating SMS summary..." : commentMode === "short" ? "Generating short comment..." : "Generating detailed explanation..."}
-          </div>
-        ) : (
-          <div className="comment-preview">{commentPreviewText}</div>
-        )}
-        <span className="comment-char-count">{commentPreviewText.length} chars</span>
-        <button className="comment-copy-btn" onClick={handleCopyComment}>
-          Copy to Clipboard
-        </button>
-        <div className="comment-export-row">
-          <button
-            className="comment-export-btn"
-            onClick={handleExportPdf}
-            disabled={isExporting}
-          >
-            {isExporting ? "Exporting\u2026" : "Export PDF"}
-          </button>
-          <button className="comment-export-btn" onClick={() => window.print()}>
-            Print
-          </button>
-        </div>
-      </div>
-
-      {/* Key Findings */}
-      {sectionSettings.include_key_findings && displayFindings.length > 0 && (
-        <details open className="results-section results-collapsible">
-          <summary className="section-heading">
-            Key Findings
-            <span className="section-count">
-              {displayFindings.length}
-            </span>
-          </summary>
-          <div className="section-body">
-            <div className="findings-list">
-              {displayFindings.map(
-                (f: FindingExplanation, i: number) => (
-                  <div key={i} className="finding-card">
-                    <div className="finding-header">
-                      <span
-                        className={`finding-severity finding-severity--${f.severity}`}
-                        aria-label={`Severity: ${f.severity}`}
-                        style={{
-                          backgroundColor:
-                            FINDING_SEVERITY_COLORS[f.severity] ||
-                            "var(--color-gray-400)",
-                        }}
-                      >
-                        {FINDING_SEVERITY_ICONS[f.severity] || "\u2014"}
-                      </span>
-                      <span className="finding-title">
-                        {isEditing ? (
-                          <input
-                            className="finding-edit-input"
-                            value={editedFindings[i]?.finding ?? f.finding}
-                            onChange={(e) => {
-                              const updated = [...editedFindings];
-                              updated[i] = {
-                                ...updated[i],
-                                finding: e.target.value,
-                              };
-                              setEditedFindings(updated);
-                              markDirty();
-                            }}
-                          />
-                        ) : (
-                          <GlossaryTooltip
-                            text={f.finding}
-                            glossary={glossary}
-                          />
-                        )}
-                      </span>
-                    </div>
-                    {isEditing ? (
-                      <textarea
-                        className="finding-edit-textarea"
-                        value={
-                          editedFindings[i]?.explanation ?? f.explanation
-                        }
-                        onChange={(e) => {
-                          const updated = [...editedFindings];
-                          updated[i] = {
-                            ...updated[i],
-                            explanation: e.target.value,
-                          };
-                          setEditedFindings(updated);
-                          markDirty();
-                        }}
-                        rows={3}
-                      />
-                    ) : (
-                      <p className="finding-explanation">
-                        <GlossaryTooltip
-                          text={f.explanation}
-                          glossary={glossary}
-                        />
-                      </p>
-                    )}
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
-        </details>
-      )}
-
-      {/* Measurements Table */}
-      {sectionSettings.include_measurements && explanation.measurements.length > 0 && (
-        <details open className="results-section results-collapsible">
-          <summary className="section-heading">
-            Measurements
-            <span className="section-count">
-              {explanation.measurements.length}
-            </span>
-          </summary>
-          <div className="section-body">
-            <div className="measurements-table-container">
-              <table
-                className="measurements-table"
-                aria-label="Measurement results"
-              >
-                <thead>
-                  <tr>
-                    <th scope="col">Measurement</th>
-                    <th scope="col">Value</th>
-                    <th scope="col">Normal Range</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Explanation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {explanation.measurements.map(
-                    (m: MeasurementExplanation, i: number) => {
-                      const parsed = measurementMap.get(m.abbreviation);
-                      return (
-                        <tr
-                          key={i}
-                          className={`measurement-row measurement-row--${m.status}`}
-                        >
-                          <td className="measurement-name">
-                            <GlossaryTooltip
-                              text={m.abbreviation}
-                              glossary={glossary}
-                            />
-                          </td>
-                          <td className="measurement-value">
-                            {m.value} {m.unit}
-                          </td>
-                          <td className="measurement-range">
-                            {parsed?.reference_range || "--"}
-                          </td>
-                          <td className="measurement-status">
-                            <span
-                              className={`status-badge status-badge--${m.status}`}
-                              aria-label={`Status: ${SEVERITY_LABELS[m.status] || m.status}`}
-                            >
-                              <span className="status-badge__icon">
-                                {SEVERITY_ICONS[m.status] || ""}
-                              </span>{" "}
-                              {SEVERITY_LABELS[m.status] || m.status}
-                            </span>
-                          </td>
-                          <td className="measurement-explanation">
-                            <GlossaryTooltip
-                              text={m.plain_language}
-                              glossary={glossary}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    },
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </details>
-      )}
-
-      {/* Metadata */}
-      <footer className="results-footer">
-        <span className="results-meta">
-          Model: {currentResponse.model_used} | Tokens:{" "}
-          {currentResponse.input_tokens} in /{" "}
-          {currentResponse.output_tokens} out
-        </span>
-        {currentResponse.validation_warnings.length > 0 && (
-          <details className="validation-warnings">
-            <summary>
-              Validation Warnings (
-              {currentResponse.validation_warnings.length})
-            </summary>
-            <ul>
-              {currentResponse.validation_warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </footer>
-
-      {/* Teaching Points */}
-      <details className="teaching-points-panel teaching-points-collapsible">
-        <summary className="teaching-points-header">
-          <h3>Teaching Points</h3>
-          {(teachingPoints.length + sharedTeachingPoints.length) > 0 && (
-            <span className="teaching-points-count">{teachingPoints.length + sharedTeachingPoints.length}</span>
-          )}
-        </summary>
-        <div className="teaching-points-body">
-          <div className="teaching-points-type-row">
-            <label className="teaching-points-type-label">Report type:</label>
-            <input
-              type="text"
-              className="teaching-points-type-input"
-              value={testTypeOverride ?? currentResponse?.parsed_report.test_type_display ?? ""}
-              onChange={(e) => setTestTypeOverride(e.target.value)}
-              placeholder="e.g. Calcium Score CT"
-            />
-          </div>
-          <p className="teaching-points-desc">
-            Add personalized instructions that customize how AI interprets and explains results.
-            These points can be stylistic or clinical. Explify will remember and apply these to all future explanations.
-          </p>
-          <div className="teaching-point-input-row">
-            <textarea
-              className="teaching-point-input"
-              placeholder="e.g. Always mention diastolic dysfunction grading"
-              value={newTeachingPoint}
-              onChange={(e) => setNewTeachingPoint(e.target.value)}
-              rows={3}
-            />
-            <div className="teaching-point-save-row">
-              <button
-                className="teaching-point-save-btn"
-                disabled={!newTeachingPoint.trim()}
-                onClick={async () => {
-                  if (!newTeachingPoint.trim()) return;
-                  try {
-                    const tp = await sidecarApi.createTeachingPoint({
-                      text: newTeachingPoint.trim(),
-                      test_type: effectiveTestType,
-                    });
-                    setTeachingPoints((prev) => [tp, ...prev]);
-                    setNewTeachingPoint("");
-                    queueUpsertAfterMutation("teaching_points", tp.id).catch(() => {});
-                  } catch {
-                    showToast("error", "Failed to save teaching point.");
-                  }
-                }}
-              >
-                Save for {effectiveTestTypeDisplay}
-              </button>
-              <button
-                className="teaching-point-save-btn teaching-point-save-btn--all"
-                disabled={!newTeachingPoint.trim()}
-                onClick={async () => {
-                  if (!newTeachingPoint.trim()) return;
-                  try {
-                    const tp = await sidecarApi.createTeachingPoint({
-                      text: newTeachingPoint.trim(),
-                    });
-                    setTeachingPoints((prev) => [tp, ...prev]);
-                    setNewTeachingPoint("");
-                    queueUpsertAfterMutation("teaching_points", tp.id).catch(() => {});
-                  } catch {
-                    showToast("error", "Failed to save teaching point.");
-                  }
-                }}
-              >
-                Save for all types
-              </button>
-            </div>
-          </div>
-          {teachingPoints.length > 0 && (
-            <div className="own-teaching-points">
-              <span className="own-teaching-points-label">Your teaching points</span>
-              {teachingPoints.map((tp) => (
-                <div key={tp.id} className="own-teaching-point-card">
-                  <p className="own-teaching-point-text">{tp.text}</p>
-                  <div className="own-teaching-point-meta">
-                    {tp.test_type ? (
-                      <span className="own-teaching-point-type">{tp.test_type}</span>
-                    ) : (
-                      <span className="own-teaching-point-type own-teaching-point-type--global">All types</span>
-                    )}
-                    <button
-                      className="own-teaching-point-delete"
-                      onClick={async () => {
-                        try {
-                          await sidecarApi.deleteTeachingPoint(tp.id);
-                          setTeachingPoints((prev) => prev.filter((p) => p.id !== tp.id));
-                        } catch {
-                          showToast("error", "Failed to delete teaching point.");
-                        }
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {sharedTeachingPoints.length > 0 && (
-            <div className="shared-teaching-points">
-              <span className="shared-teaching-points-label">Shared with you</span>
-              {sharedTeachingPoints.map((sp) => (
-                <div key={sp.sync_id} className="shared-teaching-point-card">
-                  <p className="shared-teaching-point-text">{sp.text}</p>
-                  <div className="shared-teaching-point-meta">
-                    <span className="shared-teaching-point-sharer">
-                      Shared by {sp.sharer_email}
-                    </span>
-                    {sp.test_type ? (
-                      <span className="shared-teaching-point-type">{sp.test_type}</span>
-                    ) : (
-                      <span className="shared-teaching-point-type shared-teaching-point-type--global">All types</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </details>
-
-      <div className="results-nav-buttons">
-        <button
-          className="results-back-btn results-back-btn--secondary"
-          onClick={() => {
-            if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) {
-              return;
-            }
-            clearImportCache();
-            navigate("/", {
-              state: {
-                preservedClinicalContext: clinicalContext,
-                preservedQuickReasons: quickReasons,
-              },
-            });
-          }}
-        >
-          New Report, Same Patient
-        </button>
-        <button
-          className="results-back-btn"
-          onClick={() => {
-            if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) {
-              return;
-            }
-            clearImportCache();
-            navigate("/");
-          }}
-        >
-          Start Fresh (New Patient)
-        </button>
-      </div>
-      </div>
-
-      {canRefine && (
-      <div className="results-right-column">
-      {/* Refine Panel */}
-        <div className="results-refine-panel">
-          <h3>Refine Context</h3>
-          <textarea
-            className="refine-textarea"
-            placeholder="e.g., Emphasize the elevated LDL given patient's cardiac history"
-            value={refinementInstruction}
-            onChange={(e) => setRefinementInstruction(e.target.value)}
-            rows={3}
-          />
-        </div>
-
-      {/* Result Settings Panel */}
-        <div className="results-settings-panel">
-          <h3>Result Settings</h3>
-
-          {/* Template Selector */}
-          <div className="settings-panel-label">
-            <span>Template</span>
-            <select
-              className="template-select"
-              value={selectedTemplateId ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedTemplateId(val ? Number(val) : undefined);
-              }}
+            <button
+              className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
+              onClick={() => setIsEditing(!isEditing)}
             >
-              <option value="">No template</option>
-              {templates.length > 0 && (
-                <optgroup label="Your Templates">
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </optgroup>
-              )}
-              {sharedTemplates.length > 0 && (
-                <optgroup label="Shared Templates">
-                  {sharedTemplates.map((t) => (
-                    <option key={`shared-${t.id}`} value={t.id}>{t.name}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+              {isEditing ? "Stop Editing" : "Edit Text"}
+            </button>
+            {isDirty && <span className="edit-indicator">Edited</span>}
           </div>
+        )}
 
-          <div className="settings-panel-label">
-            <span>Literacy</span>
-            <div className="literacy-tabs">
-              {LITERACY_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  className={`literacy-tab-btn ${selectedLiteracy === opt.value ? "literacy-tab-btn--active" : ""}`}
-                  onClick={() => setSelectedLiteracy(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <CommentPanel
+          commentMode={commentMode}
+          setCommentMode={setCommentMode}
+          isEditing={isEditing}
+          editedSummary={editedSummary}
+          setEditedSummary={setEditedSummary}
+          onMarkDirty={markDirty}
+          commentPreviewText={commentPreviewText}
+          isGeneratingComment={isGeneratingComment}
+          isGeneratingLong={isGeneratingLong}
+          isGeneratingSms={isGeneratingSms}
+          onCopy={handleCopyComment}
+          onExportPdf={handleExportPdf}
+          isExporting={isExporting}
+          isLiked={isLiked}
+          onToggleLike={handleToggleLike}
+          smsEnabled={smsEnabled}
+        />
 
-          <div className="quick-sliders">
-            <div className="quick-slider-group">
-              <label className="quick-slider-label">
-                Tone
-                <span className="quick-slider-value">
-                  {highAnxietyMode ? "High Anxiety Mode" : TONE_LABELS[toneSlider]}
-                </span>
-              </label>
-              <div className="quick-slider-row">
-                <span className="quick-slider-end">Concerning</span>
-                <input
-                  type="range"
-                  className="preference-slider"
-                  min={1}
-                  max={5}
-                  step={1}
-                  value={highAnxietyMode ? 5 : toneSlider}
-                  onChange={(e) => setToneSlider(Number(e.target.value))}
-                  disabled={highAnxietyMode}
-                />
-                <span className="quick-slider-end">Very Reassuring</span>
-              </div>
-              <label className="high-anxiety-toggle">
-                <input
-                  type="checkbox"
-                  checked={highAnxietyMode}
-                  onChange={(e) => {
-                    setHighAnxietyMode(e.target.checked);
-                    if (e.target.checked) setToneSlider(5);
-                  }}
-                />
-                <span className="high-anxiety-label">High Anxiety Patient</span>
-                <span className="high-anxiety-hint">
-                  Extra reassurance, avoids alarming language
-                </span>
-              </label>
-              <label className="high-anxiety-toggle">
-                <input
-                  type="checkbox"
-                  checked={useAnalogies}
-                  onChange={(e) => setUseAnalogies(e.target.checked)}
-                />
-                <span className="high-anxiety-label">Use Analogies</span>
-                <span className="high-anxiety-hint">
-                  Size comparisons and everyday examples
-                </span>
-              </label>
-            </div>
-            <div className="quick-slider-group">
-              <label className="quick-slider-label">
-                Detail
-                <span className="quick-slider-value">{DETAIL_LABELS[detailSlider]}</span>
-              </label>
-              <div className="quick-slider-row">
-                <span className="quick-slider-end">Minimal</span>
-                <input
-                  type="range"
-                  className="preference-slider"
-                  min={1}
-                  max={5}
-                  step={1}
-                  value={detailSlider}
-                  onChange={(e) => setDetailSlider(Number(e.target.value))}
-                />
-                <span className="quick-slider-end">Very Detailed</span>
-              </div>
-            </div>
-          </div>
+        {sectionSettings.include_key_findings && (
+          <KeyFindingsPanel
+            findings={displayFindings}
+            isEditing={isEditing}
+            editedFindings={editedFindings}
+            onEditFinding={handleEditFinding}
+            glossary={glossary}
+          />
+        )}
 
-          <div className="deep-analysis-setting">
-            <label className="quick-toggle">
-              <input
-                type="checkbox"
-                checked={deepAnalysis}
-                onChange={(e) => setDeepAnalysis(e.target.checked)}
-              />
-              <span>Deep Analysis</span>
-            </label>
-            <span className="deep-analysis-subtext">For complex cases only</span>
-          </div>
+        {sectionSettings.include_measurements && (
+          <MeasurementsTable
+            measurements={explanation.measurements}
+            measurementMap={measurementMap}
+            glossary={glossary}
+          />
+        )}
 
-          <div className="quick-toggles">
-            <span className="quick-actions-label">Long comment settings:</span>
-            <div className="quick-toggles-row">
-              <label className="quick-toggle">
-                <input
-                  type="checkbox"
-                  checked={sectionSettings.include_key_findings}
-                  onChange={(e) =>
-                    setSectionSettings((prev) => ({
-                      ...prev,
-                      include_key_findings: e.target.checked,
-                    }))
-                  }
-                />
-                <span>Include Key Findings</span>
-              </label>
-              <label className="quick-toggle">
-                <input
-                  type="checkbox"
-                  checked={sectionSettings.include_measurements}
-                  onChange={(e) =>
-                    setSectionSettings((prev) => ({
-                      ...prev,
-                      include_measurements: e.target.checked,
-                    }))
-                  }
-                />
-                <span>Include Measurements</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Voice */}
-          <div className="quick-voice-section">
-            <span className="quick-actions-label">Voice:</span>
-            <div className="quick-voice-toggle">
-              <button
-                className={`physician-picker-btn ${explanationVoice === "first_person" ? "physician-picker-btn--active" : ""}`}
-                onClick={() => setExplanationVoice("first_person")}
-              >
-                1st Person
-              </button>
-              <button
-                className={`physician-picker-btn ${explanationVoice === "third_person" ? "physician-picker-btn--active" : ""}`}
-                onClick={() => setExplanationVoice("third_person")}
-              >
-                3rd Person
-              </button>
-            </div>
-          </div>
-
-          {/* Physician */}
-          {explanationVoice === "third_person" && (
-            <div className="quick-voice-section">
-              <span className="quick-actions-label">Physician:</span>
-              <div className="quick-voice-toggle">
-                {currentResponse?.physician_name && (
-                  <button
-                    className={`physician-picker-btn ${physicianOverride === null ? "physician-picker-btn--active" : ""}`}
-                    onClick={() => setPhysicianOverride(null)}
-                  >
-                    {currentResponse.physician_name} (Extracted)
-                  </button>
-                )}
-                {practiceProviders.map((name) => (
-                  <button
-                    key={name}
-                    className={`physician-picker-btn ${physicianOverride === name ? "physician-picker-btn--active" : ""}`}
-                    onClick={() => setPhysicianOverride(name)}
-                  >
-                    {name}
-                  </button>
+        <footer className="results-footer">
+          <span className="results-meta">
+            Model: {currentResponse.model_used} | Tokens:{" "}
+            {currentResponse.input_tokens} in / {currentResponse.output_tokens} out
+          </span>
+          {currentResponse.validation_warnings.length > 0 && (
+            <details className="validation-warnings">
+              <summary>Validation Warnings ({currentResponse.validation_warnings.length})</summary>
+              <ul>
+                {currentResponse.validation_warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
                 ))}
-                <button
-                  className={`physician-picker-btn ${physicianOverride === "" || (!currentResponse?.physician_name && physicianOverride === null) ? "physician-picker-btn--active" : ""}`}
-                  onClick={() => setPhysicianOverride("")}
-                >
-                  Generic
-                </button>
-              </div>
-              <label className="quick-toggle" style={{ marginTop: "var(--space-xs)" }}>
-                <input
-                  type="checkbox"
-                  checked={nameDrop}
-                  onChange={(e) => setNameDrop(e.target.checked)}
-                />
-                <span>Name drop</span>
-              </label>
-            </div>
+              </ul>
+            </details>
           )}
+        </footer>
 
-          {/* Next Steps */}
-          <div className="settings-panel-next-steps">
-            <span className="quick-actions-label">Next Steps:</span>
-            <div className="next-steps-checks">
-              <label className="next-step-check">
-                <input
-                  type="checkbox"
-                  checked={checkedNextSteps.has("No comment")}
-                  onChange={() => {
-                    setCheckedNextSteps(new Set(["No comment"]));
-                  }}
-                />
-                <span>No comment</span>
-              </label>
-              {nextStepsOptions.map((option) => (
-                <label key={option} className="next-step-check">
-                  <input
-                    type="checkbox"
-                    checked={checkedNextSteps.has(option)}
-                    onChange={() => {
-                      setCheckedNextSteps((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(option)) {
-                          next.delete(option);
-                          if (next.size === 0) next.add("No comment");
-                        } else {
-                          next.add(option);
-                          next.delete("No comment");
-                        }
-                        return next;
-                      });
-                    }}
-                  />
-                  <span>{option}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+        <TeachingPointsPanel {...teachingProps} />
 
-          <div className="quick-actions-buttons">
-            <button
-              className="quick-action-btn"
-              onClick={handleRegenerate}
-              disabled={isRegenerating}
-            >
-              {isRegenerating ? "Regenerating\u2026" : "Apply"}
-            </button>
-            <button
-              className="quick-action-btn"
-              onClick={handleTranslateToggle}
-              disabled={isRegenerating}
-            >
-              {isSpanish ? "Translate to English" : "Translate to Spanish"}
-            </button>
-          </div>
-
-          <div className="extracted-text-section">
-            <div className="extracted-text-buttons">
-              {extractionResult?.full_text && (
-                <button
-                  className="extracted-text-toggle"
-                  onClick={async () => {
-                    const willShow = !showExtractedText;
-                    setShowExtractedText(willShow);
-                    if (willShow && scrubbedText === null && !isScrubbing) {
-                      setIsScrubbing(true);
-                      try {
-                        const res = await sidecarApi.scrubPreview(extractionResult.full_text);
-                        setScrubbedText(res.scrubbed_text);
-                      } catch {
-                        setScrubbedText(extractionResult.full_text);
-                      } finally {
-                        setIsScrubbing(false);
-                      }
-                    }
-                  }}
-                >
-                  {showExtractedText ? "Hide Extracted Text" : "View Extracted Text"}
-                </button>
-              )}
-              <button
-                className="extracted-text-toggle"
-                onClick={() => setShowReportType((prev) => !prev)}
-              >
-                {showReportType ? "Hide Report Type" : "View Report Type"}
-              </button>
-            </div>
-            {showReportType && (
-              <div className="report-type-reveal">
-                {currentResponse.parsed_report.test_type_display}
-              </div>
-            )}
-            {showExtractedText && extractionResult?.full_text && (
-              <div className="extracted-text-container">
-                {isScrubbing ? (
-                  <pre className="extracted-text">Redacting PHI...</pre>
-                ) : (
-                  <pre className="extracted-text">{scrubbedText ?? extractionResult.full_text}</pre>
-                )}
-              </div>
-            )}
-          </div>
+        <div className="results-nav-buttons">
+          <button
+            className="results-back-btn results-back-btn--secondary"
+            onClick={() => {
+              if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
+              clearImportCache();
+              navigate("/", { state: { preservedClinicalContext: clinicalContext, preservedQuickReasons: quickReasons } });
+            }}
+          >
+            New Report, Same Patient
+          </button>
+          <button
+            className="results-back-btn"
+            onClick={() => {
+              if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
+              clearImportCache();
+              navigate("/");
+            }}
+          >
+            Start Fresh (New Patient)
+          </button>
         </div>
       </div>
-      )}
+
+      {canRefine && <RefinementSidebar {...sidebarProps} />}
     </div>
   );
 }

@@ -1,7 +1,9 @@
+import json
 import os
 import tempfile
 
 from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.analysis_models import DetectTypeRequest, DetectTypeResponse, ParsedReport, ParseRequest
@@ -452,6 +454,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
     demographics = extract_demographics(extraction_result.full_text)
     patient_age = request.patient_age if request.patient_age is not None else demographics.age
     patient_gender = request.patient_gender if request.patient_gender is not None else demographics.gender
+    report_date = demographics.report_date
 
     # 3. Parse report (or build a generic one for unknown types)
     if handler is not None:
@@ -549,6 +552,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         sms_summary=is_sms,
         sms_summary_char_limit=settings.sms_summary_char_limit,
         high_anxiety_mode=bool(request.high_anxiety_mode),
+        anxiety_level=request.anxiety_level or 0,
         use_analogies=use_analogies,
     )
     # 6b. Load template if specified
@@ -617,6 +621,7 @@ async def explain_report(request: ExplainRequest = Body(...)):
         patient_gender=patient_gender,
         quick_reasons=request.quick_reasons,
         custom_phrases=all_custom_phrases,
+        report_date=report_date,
     )
 
     # Log prompt sizes for debugging token issues
@@ -696,6 +701,386 @@ async def explain_report(request: ExplainRequest = Body(...)):
         input_tokens=llm_response.input_tokens,
         output_tokens=llm_response.output_tokens,
     )
+
+
+def _sse_event(data: dict) -> str:
+    """Format a dict as an SSE data event."""
+    return f"data: {json.dumps(data)}\n\n"
+
+
+async def _explain_stream_gen(request: ExplainRequest):
+    """Async generator that runs the explain pipeline, yielding SSE progress events."""
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    try:
+        # Stage 1: Detect
+        yield _sse_event({"stage": "detecting", "message": "Identifying report type..."})
+
+        try:
+            extraction_result = ExtractionResult.model_validate(request.extraction_result)
+        except Exception as e:
+            yield _sse_event({"stage": "error", "message": f"Invalid extraction result: {str(e)}"})
+            return
+
+        test_type = request.test_type
+        detection_confidence = 0.0
+        if not test_type:
+            type_id, confidence = registry.detect(extraction_result)
+            if type_id is None or confidence < 0.2:
+                yield _sse_event({"stage": "error", "message": "Could not determine the test type. Please specify test_type."})
+                return
+            test_type = type_id
+            detection_confidence = confidence
+
+        resolved_id, handler = registry.resolve(test_type)
+        if handler is not None:
+            test_type = resolved_id
+
+        # Look up display name
+        available = registry.list_types()
+        display_name = next(
+            (t["display_name"] for t in available if t["test_type_id"] == test_type),
+            test_type.replace("_", " ").title(),
+        )
+
+        # Stage 2: Parse
+        yield _sse_event({"stage": "parsing", "message": f"Parsing {display_name} report..."})
+
+        demographics = extract_demographics(extraction_result.full_text)
+        patient_age = request.patient_age if request.patient_age is not None else demographics.age
+        patient_gender = request.patient_gender if request.patient_gender is not None else demographics.gender
+        report_date = demographics.report_date
+
+        if handler is not None:
+            try:
+                parsed_report = handler.parse(extraction_result, gender=patient_gender, age=patient_age)
+            except Exception as e:
+                yield _sse_event({"stage": "error", "message": f"Failed to parse report: {str(e)}"})
+                return
+        else:
+            parsed_report = ParsedReport(
+                test_type=test_type,
+                test_type_display=test_type.replace("_", " ").title(),
+                detection_confidence=detection_confidence,
+            )
+
+        m_count = len(parsed_report.measurements) if parsed_report.measurements else 0
+        f_count = len(parsed_report.findings) if parsed_report.findings else 0
+        parse_msg = f"Found {m_count} measurement{'s' if m_count != 1 else ''}"
+        if f_count:
+            parse_msg += f", {f_count} finding{'s' if f_count != 1 else ''}"
+        yield _sse_event({"stage": "parsing", "message": parse_msg})
+
+        # Stage 3: Explain (LLM call)
+        yield _sse_event({"stage": "explaining", "message": "Preparing prompt..."})
+
+        settings = settings_store.get_settings()
+        provider_str = request.provider.value if request.provider else settings.llm_provider.value
+        api_key = request.api_key or settings_store.get_api_key_for_provider(provider_str)
+        if not api_key:
+            yield _sse_event({"stage": "error", "message": f"No API key configured for provider '{provider_str}'. Set it in Settings."})
+            return
+
+        scrub_result = scrub_phi(extraction_result.full_text)
+        scrubbed_clinical_context = (
+            scrub_phi(request.clinical_context).scrubbed_text
+            if request.clinical_context
+            else None
+        )
+        extracted_physician = extract_physician_name(extraction_result.full_text)
+
+        if request.physician_name_override is not None:
+            active_physician = request.physician_name_override or None
+        else:
+            source = settings.physician_name_source.value
+            if source == "auto_extract":
+                active_physician = extracted_physician
+            elif source == "custom":
+                active_physician = settings.custom_physician_name
+            else:
+                active_physician = None
+
+        voice = request.explanation_voice.value if request.explanation_voice is not None else settings.explanation_voice.value
+        name_drop = request.name_drop if request.name_drop is not None else settings.name_drop
+
+        literacy_level = LiteracyLevel(request.literacy_level.value)
+        prompt_engine = PromptEngine()
+        prompt_context = handler.get_prompt_context(extraction_result) if handler else {}
+        if not handler:
+            prompt_context["test_type_hint"] = test_type
+        if settings.specialty and "specialty" not in prompt_context:
+            prompt_context["specialty"] = settings.specialty
+        tone_pref = request.tone_preference if request.tone_preference is not None else settings.tone_preference
+        detail_pref = request.detail_preference if request.detail_preference is not None else settings.detail_preference
+        inc_findings = request.include_key_findings if request.include_key_findings is not None else settings.include_key_findings
+        inc_measurements = request.include_measurements if request.include_measurements is not None else settings.include_measurements
+        is_sms = bool(request.sms_summary)
+        use_analogies = request.use_analogies if request.use_analogies is not None else settings.use_analogies
+
+        system_prompt = prompt_engine.build_system_prompt(
+            literacy_level=literacy_level,
+            prompt_context=prompt_context,
+            tone_preference=tone_pref,
+            detail_preference=detail_pref,
+            physician_name=active_physician,
+            short_comment=bool(request.short_comment),
+            explanation_voice=voice,
+            name_drop=name_drop,
+            short_comment_char_limit=settings.short_comment_char_limit,
+            include_key_findings=inc_findings,
+            include_measurements=inc_measurements,
+            patient_age=patient_age,
+            patient_gender=patient_gender,
+            sms_summary=is_sms,
+            sms_summary_char_limit=settings.sms_summary_char_limit,
+            high_anxiety_mode=bool(request.high_anxiety_mode),
+            anxiety_level=request.anxiety_level or 0,
+            use_analogies=use_analogies,
+        )
+
+        template_tone = None
+        template_instructions = None
+        template_closing = None
+        if request.template_id is not None:
+            db = get_db()
+            tpl = db.get_template(request.template_id)
+            if tpl:
+                template_tone = tpl.get("tone")
+                template_instructions = tpl.get("structure_instructions")
+                template_closing = tpl.get("closing_text")
+                if template_tone:
+                    prompt_context["tone"] = template_tone
+        elif request.shared_template_sync_id:
+            db = get_db()
+            tpl = db.get_shared_template_by_sync_id(request.shared_template_sync_id)
+            if tpl:
+                template_tone = tpl.get("tone")
+                template_instructions = tpl.get("structure_instructions")
+                template_closing = tpl.get("closing_text")
+                if template_tone:
+                    prompt_context["tone"] = template_tone
+
+        liked_examples = get_db().get_liked_examples(
+            limit=2, test_type=test_type,
+            tone_preference=tone_pref, detail_preference=detail_pref,
+        )
+        teaching_points = get_db().list_all_teaching_points_for_prompt(test_type=test_type)
+        prior_results = get_db().get_prior_measurements(test_type=test_type, limit=3)
+        recent_edits = get_db().get_recent_edits(test_type=test_type, limit=3)
+        learned_phrases = get_db().get_learned_phrases(test_type=test_type, limit=5)
+
+        all_custom_phrases = list(settings.custom_phrases) if hasattr(settings, 'custom_phrases') else []
+        for lp in learned_phrases:
+            if lp not in all_custom_phrases:
+                all_custom_phrases.append(lp)
+
+        user_prompt = prompt_engine.build_user_prompt(
+            parsed_report=parsed_report,
+            reference_ranges=handler.get_reference_ranges() if handler else {},
+            glossary=handler.get_glossary() if handler else {},
+            scrubbed_text=scrub_result.scrubbed_text,
+            clinical_context=scrubbed_clinical_context,
+            template_instructions=template_instructions,
+            closing_text=template_closing,
+            refinement_instruction=request.refinement_instruction,
+            liked_examples=liked_examples,
+            next_steps=request.next_steps,
+            teaching_points=teaching_points,
+            short_comment=bool(request.short_comment) or is_sms,
+            prior_results=prior_results,
+            recent_edits=recent_edits,
+            patient_age=patient_age,
+            patient_gender=patient_gender,
+            quick_reasons=request.quick_reasons,
+            custom_phrases=all_custom_phrases,
+            report_date=report_date,
+        )
+
+        llm_provider = LLMProvider(provider_str)
+        model_override = (
+            settings.claude_model
+            if provider_str == "claude"
+            else settings.openai_model
+        )
+        if request.deep_analysis and provider_str == "claude":
+            from llm.client import CLAUDE_DEEP_MODEL
+            model_override = CLAUDE_DEEP_MODEL
+
+        model_display = model_override or provider_str
+        yield _sse_event({"stage": "explaining", "message": f"Generating explanation ({model_display})..."})
+
+        client = LLMClient(
+            provider=llm_provider,
+            api_key=api_key,
+            model=model_override,
+        )
+
+        if request.deep_analysis:
+            max_tokens = 8192
+        elif is_sms:
+            max_tokens = 512
+        elif request.short_comment:
+            max_tokens = 1024
+        else:
+            max_tokens = 4096
+
+        try:
+            llm_response = await with_retry(
+                client.call_with_tool,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                tool_name=EXPLANATION_TOOL_NAME,
+                tool_schema=EXPLANATION_TOOL_SCHEMA,
+                max_tokens=max_tokens,
+                max_attempts=2,
+            )
+        except LLMRetryError as e:
+            yield _sse_event({"stage": "error", "message": f"LLM API call failed after retries: {e.last_error}"})
+            return
+        except Exception as e:
+            yield _sse_event({"stage": "error", "message": f"LLM API call failed: {e}"})
+            return
+
+        # Stage 4: Validate
+        yield _sse_event({"stage": "validating", "message": "Checking response quality..."})
+
+        try:
+            explanation, issues = parse_and_validate_response(
+                tool_result=llm_response.tool_call_result,
+                parsed_report=parsed_report,
+            )
+        except ValueError as e:
+            yield _sse_event({"stage": "error", "message": f"LLM response validation failed: {e}"})
+            return
+
+        # Stage 5: Done
+        response = ExplainResponse(
+            explanation=explanation,
+            parsed_report=parsed_report,
+            validation_warnings=[issue.message for issue in issues],
+            phi_categories_found=scrub_result.phi_found,
+            physician_name=extracted_physician,
+            model_used=llm_response.model,
+            input_tokens=llm_response.input_tokens,
+            output_tokens=llm_response.output_tokens,
+        )
+
+        yield _sse_event({"stage": "done", "data": response.model_dump(mode="json")})
+
+    except Exception as e:
+        _logger.exception("Unexpected error in explain stream")
+        yield _sse_event({"stage": "error", "message": str(e)})
+
+
+@router.post("/analyze/explain-stream")
+async def explain_report_stream(request: ExplainRequest = Body(...)):
+    """Full analysis pipeline with SSE progress events."""
+    return StreamingResponse(
+        _explain_stream_gen(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/analyze/compare")
+async def compare_reports(body: dict = Body(...)):
+    """Generate a trend summary comparing two reports of the same type."""
+    newer_response = body.get("newer_response")
+    older_response = body.get("older_response")
+    newer_date = body.get("newer_date", "recent")
+    older_date = body.get("older_date", "previous")
+
+    if not newer_response or not older_response:
+        raise HTTPException(status_code=400, detail="Both newer_response and older_response are required.")
+
+    newer_expl = newer_response.get("explanation", {})
+    older_expl = older_response.get("explanation", {})
+    newer_parsed = newer_response.get("parsed_report", {})
+    test_type_display = newer_parsed.get("test_type_display", "Report")
+
+    # Build measurement summaries
+    def format_measurements(expl: dict) -> str:
+        measurements = expl.get("measurements", [])
+        if not measurements:
+            return "No measurements available."
+        lines = []
+        for m in measurements:
+            lines.append(f"- {m.get('abbreviation', '?')}: {m.get('value', '?')} {m.get('unit', '')} ({m.get('status', 'undetermined')})")
+        return "\n".join(lines)
+
+    def format_findings(expl: dict) -> str:
+        findings = expl.get("key_findings", [])
+        if not findings:
+            return "No key findings."
+        lines = []
+        for f in findings:
+            lines.append(f"- {f.get('finding', '?')} (severity: {f.get('severity', '?')})")
+        return "\n".join(lines)
+
+    system_prompt = (
+        "You are a physician reviewing two medical reports of the same type for the same patient, "
+        "taken at different times. Generate a brief, patient-friendly trend summary that explains "
+        "what has changed between the two reports.\n\n"
+        "Rules:\n"
+        "- Write in plain language appropriate for patients\n"
+        "- Focus on clinically significant changes\n"
+        "- Note improvements, worsenings, and stable findings\n"
+        "- Be concise (2-5 sentences)\n"
+        "- Do NOT suggest treatments, future testing, or hypothetical actions\n"
+        "- Do NOT include any patient-identifying information\n"
+        "- Return ONLY the trend summary text, no preamble\n"
+    )
+
+    user_prompt = (
+        f"Compare these two {test_type_display} reports:\n\n"
+        f"NEWER REPORT ({newer_date}):\n"
+        f"Summary: {newer_expl.get('overall_summary', 'N/A')}\n"
+        f"Measurements:\n{format_measurements(newer_expl)}\n"
+        f"Key Findings:\n{format_findings(newer_expl)}\n\n"
+        f"OLDER REPORT ({older_date}):\n"
+        f"Summary: {older_expl.get('overall_summary', 'N/A')}\n"
+        f"Measurements:\n{format_measurements(older_expl)}\n"
+        f"Key Findings:\n{format_findings(older_expl)}\n\n"
+        f"Generate a brief trend summary for the patient."
+    )
+
+    settings = settings_store.get_settings()
+    provider_str = settings.llm_provider.value
+    api_key = settings_store.get_api_key_for_provider(provider_str)
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No API key configured for provider '{provider_str}'. Set it in Settings.",
+        )
+
+    model_override = (
+        settings.claude_model if provider_str == "claude" else settings.openai_model
+    )
+    client = LLMClient(
+        provider=LLMProvider(provider_str),
+        api_key=api_key,
+        model=model_override,
+    )
+
+    try:
+        llm_response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=1024,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM API call failed: {e}")
+
+    return {
+        "trend_summary": llm_response.text_content,
+        "model_used": getattr(llm_response, "model", ""),
+        "input_tokens": getattr(llm_response, "input_tokens", 0),
+        "output_tokens": getattr(llm_response, "output_tokens", 0),
+    }
 
 
 @router.get("/glossary/{test_type}")

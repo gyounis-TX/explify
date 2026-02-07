@@ -91,6 +91,23 @@ def _extract_stylistic_patterns(text: str) -> dict[str, list[str]]:
             if phrase and phrase not in patterns["softening"]:
                 patterns["softening"].append(phrase)
 
+    # --- Quantitative style metrics ---
+    sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
+    if sentences:
+        word_counts = [len(s.split()) for s in sentences]
+        patterns["avg_sentence_length"] = round(sum(word_counts) / len(word_counts), 1)
+
+        # Fragment usage (sentences < 5 words)
+        fragments = sum(1 for wc in word_counts if wc < 5)
+        patterns["fragment_count"] = fragments
+
+        # Contraction frequency
+        contraction_pattern = r"\b\w+(?:'(?:t|s|re|ve|ll|d|m))\b"
+        total_words = sum(word_counts)
+        contraction_count = len(re.findall(contraction_pattern, text, re.IGNORECASE))
+        if total_words > 0:
+            patterns["contraction_rate"] = round(contraction_count / total_words, 2)
+
     return patterns
 
 

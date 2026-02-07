@@ -34,6 +34,55 @@
   background-color: var(--color-primary-600);
 }
 
+.toast--undo {
+  background-color: #1e293b;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+
+.toast-undo-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-undo-btn {
+  padding: 2px var(--space-sm);
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toast-undo-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.toast-undo-progress {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.toast-undo-progress-bar {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
 @keyframes toast-slide-in {
   from {
     opacity: 0;

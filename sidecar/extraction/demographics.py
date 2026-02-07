@@ -12,6 +12,7 @@ from typing import Optional
 class Demographics:
     age: Optional[int] = None
     gender: Optional[str] = None
+    report_date: Optional[str] = None  # e.g. "01/15/2024" or "January 15, 2024"
 
 
 # Age patterns
@@ -76,8 +77,36 @@ def _calculate_age_from_dob(month: int, day: int, year: int) -> Optional[int]:
     return None
 
 
+_REPORT_DATE_PATTERNS = [
+    # "Study Date: 01/15/2024" or "Date of Study: 1-15-2024"
+    re.compile(
+        r"(?i)(?:study\s+date|date\s+of\s+(?:study|exam(?:ination)?|procedure|report|service|test)"
+        r"|exam(?:ination)?\s+date|procedure\s+date|report\s+date|service\s+date"
+        r"|test\s+date|date\s+performed|performed\s+(?:on|date))"
+        r"\s*[:=]\s*"
+        r"(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})"
+    ),
+    # "Study Date: January 15, 2024" or "Date of Exam: Jan 15, 2024"
+    re.compile(
+        r"(?i)(?:study\s+date|date\s+of\s+(?:study|exam(?:ination)?|procedure|report|service|test)"
+        r"|exam(?:ination)?\s+date|procedure\s+date|report\s+date|service\s+date"
+        r"|test\s+date|date\s+performed|performed\s+(?:on|date))"
+        r"\s*[:=]\s*"
+        r"([A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4})"
+    ),
+    # "Date: 01/15/2024" — generic "Date:" label (only in first ~500 chars of report)
+    re.compile(
+        r"(?i)\bdate\s*[:=]\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})"
+    ),
+    # "Date: January 15, 2024"
+    re.compile(
+        r"(?i)\bdate\s*[:=]\s*([A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4})"
+    ),
+]
+
+
 def extract_demographics(text: str) -> Demographics:
-    """Extract age and gender from medical report text."""
+    """Extract age, gender, and report date from medical report text."""
     if not text:
         return Demographics()
 
@@ -109,5 +138,15 @@ def extract_demographics(text: str) -> Demographics:
             result.gender = _GENDER_MAP.get(raw)
             if result.gender:
                 break
+
+    # Extract report date — use header area first (first 500 chars), then full text
+    header_text = text[:500]
+    for i, pattern in enumerate(_REPORT_DATE_PATTERNS):
+        # Generic "Date:" patterns (last two) only search header area
+        search_text = header_text if i >= 2 else text
+        match = pattern.search(search_text)
+        if match:
+            result.report_date = match.group(1).strip()
+            break
 
     return result

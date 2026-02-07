@@ -287,6 +287,12 @@ class SidecarApi {
       body.include_measurements = request.include_measurements;
     if (request.deep_analysis != null)
       body.deep_analysis = request.deep_analysis;
+    if (request.high_anxiety_mode != null)
+      body.high_anxiety_mode = request.high_anxiety_mode;
+    if (request.quick_reasons != null)
+      body.quick_reasons = request.quick_reasons;
+    if (request.use_analogies != null)
+      body.use_analogies = request.use_analogies;
 
     const response = await fetch(`${baseUrl}/analyze/explain`, {
       method: "POST",
@@ -299,6 +305,93 @@ class SidecarApi {
     }
 
     return response.json();
+  }
+
+  async *explainReportStream(
+    request: ExplainRequest,
+  ): AsyncGenerator<{
+    stage: string;
+    message?: string;
+    data?: ExplainResponse;
+  }> {
+    const baseUrl = await this.ensureInitialized();
+
+    const body: Record<string, unknown> = {
+      extraction_result: request.extraction_result,
+    };
+    if (request.test_type != null) body.test_type = request.test_type;
+    if (request.literacy_level != null)
+      body.literacy_level = request.literacy_level;
+    if (request.provider != null) body.provider = request.provider;
+    if (request.api_key != null) body.api_key = request.api_key;
+    if (request.clinical_context != null)
+      body.clinical_context = request.clinical_context;
+    if (request.template_id != null) body.template_id = request.template_id;
+    if (request.shared_template_sync_id != null)
+      body.shared_template_sync_id = request.shared_template_sync_id;
+    if (request.refinement_instruction != null)
+      body.refinement_instruction = request.refinement_instruction;
+    if (request.tone_preference != null)
+      body.tone_preference = request.tone_preference;
+    if (request.detail_preference != null)
+      body.detail_preference = request.detail_preference;
+    if (request.next_steps != null) body.next_steps = request.next_steps;
+    if (request.short_comment != null)
+      body.short_comment = request.short_comment;
+    if (request.sms_summary != null)
+      body.sms_summary = request.sms_summary;
+    if (request.explanation_voice != null)
+      body.explanation_voice = request.explanation_voice;
+    if (request.name_drop != null)
+      body.name_drop = request.name_drop;
+    if (request.physician_name_override != null)
+      body.physician_name_override = request.physician_name_override;
+    if (request.include_key_findings != null)
+      body.include_key_findings = request.include_key_findings;
+    if (request.include_measurements != null)
+      body.include_measurements = request.include_measurements;
+    if (request.deep_analysis != null)
+      body.deep_analysis = request.deep_analysis;
+    if (request.high_anxiety_mode != null)
+      body.high_anxiety_mode = request.high_anxiety_mode;
+    if (request.quick_reasons != null)
+      body.quick_reasons = request.quick_reasons;
+    if (request.use_analogies != null)
+      body.use_analogies = request.use_analogies;
+
+    const response = await fetch(`${baseUrl}/analyze/explain-stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE events from buffer
+      while (true) {
+        const eventEnd = buffer.indexOf("\n\n");
+        if (eventEnd === -1) break;
+        const eventStr = buffer.slice(0, eventEnd);
+        buffer = buffer.slice(eventEnd + 2);
+
+        for (const line of eventStr.split("\n")) {
+          if (line.startsWith("data: ")) {
+            yield JSON.parse(line.slice(6));
+          }
+        }
+      }
+    }
   }
 
   async getGlossary(testType: string): Promise<GlossaryResponse> {
@@ -809,6 +902,36 @@ class SidecarApi {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table, rows }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  // --- Comparison ---
+
+  async compareReports(
+    newerResponse: ExplainResponse,
+    olderResponse: ExplainResponse,
+    newerDate: string,
+    olderDate: string,
+  ): Promise<{
+    trend_summary: string;
+    model_used: string;
+    input_tokens: number;
+    output_tokens: number;
+  }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/analyze/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newer_response: newerResponse,
+        older_response: olderResponse,
+        newer_date: newerDate,
+        older_date: olderDate,
+      }),
     });
     if (!response.ok) {
       await this.handleErrorResponse(response);

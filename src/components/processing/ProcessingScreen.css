@@ -122,11 +122,35 @@
 .error-suggestion {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.error-suggestions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-md) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.error-suggestions-list li {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding-left: var(--space-md);
+  position: relative;
+}
+
+.error-suggestions-list li::before {
+  content: "\2022";
+  position: absolute;
+  left: 0;
+  color: var(--color-gray-400);
 }
 
 .error-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 
@@ -173,9 +197,171 @@
   font-style: italic;
 }
 
+/* Error step */
+.processing-step--error .step-indicator {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.step-error-icon {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+}
+
+/* Elapsed timer */
+.processing-elapsed {
+  margin-top: var(--space-lg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .processing-complete {
   margin-top: var(--space-xl);
   text-align: center;
   color: var(--color-accent-600);
   font-weight: 500;
+}
+
+/* ---------------------------------------------------------------------------
+   Batch Processing Mode
+   --------------------------------------------------------------------------- */
+
+.batch-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.batch-file-card {
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease;
+}
+
+.batch-file-card--processing {
+  border-color: var(--color-primary-300);
+  background-color: var(--color-primary-50);
+}
+
+.batch-file-card--done {
+  opacity: 0.7;
+}
+
+.batch-file-card--error {
+  border-color: #fca5a5;
+  background-color: #fef2f2;
+}
+
+.batch-file-card--waiting {
+  opacity: 0.5;
+}
+
+.batch-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.batch-file-name {
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-file-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.batch-file-badge--waiting {
+  background-color: var(--color-gray-100);
+  color: var(--color-gray-500);
+}
+
+.batch-file-badge--processing {
+  background-color: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.batch-file-badge--done {
+  background-color: var(--color-accent-100);
+  color: var(--color-accent-600);
+}
+
+.batch-file-badge--error {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.batch-file-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.batch-step {
+  font-size: var(--font-size-xs);
+  color: var(--color-gray-400);
+}
+
+.batch-step--done {
+  color: var(--color-accent-600);
+}
+
+.batch-step--active {
+  color: var(--color-primary-600);
+  font-weight: 600;
+}
+
+.batch-file-message {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-xs) 0 0;
+  font-style: italic;
+}
+
+.batch-file-error {
+  font-size: var(--font-size-sm);
+  color: #dc2626;
+  margin: var(--space-xs) 0 0;
+}
+
+.batch-progress {
+  margin-top: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.batch-progress-bar {
+  flex: 1;
+  height: 8px;
+  background-color: var(--color-gray-200);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.batch-progress-fill {
+  height: 100%;
+  background-color: var(--color-primary-500);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.batch-progress-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

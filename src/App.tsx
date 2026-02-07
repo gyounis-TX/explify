@@ -9,6 +9,7 @@ import { ResultsScreen } from "./components/results/ResultsScreen";
 import { HistoryScreen } from "./components/history/HistoryScreen";
 import { LettersScreen } from "./components/letters/LettersScreen";
 import { TeachingPointsScreen } from "./components/teaching-points/TeachingPointsScreen";
+import { ComparisonScreen } from "./components/comparison/ComparisonScreen";
 import { AuthScreen } from "./components/auth/AuthScreen";
 
 function AuthRoute() {
@@ -29,6 +30,7 @@ function App() {
         <Route path="/admin" element={<AdminScreen />} />
         <Route path="/processing" element={<ProcessingScreen />} />
         <Route path="/results" element={<ResultsScreen />} />
+        <Route path="/comparison" element={<ComparisonScreen />} />
         <Route path="/auth" element={<AuthRoute />} />
       </Route>
     </Routes>

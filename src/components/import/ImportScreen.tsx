@@ -162,6 +162,11 @@ export function ImportScreen() {
   const [detectionResult, setDetectionResult] = useState<DetectTypeResponse | null>(_cache.detectionResult);
   const [manualTestType, setManualTestType] = useState<string | null>(_cache.manualTestType);
 
+  // Type selection modal state
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [modalSelectedType, setModalSelectedType] = useState<string | null>(null);
+  const [modalCustomType, setModalCustomType] = useState("");
+
   // Track whether we've applied location state (to avoid re-applying on re-renders)
   const [appliedLocationState, setAppliedLocationState] = useState(false);
 
@@ -321,6 +326,22 @@ export function ImportScreen() {
       });
   }, [result, testTypeHint]);
 
+  // Auto-open type selection modal when detection is uncertain
+  useEffect(() => {
+    if (
+      (detectionStatus === "low_confidence" || detectionStatus === "failed" || detectionStatus === "error") &&
+      manualTestType == null
+    ) {
+      if (detectionStatus === "low_confidence" && detectionResult?.test_type) {
+        setModalSelectedType(detectionResult.test_type);
+      } else {
+        setModalSelectedType(null);
+      }
+      setModalCustomType("");
+      setShowTypeModal(true);
+    }
+  }, [detectionStatus, detectionResult, manualTestType]);
+
   const resolvedTestType =
     (manualTestType != null && manualTestType.trim() !== "" ? manualTestType.trim() : null) ??
     (testTypeHint.trim() || null) ??
@@ -345,20 +366,22 @@ export function ImportScreen() {
   const handleFileSelect = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
-      // Only allow a single file
-      const file = files[0];
-      const validationError = validateFile(file);
-      if (validationError) {
-        setError(validationError);
-        setSelectedFiles([]);
-      } else {
-        setError(null);
-        setSelectedFiles([file]);
-        setPastedText("");
-        resetState();
+      const validFiles: File[] = [];
+      for (const file of files) {
+        const validationError = validateFile(file);
+        if (validationError) {
+          showToast("error", validationError);
+        } else {
+          validFiles.push(file);
+        }
       }
+      if (validFiles.length === 0) return;
+      setError(null);
+      setSelectedFiles((prev) => [...prev, ...validFiles].slice(0, 5));
+      setPastedText("");
+      resetState();
     },
-    [resetState],
+    [resetState, showToast],
   );
 
   const handleRemoveFile = useCallback(
@@ -399,7 +422,7 @@ export function ImportScreen() {
       setIsDragOver(false);
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
-        handleFileSelect([files[0]]);
+        handleFileSelect(files);
       }
     },
     [handleFileSelect],
@@ -524,9 +547,19 @@ export function ImportScreen() {
       } else if (selectedTemplateValue.startsWith("shared:")) {
         state.sharedTemplateSyncId = selectedTemplateValue.slice(7);
       }
+      // Collect all successful extraction results for batch processing
+      const successfulResults: Array<{ key: string; result: ExtractionResult }> = [];
+      for (const [key, entry] of extractionResults) {
+        if (entry.status === "success" && entry.result) {
+          successfulResults.push({ key, result: entry.result });
+        }
+      }
+      if (successfulResults.length > 1) {
+        state.batchExtractionResults = successfulResults;
+      }
       navigate("/processing", { state });
     }
-  }, [navigate, result, selectedTemplateValue, clinicalContext, selectedReasons, resolvedTestType]);
+  }, [navigate, result, selectedTemplateValue, clinicalContext, selectedReasons, resolvedTestType, extractionResults]);
 
   const canExtract =
     status !== "extracting" &&
@@ -560,36 +593,52 @@ export function ImportScreen() {
               ref={fileInputRef}
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.txt,application/pdf,image/jpeg,image/png,text/plain"
+              multiple
               onChange={handleInputChange}
               className="drop-zone-input"
             />
             {selectedFiles.length > 0 ? (
               <div className="unified-file-display">
-                <div className="file-list-item">
-                  <span className="file-list-name">{selectedFiles[0].name}</span>
-                  <span className="file-list-size">
-                    {formatFileSize(selectedFiles[0].size)}
-                  </span>
-                  {(() => {
-                    const entry = extractionResults.get(fileKey(selectedFiles[0]));
-                    return entry ? (
-                      <span className={`file-list-status file-list-status--${entry.status}`}>
-                        {entry.status === "pending" && "Pending"}
-                        {entry.status === "extracting" && "Extracting..."}
-                        {entry.status === "success" && "Done"}
-                        {entry.status === "error" && (entry.error ?? "Failed")}
-                      </span>
-                    ) : null;
-                  })()}
+                {selectedFiles.map((file, idx) => (
+                  <div key={fileKey(file)} className="file-list-item">
+                    <span className="file-list-name">{file.name}</span>
+                    <span className="file-list-size">
+                      {formatFileSize(file.size)}
+                    </span>
+                    {(() => {
+                      const entry = extractionResults.get(fileKey(file));
+                      return entry ? (
+                        <span className={`file-list-status file-list-status--${entry.status}`}>
+                          {entry.status === "pending" && "Pending"}
+                          {entry.status === "extracting" && "Extracting..."}
+                          {entry.status === "success" && "Done"}
+                          {entry.status === "error" && (entry.error ?? "Failed")}
+                        </span>
+                      ) : null;
+                    })()}
+                    <button
+                      className="file-list-remove"
+                      onClick={() => handleRemoveFile(idx)}
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+                {selectedFiles.length < 5 && (
                   <button
-                    className="file-list-remove"
-                    onClick={() => handleRemoveFile(0)}
-                    aria-label={`Remove ${selectedFiles[0].name}`}
+                    type="button"
+                    className="batch-add-more-btn"
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    &times;
+                    + Add more files on this patient
                   </button>
-                </div>
-                <p className="unified-file-hint">Drop a different file to replace</p>
+                )}
+                <p className="unified-file-hint">
+                  {selectedFiles.length === 1
+                    ? "Drop more files to add (up to 5)"
+                    : `${selectedFiles.length} files selected (up to 5)`}
+                </p>
               </div>
             ) : (
               <>
@@ -619,13 +668,30 @@ export function ImportScreen() {
             )}
           </div>
 
-          <button
-            className="extract-btn"
-            onClick={handleExtract}
-            disabled={!canExtract}
-          >
-            {status === "extracting" ? "Analyzing..." : "Analyze"}
-          </button>
+          <div className="extract-btn-row">
+            <button
+              className="extract-btn"
+              onClick={handleExtract}
+              disabled={!canExtract}
+            >
+              {status === "extracting"
+                ? "Analyzing..."
+                : selectedFiles.length > 1
+                  ? `Analyze All (${selectedFiles.length} files)`
+                  : "Analyze"}
+            </button>
+            <button
+              className="start-over-btn"
+              onClick={() => {
+                setSelectedFiles([]);
+                setPastedText("");
+                setClinicalContext("");
+                resetState();
+              }}
+            >
+              Start Over
+            </button>
+          </div>
 
           {error && (
             <div className="import-error">
@@ -725,48 +791,50 @@ export function ImportScreen() {
                 {(detectionStatus === "low_confidence" ||
                   detectionStatus === "failed" ||
                   detectionStatus === "error") && (
-                  <div className="detection-fallback">
-                    <p className="detection-fallback-message">
-                      <span className="detection-fallback-icon">{"\u26A0"}</span>
-                      {detectionStatus === "low_confidence" && detectionResult
-                        ? `Low confidence detection: ${
-                            detectionResult.available_types.find(
-                              (t) => t.test_type_id === detectionResult.test_type,
-                            )?.display_name ?? detectionResult.test_type
-                          }. Please confirm or select the correct report type below.`
-                        : "Could not automatically identify the report type. Select a type below or enter it manually to continue."}
-                    </p>
-                    {detectionResult?.available_types && detectionResult.available_types.length > 0 && (
-                      <div className="detection-type-buttons">
-                        {groupTypesByCategory(detectionResult.available_types).map(([label, types]) => (
-                          <div key={label} className="detection-type-group">
-                            <span className="detection-type-group-label">{label}</span>
-                            <div className="detection-type-group-buttons">
-                              {types.map((t) => (
-                                <button
-                                  key={t.test_type_id}
-                                  type="button"
-                                  className={`detection-type-btn${manualTestType === t.test_type_id ? " detection-type-btn--active" : ""}`}
-                                  onClick={() => setManualTestType(t.test_type_id)}
-                                >
-                                  {t.display_name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="detection-fallback-compact">
+                    {manualTestType ? (
+                      <>
+                        <span className="detection-badge--success">
+                          {detectionResult?.available_types?.find(
+                            (t) => t.test_type_id === manualTestType,
+                          )?.display_name ?? manualTestType}
+                        </span>
+                        <button
+                          className="redetect-btn"
+                          onClick={() => {
+                            setModalSelectedType(manualTestType);
+                            setModalCustomType("");
+                            setShowTypeModal(true);
+                          }}
+                        >
+                          Change
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="detection-fallback-icon">{"\u26A0"}</span>
+                        <span className="detection-fallback-text">
+                          {detectionStatus === "low_confidence" && detectionResult
+                            ? `Low confidence: ${
+                                detectionResult.available_types?.find(
+                                  (t) => t.test_type_id === detectionResult.test_type,
+                                )?.display_name ?? detectionResult.test_type
+                              }`
+                            : "Report type not detected."}
+                        </span>
+                        <button
+                          className="redetect-btn"
+                          onClick={() => {
+                            if (detectionStatus === "low_confidence" && detectionResult?.test_type) {
+                              setModalSelectedType(detectionResult.test_type);
+                            }
+                            setShowTypeModal(true);
+                          }}
+                        >
+                          Select type
+                        </button>
+                      </>
                     )}
-                    <input
-                      type="text"
-                      className="import-field-textarea"
-                      style={{ resize: "none", minHeight: "auto" }}
-                      placeholder='Or type a report type, e.g. "calcium score", "renal ultrasound"'
-                      value={manualTestType ?? ""}
-                      onChange={(e) =>
-                        setManualTestType(e.target.value || null)
-                      }
-                    />
                   </div>
                 )}
               </div>
@@ -846,9 +914,9 @@ export function ImportScreen() {
 
           <div className="import-field">
             <label className="import-field-label import-field-label--bold">
-              Clinical Context
+              Clinical Context <span className="import-field-optional">(optional)</span>
             </label>
-            <span className="import-field-subtitle">Optional but recommended — more context = more personalized interpretation</span>
+            <span className="import-field-subtitle">More context = more personalized</span>
             {quickReasons.length > 0 && (
               <div className="quick-reasons">
                 {quickReasons.map((reason) => (
@@ -897,9 +965,11 @@ export function ImportScreen() {
 
           {/* Test Type Hint */}
           <div className="import-field">
-            <label className="import-field-label">Test Type Hint</label>
+            <label className="import-field-label">
+              Test Type Hint <span className="import-field-optional">(optional)</span>
+            </label>
             <span className="import-field-subtitle">
-              Optional — helps identify the report type
+              Helps identify the report type
             </span>
             <div className="test-type-hint-row">
               <input
@@ -923,6 +993,85 @@ export function ImportScreen() {
           </div>
         </div>
       </div>
+
+      {/* Type Selection Modal */}
+      {showTypeModal && (
+        <div className="type-modal-backdrop" onClick={() => setShowTypeModal(false)}>
+          <div className="type-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="type-modal-title">Select Report Type</h3>
+            <p className="type-modal-subtitle">
+              {detectionStatus === "low_confidence" && detectionResult
+                ? `We detected this might be a ${
+                    detectionResult.available_types?.find(
+                      (t) => t.test_type_id === detectionResult.test_type,
+                    )?.display_name ?? detectionResult.test_type
+                  } (${Math.round(detectionResult.confidence * 100)}% confidence). Please confirm or select the correct type.`
+                : "Could not automatically identify the report type. Please select the correct type below."}
+            </p>
+
+            {detectionResult?.available_types && detectionResult.available_types.length > 0 && (
+              <div className="type-modal-categories">
+                {groupTypesByCategory(detectionResult.available_types).map(([label, types]) => (
+                  <div key={label} className="type-modal-category">
+                    <span className="type-modal-category-label">{label}</span>
+                    <div className="type-modal-category-buttons">
+                      {types.map((t) => (
+                        <button
+                          key={t.test_type_id}
+                          className={`detection-type-btn${
+                            modalSelectedType === t.test_type_id && !modalCustomType
+                              ? " detection-type-btn--active"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            setModalSelectedType(t.test_type_id);
+                            setModalCustomType("");
+                          }}
+                        >
+                          {t.display_name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="type-modal-other">
+              <label className="type-modal-other-label">Other:</label>
+              <input
+                type="text"
+                className="type-modal-other-input"
+                placeholder='e.g. "calcium score", "renal ultrasound"'
+                value={modalCustomType}
+                onChange={(e) => {
+                  setModalCustomType(e.target.value);
+                  if (e.target.value) setModalSelectedType(null);
+                }}
+              />
+            </div>
+
+            <div className="type-modal-actions">
+              <button
+                className="type-modal-cancel"
+                onClick={() => setShowTypeModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="type-modal-confirm"
+                disabled={!modalSelectedType && !modalCustomType.trim()}
+                onClick={() => {
+                  setManualTestType(modalCustomType.trim() || modalSelectedType);
+                  setShowTypeModal(false);
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

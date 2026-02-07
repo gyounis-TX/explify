@@ -10,7 +10,7 @@ type Tab = "reports" | "letters";
 
 export function HistoryScreen() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>("reports");
 
   // Reports state
@@ -23,6 +23,8 @@ export function HistoryScreen() {
   const [likedOnly, setLikedOnly] = useState(false);
   const [testTypeFilter, setTestTypeFilter] = useState("");
   const [availableTestTypes, setAvailableTestTypes] = useState<string[]>([]);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<Set<number>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const limit = 20;
 
@@ -161,26 +163,75 @@ export function HistoryScreen() {
     navigate("/letters", { state: { letterId } });
   };
 
-  const handleDelete = async (id: number) => {
-    try {
-      const item = items.find((i) => i.id === id);
-      await sidecarApi.deleteHistory(id);
-      setItems((prev) => prev.filter((i) => i.id !== id));
-      setTotal((prev) => prev - 1);
-      if (item?.sync_id) {
-        deleteFromSupabase("history", item.sync_id).catch(() => {});
+  const pendingDeleteRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  const handleDelete = (id: number) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    setDeletingId(null);
+
+    // Optimistic removal
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    setTotal((prev) => prev - 1);
+
+    // Schedule actual deletion after undo window
+    const timer = setTimeout(async () => {
+      pendingDeleteRef.current.delete(id);
+      try {
+        await sidecarApi.deleteHistory(id);
+        if (item.sync_id) {
+          deleteFromSupabase("history", item.sync_id).catch(() => {});
+        }
+      } catch {
+        // Deletion failed — restore the item
+        setItems((prev) => [item, ...prev]);
+        setTotal((prev) => prev + 1);
+        showToast("error", "Failed to delete record.");
       }
-      showToast("success", "Record deleted.");
-    } catch {
-      showToast("error", "Failed to delete record.");
-    } finally {
-      setDeletingId(null);
-    }
+    }, 5200);
+    pendingDeleteRef.current.set(id, timer);
+
+    showUndoToast("Record deleted.", () => {
+      // Undo: cancel the pending deletion and restore the item
+      const pending = pendingDeleteRef.current.get(id);
+      if (pending) {
+        clearTimeout(pending);
+        pendingDeleteRef.current.delete(id);
+      }
+      setItems((prev) => [item, ...prev].sort((a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ));
+      setTotal((prev) => prev + 1);
+      showToast("success", "Record restored.");
+    });
   };
 
   const handleToggleLikedFilter = () => {
     setLikedOnly((prev) => !prev);
     setOffset(0);
+  };
+
+  const handleToggleCompareMode = () => {
+    setCompareMode((prev) => !prev);
+    setSelectedForCompare(new Set());
+  };
+
+  const handleToggleCompareSelect = (id: number) => {
+    setSelectedForCompare((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < 2) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleCompare = () => {
+    if (selectedForCompare.size !== 2) return;
+    const ids = [...selectedForCompare] as [number, number];
+    navigate("/comparison", { state: { historyIds: ids } });
   };
 
   const handleToggleLike = async (id: number, currentLiked: boolean) => {
@@ -284,6 +335,12 @@ export function HistoryScreen() {
                 ))}
               </select>
             )}
+            <button
+              className={`history-filter-btn history-compare-toggle${compareMode ? " history-filter-btn--compare-active" : ""}`}
+              onClick={handleToggleCompareMode}
+            >
+              {compareMode ? "Cancel Compare" : "Compare"}
+            </button>
           </div>
 
           {!loading && filteredItems.length === 0 && (
@@ -303,10 +360,20 @@ export function HistoryScreen() {
 
           <div className="history-list">
             {filteredItems.map((item) => (
-              <div key={item.id} className="history-card">
+              <div key={item.id} className={`history-card${compareMode && selectedForCompare.has(item.id) ? " history-card--selected" : ""}`}>
+                {compareMode && (
+                  <label className="history-compare-checkbox" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedForCompare.has(item.id)}
+                      onChange={() => handleToggleCompareSelect(item.id)}
+                      disabled={!selectedForCompare.has(item.id) && selectedForCompare.size >= 2}
+                    />
+                  </label>
+                )}
                 <div
                   className="history-card-content"
-                  onClick={() => handleCardClick(item.id)}
+                  onClick={() => compareMode ? handleToggleCompareSelect(item.id) : handleCardClick(item.id)}
                 >
                   <div className="history-card-top">
                     <span className="history-date">{formatDate(item.created_at)}</span>
@@ -357,6 +424,16 @@ export function HistoryScreen() {
               </div>
             ))}
           </div>
+
+          {compareMode && (
+            <button
+              className="history-compare-btn"
+              disabled={selectedForCompare.size !== 2}
+              onClick={handleCompare}
+            >
+              Compare Selected ({selectedForCompare.size}/2)
+            </button>
+          )}
 
           {items.length < total && (
             <button

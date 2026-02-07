@@ -168,6 +168,7 @@ export interface ExplainRequest {
   patient_gender?: string;
   deep_analysis?: boolean;
   high_anxiety_mode?: boolean;
+  anxiety_level?: number;
   quick_reasons?: string[];
   use_analogies?: boolean;
 }

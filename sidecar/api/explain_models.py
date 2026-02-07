@@ -70,6 +70,7 @@ class ExplainRequest(BaseModel):
     patient_gender: Optional[str] = None
     deep_analysis: Optional[bool] = None
     high_anxiety_mode: Optional[bool] = None
+    anxiety_level: Optional[int] = Field(default=None, ge=0, le=3)
     quick_reasons: Optional[list[str]] = None
     use_analogies: Optional[bool] = None
 
