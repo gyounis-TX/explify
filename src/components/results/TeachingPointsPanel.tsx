@@ -11,8 +11,6 @@ interface TeachingPointsPanelProps {
   setNewTeachingPoint: (value: string) => void;
   effectiveTestType: string;
   effectiveTestTypeDisplay: string;
-  testTypeOverride: string | null;
-  setTestTypeOverride: (value: string | null) => void;
   showToast: (type: "success" | "error" | "info", message: string) => void;
   showUndoToast: (message: string, onUndo: () => void, duration?: number) => void;
   letterMode?: boolean;
@@ -26,19 +24,23 @@ export function TeachingPointsPanel({
   setNewTeachingPoint,
   effectiveTestType,
   effectiveTestTypeDisplay,
-  testTypeOverride,
-  setTestTypeOverride,
   showToast,
   showUndoToast,
   letterMode,
 }: TeachingPointsPanelProps) {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
-  const [validTypes, setValidTypes] = useState<{ id: string; name: string }[]>([]);
+  const [historyTypes, setHistoryTypes] = useState<{ test_type: string; test_type_display: string }[]>([]);
+  const [saveType, setSaveType] = useState<string>("__current__");
 
   useEffect(() => {
-    sidecarApi.listTestTypes().then(setValidTypes).catch(() => {});
+    sidecarApi.listHistoryTestTypes().then(setHistoryTypes).catch(() => {});
   }, []);
+
+  // Default save dropdown to current report's type
+  useEffect(() => {
+    setSaveType("__current__");
+  }, [effectiveTestType]);
 
   const totalCount = teachingPoints.length + sharedTeachingPoints.length;
 
@@ -54,37 +56,9 @@ export function TeachingPointsPanel({
     return [...types].sort();
   }, [teachingPoints, sharedTeachingPoints]);
 
-  // All valid types for the datalist (registry + any already used), with display names
-  const allTypeOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of validTypes) map.set(t.id, t.name);
-    for (const t of uniqueTypes) {
-      if (!map.has(t)) map.set(t, t.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
-    }
-    if (effectiveTestType && !map.has(effectiveTestType)) {
-      map.set(effectiveTestType, effectiveTestType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
-    }
-    return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [validTypes, uniqueTypes, effectiveTestType]);
-
-  /** Try to match free-text input to a valid registry type ID. */
-  const resolveTypeId = (input: string): string | null => {
-    if (!input) return null;
-    const lower = input.toLowerCase().replace(/[\s_-]+/g, "_");
-    const exact = validTypes.find((t) => t.id === lower);
-    if (exact) return exact.id;
-    const byName = validTypes.find((t) => t.name.toLowerCase() === input.toLowerCase());
-    if (byName) return byName.id;
-    const partial = validTypes.find(
-      (t) => t.id.includes(lower) || t.name.toLowerCase().includes(input.toLowerCase()),
-    );
-    if (partial) return partial.id;
-    return null;
-  };
-
   const getDisplayName = (typeId: string): string => {
-    const found = validTypes.find(t => t.id === typeId);
-    return found?.name ?? typeId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const found = historyTypes.find(t => t.test_type === typeId);
+    return found?.test_type_display ?? typeId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   };
 
   // Filter logic: "" = all, "__global__" = only null test_type, specific = that type + global
@@ -100,26 +74,13 @@ export function TeachingPointsPanel({
     return sharedTeachingPoints.filter((sp) => !sp.test_type || sp.test_type === typeFilter);
   }, [sharedTeachingPoints, typeFilter]);
 
-  const handleSaveForType = async () => {
+  const handleSave = async () => {
     if (!newTeachingPoint.trim()) return;
+    const testType = saveType === "__all__" ? undefined : (saveType === "__current__" ? effectiveTestType : saveType);
     try {
       const tp = await sidecarApi.createTeachingPoint({
         text: newTeachingPoint.trim(),
-        test_type: effectiveTestType,
-      });
-      setTeachingPoints((prev) => [tp, ...prev]);
-      setNewTeachingPoint("");
-      queueUpsertAfterMutation("teaching_points", tp.id).catch(() => {});
-    } catch {
-      showToast("error", "Failed to save teaching point.");
-    }
-  };
-
-  const handleSaveForAll = async () => {
-    if (!newTeachingPoint.trim()) return;
-    try {
-      const tp = await sidecarApi.createTeachingPoint({
-        text: newTeachingPoint.trim(),
+        test_type: testType,
       });
       setTeachingPoints((prev) => [tp, ...prev]);
       setNewTeachingPoint("");
@@ -153,41 +114,19 @@ export function TeachingPointsPanel({
     });
   };
 
-  const handleTypeChange = async (id: number, rawInput: string | null) => {
+  const handleTypeChange = async (id: number, newType: string) => {
     setEditingTypeId(null);
     const prev = teachingPoints.find((tp) => tp.id === id);
     if (!prev) return;
 
-    // Blank = "All types"
-    if (!rawInput) {
-      if (prev.test_type === null) return;
-      setTeachingPoints((pts) =>
-        pts.map((tp) => (tp.id === id ? { ...tp, test_type: null } : tp)),
-      );
-      try {
-        await sidecarApi.updateTeachingPoint(id, { test_type: null });
-        queueUpsertAfterMutation("teaching_points", id).catch(() => {});
-      } catch {
-        setTeachingPoints((pts) =>
-          pts.map((tp) => (tp.id === id ? { ...tp, test_type: prev.test_type } : tp)),
-        );
-        showToast("error", "Failed to update teaching point type.");
-      }
-      return;
-    }
-
-    const resolved = resolveTypeId(rawInput);
-    if (!resolved) {
-      showToast("info", "No matching type found. Try picking from the suggestions.");
-      return;
-    }
-    if (resolved === prev.test_type) return;
+    const resolvedType = newType === "__all__" ? null : newType;
+    if (resolvedType === (prev.test_type ?? null)) return;
 
     setTeachingPoints((pts) =>
-      pts.map((tp) => (tp.id === id ? { ...tp, test_type: resolved } : tp)),
+      pts.map((tp) => (tp.id === id ? { ...tp, test_type: resolvedType } : tp)),
     );
     try {
-      await sidecarApi.updateTeachingPoint(id, { test_type: resolved });
+      await sidecarApi.updateTeachingPoint(id, { test_type: resolvedType });
       queueUpsertAfterMutation("teaching_points", id).catch(() => {});
     } catch {
       setTeachingPoints((pts) =>
@@ -206,18 +145,6 @@ export function TeachingPointsPanel({
         )}
       </summary>
       <div className="teaching-points-body">
-        {!letterMode && testTypeOverride !== undefined && (
-          <div className="teaching-points-type-row">
-            <label className="teaching-points-type-label">Report type:</label>
-            <input
-              type="text"
-              className="teaching-points-type-input"
-              value={testTypeOverride ?? effectiveTestTypeDisplay}
-              onChange={(e) => setTestTypeOverride(e.target.value)}
-              placeholder="e.g. Calcium Score CT"
-            />
-          </div>
-        )}
         <p className="teaching-points-desc">
           {letterMode
             ? "Add personalized instructions that customize how AI generates letters. These points can be stylistic or clinical. Explify will remember and apply these to all future outputs."
@@ -235,7 +162,7 @@ export function TeachingPointsPanel({
               <option value="">All teaching points</option>
               <option value="__global__">Global only</option>
               {uniqueTypes.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{getDisplayName(t)}</option>
               ))}
             </select>
           </div>
@@ -252,21 +179,29 @@ export function TeachingPointsPanel({
             rows={3}
           />
           <div className="teaching-point-save-row">
-            {!letterMode && (
-              <button
-                className="teaching-point-save-btn"
-                disabled={!newTeachingPoint.trim()}
-                onClick={handleSaveForType}
-              >
-                Save for {effectiveTestTypeDisplay}
-              </button>
-            )}
-            <button
-              className={letterMode ? "teaching-point-save-btn" : "teaching-point-save-btn teaching-point-save-btn--all"}
-              disabled={!newTeachingPoint.trim()}
-              onClick={handleSaveForAll}
+            <select
+              className="teaching-point-type-dropdown"
+              value={saveType}
+              onChange={(e) => setSaveType(e.target.value)}
             >
-              Save for all types
+              {!letterMode && (
+                <option value="__current__">{effectiveTestTypeDisplay}</option>
+              )}
+              <option value="__all__">All types</option>
+              {historyTypes
+                .filter((ht) => ht.test_type !== effectiveTestType)
+                .map((ht) => (
+                  <option key={ht.test_type} value={ht.test_type}>
+                    {ht.test_type_display}
+                  </option>
+                ))}
+            </select>
+            <button
+              className="teaching-point-save-btn"
+              disabled={!newTeachingPoint.trim()}
+              onClick={handleSave}
+            >
+              Save
             </button>
           </div>
         </div>
@@ -278,49 +213,28 @@ export function TeachingPointsPanel({
                 <p className="own-teaching-point-text">{tp.text}</p>
                 <div className="own-teaching-point-meta">
                   {editingTypeId === tp.id ? (
-                    <>
-                      <input
-                        className="own-teaching-point-type-select"
-                        list={`tp-type-list-${tp.id}`}
-                        defaultValue={tp.test_type ? getDisplayName(tp.test_type) : ""}
-                        placeholder="Type or pick (blank = all)"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const val = (e.target as HTMLInputElement).value.trim() || null;
-                            handleTypeChange(tp.id, val);
-                          } else if (e.key === "Escape") {
-                            setEditingTypeId(null);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const val = e.target.value.trim() || null;
-                          handleTypeChange(tp.id, val);
-                        }}
-                      />
-                      <datalist id={`tp-type-list-${tp.id}`}>
-                        {allTypeOptions.map((t) => (
-                          <option key={t.id} value={t.name} />
-                        ))}
-                      </datalist>
-                    </>
+                    <select
+                      className="own-teaching-point-type-select"
+                      defaultValue={tp.test_type ?? "__all__"}
+                      autoFocus
+                      onChange={(e) => handleTypeChange(tp.id, e.target.value)}
+                      onBlur={() => setEditingTypeId(null)}
+                    >
+                      <option value="__all__">All types</option>
+                      {historyTypes.map((ht) => (
+                        <option key={ht.test_type} value={ht.test_type}>
+                          {ht.test_type_display}
+                        </option>
+                      ))}
+                    </select>
                   ) : tp.test_type ? (
-                    <>
-                      <span
-                        className="own-teaching-point-type"
-                        onClick={() => setEditingTypeId(tp.id)}
-                        title="Click to change type"
-                      >
-                        {tp.test_type}
-                      </span>
-                      <span
-                        className="own-teaching-point-type own-teaching-point-type--display"
-                        onClick={() => setEditingTypeId(tp.id)}
-                        title="Click to change type"
-                      >
-                        {getDisplayName(tp.test_type)}
-                      </span>
-                    </>
+                    <span
+                      className="own-teaching-point-type"
+                      onClick={() => setEditingTypeId(tp.id)}
+                      title="Click to change type"
+                    >
+                      {getDisplayName(tp.test_type)}
+                    </span>
                   ) : (
                     <span
                       className="own-teaching-point-type own-teaching-point-type--global"
@@ -352,7 +266,9 @@ export function TeachingPointsPanel({
                     Shared by {sp.sharer_email}
                   </span>
                   {sp.test_type ? (
-                    <span className="shared-teaching-point-type">{sp.test_type}</span>
+                    <span className="shared-teaching-point-type">
+                      {getDisplayName(sp.test_type)}
+                    </span>
                   ) : (
                     <span className="shared-teaching-point-type shared-teaching-point-type--global">All types</span>
                   )}

@@ -75,8 +75,25 @@
   color: var(--color-gray-400);
 }
 
+.tp-entry-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.tp-entry-type-dropdown {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  flex: 1;
+  min-width: 120px;
+}
+
 .tp-entry-btn {
-  align-self: flex-start;
   padding: var(--space-sm) var(--space-lg);
   background-color: var(--color-primary-600);
   color: white;
@@ -299,26 +316,14 @@
   font-weight: 500;
 }
 
-.tp-edit-scope-btn {
-  padding: 3px 10px;
-  background-color: var(--color-surface);
-  color: var(--color-text-secondary);
+.tp-edit-scope-dropdown {
+  padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
   cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tp-edit-scope-btn:hover {
-  background-color: var(--color-gray-50);
-}
-
-.tp-edit-scope-btn--active {
-  background-color: var(--color-primary-50);
-  border-color: var(--color-primary-400);
-  color: var(--color-primary-600);
-  font-weight: 500;
 }
 
 .tp-edit-actions {

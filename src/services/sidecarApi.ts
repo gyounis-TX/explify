@@ -500,6 +500,17 @@ class SidecarApi {
     return response.json();
   }
 
+  async listHistoryTestTypes(): Promise<
+    { test_type: string; test_type_display: string }[]
+  > {
+    const baseUrl = await this.ensureInitialized();
+    const response = await fetch(`${baseUrl}/history/test-types`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return [];
+    return response.json();
+  }
+
   async getDefaultTemplate(testType: string): Promise<Template | null> {
     const baseUrl = await this.ensureInitialized();
     const response = await fetch(

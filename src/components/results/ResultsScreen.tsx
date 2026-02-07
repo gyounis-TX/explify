@@ -224,12 +224,8 @@ export function ResultsScreen() {
   const [isEditingCombined, setIsEditingCombined] = useState(false);
   const [editedCombinedSummary, setEditedCombinedSummary] = useState("");
 
-  // Test type override
-  const [testTypeOverride, setTestTypeOverride] = useState<string | null>(null);
-  const effectiveTestType = testTypeOverride?.trim() || currentResponse?.parsed_report.test_type || "";
-  const effectiveTestTypeDisplay = testTypeOverride?.trim()
-    ? testTypeOverride.trim().replace(/\b\w/g, (c) => c.toUpperCase())
-    : currentResponse?.parsed_report.test_type_display || "this type";
+  const effectiveTestType = currentResponse?.parsed_report.test_type || "";
+  const effectiveTestTypeDisplay = currentResponse?.parsed_report.test_type_display || "this type";
 
   // Draft auto-save
   const draftKey = historyId ? `draft:${historyId}` : null;
@@ -812,8 +808,6 @@ export function ResultsScreen() {
     setNewTeachingPoint,
     effectiveTestType,
     effectiveTestTypeDisplay,
-    testTypeOverride,
-    setTestTypeOverride,
     showToast,
     showUndoToast,
   } as const;

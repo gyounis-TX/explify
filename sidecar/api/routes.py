@@ -1389,6 +1389,13 @@ async def delete_template(template_id: int):
 # --- History Endpoints ---
 
 
+@router.get("/history/test-types")
+async def list_history_test_types():
+    """Return distinct test types from user's history."""
+    db = get_db()
+    return db.list_history_test_types()
+
+
 @router.get("/history", response_model=HistoryListResponse)
 async def list_history(
     offset: int = Query(0, ge=0),

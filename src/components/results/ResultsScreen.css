@@ -1386,19 +1386,6 @@
   border-bottom-right-radius: var(--radius-md);
 }
 
-.teaching-points-type-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
-
-.teaching-points-type-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
 .teaching-points-type-input {
   flex: 1;
   padding: var(--space-xs) var(--space-sm);
@@ -1483,6 +1470,19 @@
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.teaching-point-type-dropdown {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  flex: 1;
+  min-width: 120px;
 }
 
 .teaching-point-save-btn {
@@ -1497,19 +1497,8 @@
   transition: all 0.15s ease;
 }
 
-.teaching-point-save-btn--all {
-  background-color: var(--color-surface);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-}
-
 .teaching-point-save-btn:hover:not(:disabled) {
   background-color: var(--color-primary-700);
-}
-
-.teaching-point-save-btn--all:hover:not(:disabled) {
-  background-color: var(--color-gray-100);
-  color: var(--color-text);
 }
 
 .teaching-point-save-btn:disabled {

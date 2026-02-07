@@ -14,6 +14,7 @@ export function TeachingPointsScreen() {
   const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [addType, setAddType] = useState<string>("__all__");
 
   // Recipients state (for "Shared with" footer)
   const [recipients, setRecipients] = useState<ShareRecipient[]>([]);
@@ -21,13 +22,13 @@ export function TeachingPointsScreen() {
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
-  const [editScope, setEditScope] = useState<string | null>(null);
+  const [editScope, setEditScope] = useState<string>("__all__");
 
   // Inline type-edit state (click badge to change type without full edit mode)
   const [inlineTypeEditId, setInlineTypeEditId] = useState<number | null>(null);
 
-  // Valid test types from registry (for validation)
-  const [validTypes, setValidTypes] = useState<{ id: string; name: string }[]>([]);
+  // History test types for dropdown
+  const [historyTypes, setHistoryTypes] = useState<{ test_type: string; test_type_display: string }[]>([]);
 
   const fetchPoints = useCallback(async () => {
     try {
@@ -46,7 +47,7 @@ export function TeachingPointsScreen() {
 
   useEffect(() => {
     fetchPoints();
-    sidecarApi.listTestTypes().then(setValidTypes).catch(() => {});
+    sidecarApi.listHistoryTestTypes().then(setHistoryTypes).catch(() => {});
   }, [fetchPoints]);
 
   useEffect(() => {
@@ -63,12 +64,18 @@ export function TeachingPointsScreen() {
     loadRecipients();
   }, []);
 
+  const getDisplayName = (typeId: string): string => {
+    const found = historyTypes.find(t => t.test_type === typeId);
+    return found?.test_type_display ?? typeId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  };
+
   const handleAdd = useCallback(async () => {
     const text = newText.trim();
     if (!text || saving) return;
     setSaving(true);
+    const testType = addType === "__all__" ? undefined : addType;
     try {
-      const tp = await sidecarApi.createTeachingPoint({ text });
+      const tp = await sidecarApi.createTeachingPoint({ text, test_type: testType });
       setTeachingPoints((prev) => [tp, ...prev]);
       setNewText("");
       queueUpsertAfterMutation("teaching_points", tp.id).catch(() => {});
@@ -78,7 +85,7 @@ export function TeachingPointsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [newText, saving, showToast]);
+  }, [newText, saving, showToast, addType]);
 
   const handleDelete = useCallback(
     async (id: number) => {
@@ -100,86 +107,29 @@ export function TeachingPointsScreen() {
   const startEditing = useCallback((tp: TeachingPoint) => {
     setEditingId(tp.id);
     setEditText(tp.text);
-    setEditScope(tp.test_type ?? null);
+    setEditScope(tp.test_type ?? "__all__");
   }, []);
 
   const cancelEditing = useCallback(() => {
     setEditingId(null);
     setEditText("");
-    setEditScope(null);
+    setEditScope("__all__");
   }, []);
 
-  // All valid types for the datalist (registry + any already used), with display names
-  const allTypeOptions = (() => {
-    const map = new Map<string, string>();
-    for (const t of validTypes) map.set(t.id, t.name);
-    for (const tp of teachingPoints) {
-      if (tp.test_type && !map.has(tp.test_type)) {
-        map.set(tp.test_type, tp.test_type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
-      }
-    }
-    return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  })();
-
-  /** Try to match free-text input to a valid registry type ID. */
-  const resolveTypeId = (input: string): string | null => {
-    if (!input) return null;
-    const lower = input.toLowerCase().replace(/[\s_-]+/g, "_");
-    // Exact match on ID
-    const exact = validTypes.find((t) => t.id === lower);
-    if (exact) return exact.id;
-    // Exact match on display name (case-insensitive)
-    const byName = validTypes.find((t) => t.name.toLowerCase() === input.toLowerCase());
-    if (byName) return byName.id;
-    // Partial match: input contained in name or ID
-    const partial = validTypes.find(
-      (t) => t.id.includes(lower) || t.name.toLowerCase().includes(input.toLowerCase()),
-    );
-    if (partial) return partial.id;
-    return null;
-  };
-
-  const getDisplayName = (typeId: string): string => {
-    const found = validTypes.find(t => t.id === typeId);
-    return found?.name ?? typeId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  };
-
   const handleInlineTypeChange = useCallback(
-    async (id: number, rawInput: string | null) => {
+    async (id: number, newType: string) => {
       setInlineTypeEditId(null);
       const prev = teachingPoints.find((tp) => tp.id === id);
       if (!prev) return;
 
-      // Blank = "All types"
-      if (!rawInput) {
-        if (prev.test_type === null) return;
-        setTeachingPoints((pts) =>
-          pts.map((tp) => (tp.id === id ? { ...tp, test_type: null } : tp)),
-        );
-        try {
-          await sidecarApi.updateTeachingPoint(id, { test_type: null });
-          queueUpsertAfterMutation("teaching_points", id).catch(() => {});
-        } catch {
-          setTeachingPoints((pts) =>
-            pts.map((tp) => (tp.id === id ? { ...tp, test_type: prev.test_type } : tp)),
-          );
-          showToast("error", "Failed to update type.");
-        }
-        return;
-      }
-
-      const resolved = resolveTypeId(rawInput);
-      if (!resolved) {
-        showToast("info", "No matching type found. Try picking from the suggestions.");
-        return;
-      }
-      if (resolved === prev.test_type) return;
+      const resolvedType = newType === "__all__" ? null : newType;
+      if (resolvedType === (prev.test_type ?? null)) return;
 
       setTeachingPoints((pts) =>
-        pts.map((tp) => (tp.id === id ? { ...tp, test_type: resolved } : tp)),
+        pts.map((tp) => (tp.id === id ? { ...tp, test_type: resolvedType } : tp)),
       );
       try {
-        await sidecarApi.updateTeachingPoint(id, { test_type: resolved });
+        await sidecarApi.updateTeachingPoint(id, { test_type: resolvedType });
         queueUpsertAfterMutation("teaching_points", id).catch(() => {});
       } catch {
         setTeachingPoints((pts) =>
@@ -188,15 +138,16 @@ export function TeachingPointsScreen() {
         showToast("error", "Failed to update type.");
       }
     },
-    [teachingPoints, showToast, validTypes],
+    [teachingPoints, showToast],
   );
 
   const handleSaveEdit = useCallback(async () => {
     if (editingId === null || !editText.trim()) return;
+    const resolvedScope = editScope === "__all__" ? null : editScope;
     try {
       const updated = await sidecarApi.updateTeachingPoint(editingId, {
         text: editText.trim(),
-        test_type: editScope,
+        test_type: resolvedScope,
       });
       setTeachingPoints((prev) =>
         prev.map((p) => (p.id === editingId ? updated : p)),
@@ -250,13 +201,27 @@ export function TeachingPointsScreen() {
             }}
             rows={4}
           />
-          <button
-            className="tp-entry-btn"
-            disabled={!newText.trim() || saving}
-            onClick={handleAdd}
-          >
-            {saving ? "Saving..." : "Add Teaching Point"}
-          </button>
+          <div className="tp-entry-actions">
+            <select
+              className="tp-entry-type-dropdown"
+              value={addType}
+              onChange={(e) => setAddType(e.target.value)}
+            >
+              <option value="__all__">All types</option>
+              {historyTypes.map((ht) => (
+                <option key={ht.test_type} value={ht.test_type}>
+                  {ht.test_type_display}
+                </option>
+              ))}
+            </select>
+            <button
+              className="tp-entry-btn"
+              disabled={!newText.trim() || saving}
+              onClick={handleAdd}
+            >
+              {saving ? "Saving..." : "Add"}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -290,18 +255,18 @@ export function TeachingPointsScreen() {
                     />
                     <div className="tp-edit-scope">
                       <span className="tp-edit-scope-label">Scope:</span>
-                      <button
-                        className={`tp-edit-scope-btn${editScope !== null ? " tp-edit-scope-btn--active" : ""}`}
-                        onClick={() => setEditScope(tp.test_type ?? "General")}
+                      <select
+                        className="tp-edit-scope-dropdown"
+                        value={editScope}
+                        onChange={(e) => setEditScope(e.target.value)}
                       >
-                        {tp.test_type || "Original type"}
-                      </button>
-                      <button
-                        className={`tp-edit-scope-btn${editScope === null ? " tp-edit-scope-btn--active" : ""}`}
-                        onClick={() => setEditScope(null)}
-                      >
-                        All types
-                      </button>
+                        <option value="__all__">All types</option>
+                        {historyTypes.map((ht) => (
+                          <option key={ht.test_type} value={ht.test_type}>
+                            {ht.test_type_display}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="tp-edit-actions">
                       <button
@@ -325,49 +290,28 @@ export function TeachingPointsScreen() {
                       <p className="tp-card-text">{tp.text}</p>
                       <div className="tp-card-meta">
                         {inlineTypeEditId === tp.id ? (
-                          <>
-                            <input
-                              className="tp-card-type-select"
-                              list={`tp-type-list-${tp.id}`}
-                              defaultValue={tp.test_type ? getDisplayName(tp.test_type) : ""}
-                              placeholder="Type or pick (blank = all)"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  const val = (e.target as HTMLInputElement).value.trim() || null;
-                                  handleInlineTypeChange(tp.id, val);
-                                } else if (e.key === "Escape") {
-                                  setInlineTypeEditId(null);
-                                }
-                              }}
-                              onBlur={(e) => {
-                                const val = e.target.value.trim() || null;
-                                handleInlineTypeChange(tp.id, val);
-                              }}
-                            />
-                            <datalist id={`tp-type-list-${tp.id}`}>
-                              {allTypeOptions.map((t) => (
-                                <option key={t.id} value={t.name} />
-                              ))}
-                            </datalist>
-                          </>
+                          <select
+                            className="tp-card-type-select"
+                            defaultValue={tp.test_type ?? "__all__"}
+                            autoFocus
+                            onChange={(e) => handleInlineTypeChange(tp.id, e.target.value)}
+                            onBlur={() => setInlineTypeEditId(null)}
+                          >
+                            <option value="__all__">All types</option>
+                            {historyTypes.map((ht) => (
+                              <option key={ht.test_type} value={ht.test_type}>
+                                {ht.test_type_display}
+                              </option>
+                            ))}
+                          </select>
                         ) : tp.test_type ? (
-                          <>
-                            <span
-                              className="tp-card-type tp-card-type--clickable"
-                              onClick={() => setInlineTypeEditId(tp.id)}
-                              title="Click to change type"
-                            >
-                              {tp.test_type}
-                            </span>
-                            <span
-                              className="tp-card-type tp-card-type--display tp-card-type--clickable"
-                              onClick={() => setInlineTypeEditId(tp.id)}
-                              title="Click to change type"
-                            >
-                              {getDisplayName(tp.test_type)}
-                            </span>
-                          </>
+                          <span
+                            className="tp-card-type tp-card-type--clickable"
+                            onClick={() => setInlineTypeEditId(tp.id)}
+                            title="Click to change type"
+                          >
+                            {getDisplayName(tp.test_type)}
+                          </span>
                         ) : (
                           <span
                             className="tp-card-type tp-card-type--global tp-card-type--clickable"
@@ -427,7 +371,9 @@ export function TeachingPointsScreen() {
                       Shared by {sp.sharer_email}
                     </span>
                     {sp.test_type ? (
-                      <span className="tp-card-type">{sp.test_type}</span>
+                      <span className="tp-card-type">
+                        {getDisplayName(sp.test_type)}
+                      </span>
                     ) : (
                       <span className="tp-card-type tp-card-type--global">
                         All types

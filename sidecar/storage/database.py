@@ -1038,6 +1038,17 @@ class Database:
             conn.close()
 
 
+    def list_history_test_types(self) -> list[dict[str, str]]:
+        """Return distinct test types from the history table."""
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT test_type, test_type_display FROM history ORDER BY test_type_display"
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
     # --- Shared Teaching Points ---
 
     def replace_shared_teaching_points(self, rows: list[dict]) -> int:
