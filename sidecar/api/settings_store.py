@@ -3,6 +3,7 @@ Persistent settings store backed by SQLite + OS keychain (desktop)
 or PostgreSQL + env vars (web).
 
 Same public API: get_settings, update_settings, get_api_key_for_provider.
+All functions are async to support PG mode.
 """
 
 from __future__ import annotations
@@ -11,12 +12,11 @@ import json
 import os
 
 from api.explain_models import AppSettings, ExplanationVoiceEnum, FooterTypeEnum, LiteracyLevelEnum, LLMProviderEnum, PhysicianNameSourceEnum, SettingsUpdate
-from storage.database import get_db
-from storage.keychain import get_keychain
 
 REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "").lower() == "true"
+_USE_PG = bool(os.getenv("DATABASE_URL", ""))
 
-# Non-secret settings stored in SQLite
+# Non-secret settings stored in DB
 _DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "default_comment_mode", "footer_type", "custom_footer_text", "aws_region")
 # Keys that store JSON-encoded lists
 _JSON_LIST_KEYS = {"quick_reasons", "next_steps_options", "practice_providers"}
@@ -24,10 +24,42 @@ _JSON_LIST_KEYS = {"quick_reasons", "next_steps_options", "practice_providers"}
 _SECRET_KEYS = ("claude_api_key", "openai_api_key", "aws_access_key_id", "aws_secret_access_key")
 
 
-def get_settings() -> AppSettings:
-    """Return current settings (loaded fresh from SQLite + keychain)."""
-    db = get_db()
-    all_db = db.get_all_settings()
+async def _get_all_db_settings(user_id: str | None = None) -> dict[str, str]:
+    """Get all settings from the appropriate database."""
+    if _USE_PG:
+        from storage.pg_database import get_pg_db
+        db = get_pg_db()
+        return await db.get_all_settings(user_id=user_id)
+    else:
+        from storage.database import get_db
+        return get_db().get_all_settings()
+
+
+async def _set_setting(key: str, value: str, user_id: str | None = None) -> None:
+    """Set a setting in the appropriate database."""
+    if _USE_PG:
+        from storage.pg_database import get_pg_db
+        db = get_pg_db()
+        await db.set_setting(key, value, user_id=user_id)
+    else:
+        from storage.database import get_db
+        get_db().set_setting(key, value)
+
+
+async def _delete_setting(key: str, user_id: str | None = None) -> None:
+    """Delete a setting from the appropriate database."""
+    if _USE_PG:
+        from storage.pg_database import get_pg_db
+        db = get_pg_db()
+        await db.delete_setting(key, user_id=user_id)
+    else:
+        from storage.database import get_db
+        get_db().delete_setting(key)
+
+
+async def get_settings(user_id: str | None = None) -> AppSettings:
+    """Return current settings (loaded fresh from DB + keychain)."""
+    all_db = await _get_all_db_settings(user_id=user_id)
 
     def _load_json_list(key: str) -> list[str]:
         raw = all_db.get(key)
@@ -45,6 +77,7 @@ def get_settings() -> AppSettings:
         aws_access = None
         aws_secret = None
     else:
+        from storage.keychain import get_keychain
         keychain = get_keychain()
         claude_key = keychain.get_claude_key()
         openai_key = keychain.get_openai_key()
@@ -102,14 +135,13 @@ def get_settings() -> AppSettings:
     )
 
 
-def update_settings(update: SettingsUpdate) -> AppSettings:
+async def update_settings(update: SettingsUpdate, user_id: str | None = None) -> AppSettings:
     """Apply partial update and return new settings."""
-    db = get_db()
-
     update_data = update.model_dump(exclude_unset=True)
 
     # Persist API keys in keychain (desktop mode only)
     if not REQUIRE_AUTH:
+        from storage.keychain import get_keychain
         keychain = get_keychain()
         if "claude_api_key" in update_data:
             val = update_data.pop("claude_api_key")
@@ -140,23 +172,23 @@ def update_settings(update: SettingsUpdate) -> AppSettings:
         for secret_key in _SECRET_KEYS:
             update_data.pop(secret_key, None)
 
-    # Persist non-secret settings in SQLite
+    # Persist non-secret settings in DB
     for key in _DB_KEYS:
         if key in update_data:
             val = update_data[key]
             if key == "short_comment_char_limit":
-                db.set_setting(key, "none" if val is None else str(val))
+                await _set_setting(key, "none" if val is None else str(val), user_id=user_id)
             elif val is None:
-                db.delete_setting(key)
+                await _delete_setting(key, user_id=user_id)
             elif key in _JSON_LIST_KEYS:
-                db.set_setting(key, json.dumps(val))
+                await _set_setting(key, json.dumps(val), user_id=user_id)
             elif isinstance(val, bool):
-                db.set_setting(key, "true" if val else "false")
+                await _set_setting(key, "true" if val else "false", user_id=user_id)
             else:
                 # Enums -> store their value string
-                db.set_setting(key, val.value if hasattr(val, "value") else str(val))
+                await _set_setting(key, val.value if hasattr(val, "value") else str(val), user_id=user_id)
 
-    return get_settings()
+    return await get_settings(user_id=user_id)
 
 
 def get_api_key_for_provider(provider: str) -> str | dict | None:
@@ -181,6 +213,8 @@ def get_api_key_for_provider(provider: str) -> str | dict | None:
         return None
 
     # Desktop mode: keys from OS keychain
+    from storage.keychain import get_keychain
+    from storage.database import get_db
     keychain = get_keychain()
     if provider == "claude":
         return keychain.get_claude_key()

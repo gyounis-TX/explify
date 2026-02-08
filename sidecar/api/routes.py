@@ -300,7 +300,8 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
     # Tier 2: LLM fallback
     llm_attempted = False
     try:
-        settings = settings_store.get_settings()
+        user_id = _get_user_id(request)
+        settings = await settings_store.get_settings(user_id=user_id)
         provider_str = settings.llm_provider.value
         api_key = settings_store.get_api_key_for_provider(provider_str)
 
@@ -393,7 +394,8 @@ async def classify_input(request: Request, body: dict = Body(...)):
 
     # Ambiguous -- use LLM for tiebreak (optional, if API key available)
     try:
-        settings = settings_store.get_settings()
+        user_id = _get_user_id(request)
+        settings = await settings_store.get_settings(user_id=user_id)
         api_key = settings_store.get_api_key_for_provider(settings.llm_provider.value)
         if api_key:
             client = LLMClient(
@@ -516,7 +518,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         )
 
     # 4. Resolve API key
-    settings = settings_store.get_settings()
+    settings = await settings_store.get_settings(user_id=user_id)
     provider_str = body.provider.value if body.provider else settings.llm_provider.value
     api_key = body.api_key or settings_store.get_api_key_for_provider(
         provider_str
@@ -823,7 +825,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
         # Stage 3: Explain (LLM call)
         yield _sse_event({"stage": "explaining", "message": "Preparing prompt..."})
 
-        settings = settings_store.get_settings()
+        settings = await settings_store.get_settings(user_id=user_id)
         provider_str = explain_request.provider.value if explain_request.provider else settings.llm_provider.value
         api_key = explain_request.api_key or settings_store.get_api_key_for_provider(provider_str)
         if not api_key:
@@ -1102,7 +1104,8 @@ async def compare_reports(request: Request, body: dict = Body(...)):
         f"Generate a brief trend summary for the patient."
     )
 
-    settings = settings_store.get_settings()
+    user_id = _get_user_id(request)
+    settings = await settings_store.get_settings(user_id=user_id)
     provider_str = settings.llm_provider.value
     api_key = settings_store.get_api_key_for_provider(provider_str)
     if not api_key:
@@ -1184,7 +1187,8 @@ async def synthesize_reports(request: Request, body: dict = Body(...)):
         report_sections.append(section)
 
     # Load settings for tone/anxiety/voice
-    settings = settings_store.get_settings()
+    user_id = _get_user_id(request)
+    settings = await settings_store.get_settings(user_id=user_id)
     provider_str = settings.llm_provider.value
     api_key = settings_store.get_api_key_for_provider(provider_str)
     if not api_key:
@@ -1317,9 +1321,10 @@ def _mask_api_key(key: str | None) -> str | None:
 
 
 @router.get("/settings", response_model=AppSettings)
-async def get_settings():
+async def get_settings(request: Request):
     """Return current application settings with masked API keys."""
-    settings = settings_store.get_settings()
+    user_id = _get_user_id(request)
+    settings = await settings_store.get_settings(user_id=user_id)
     settings.claude_api_key = _mask_api_key(settings.claude_api_key)
     settings.openai_api_key = _mask_api_key(settings.openai_api_key)
     settings.aws_access_key_id = _mask_api_key(settings.aws_access_key_id)
@@ -1328,9 +1333,10 @@ async def get_settings():
 
 
 @router.patch("/settings", response_model=AppSettings)
-async def update_settings(update: SettingsUpdate = Body(...)):
+async def update_settings(request: Request, update: SettingsUpdate = Body(...)):
     """Update application settings (partial update)."""
-    updated = settings_store.update_settings(update)
+    user_id = _get_user_id(request)
+    updated = await settings_store.update_settings(update, user_id=user_id)
     updated.claude_api_key = _mask_api_key(updated.claude_api_key)
     updated.openai_api_key = _mask_api_key(updated.openai_api_key)
     updated.aws_access_key_id = _mask_api_key(updated.aws_access_key_id)
@@ -1692,7 +1698,7 @@ async def update_teaching_point(request: Request, point_id: str, body: dict = Bo
 async def generate_letter(request: Request, body: LetterGenerateRequest = Body(...)):
     """Generate a patient-facing letter/explanation from free-text input."""
     user_id = _get_user_id(request)
-    settings = settings_store.get_settings()
+    settings = await settings_store.get_settings(user_id=user_id)
     provider_str = settings.llm_provider.value
     api_key = settings_store.get_api_key_for_provider(provider_str)
     if not api_key:
