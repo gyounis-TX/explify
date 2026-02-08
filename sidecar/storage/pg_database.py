@@ -39,9 +39,9 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
-def _now() -> str:
-    """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _now() -> datetime:
+    """Return current UTC time as a datetime object (asyncpg requires native types)."""
+    return datetime.now(timezone.utc)
 
 
 # Reuse stylistic pattern extraction from the SQLite module
