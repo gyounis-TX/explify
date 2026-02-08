@@ -188,23 +188,22 @@ class PgDatabase:
         user_id: str | None = None,
     ) -> dict[str, Any]:
         pool = await _get_pool()
-        record_id = str(uuid.uuid4())
         sync_id = str(uuid.uuid4())
         now = _now()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO history
-                   (id, user_id, sync_id, test_type, test_type_display, filename,
+                   (user_id, sync_id, test_type, test_type_display, filename,
                     summary, full_response, tone_preference, detail_preference,
                     created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
-                record_id, user_id, sync_id, test_type, test_type_display,
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+                user_id, sync_id, test_type, test_type_display,
                 filename, summary, json.dumps(full_response),
                 tone_preference, detail_preference, now, now,
             )
             row = await conn.fetchrow(
-                "SELECT * FROM history WHERE id = $1 AND user_id = $2",
-                record_id, user_id,
+                "SELECT * FROM history WHERE sync_id = $1 AND user_id = $2",
+                sync_id, user_id,
             )
         result = _normalize_row(dict(row))
         if isinstance(result.get("full_response"), str):
@@ -244,7 +243,7 @@ class PgDatabase:
             total = count_row["cnt"]
 
             rows = await conn.fetch(
-                f"""SELECT id, created_at, test_type, test_type_display, filename,
+                f"""SELECT sync_id AS id, created_at, test_type, test_type_display, filename,
                            summary, liked, sync_id, updated_at
                     FROM history{where}
                     ORDER BY created_at DESC
@@ -258,7 +257,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM history WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM history WHERE sync_id = $1 AND user_id = $2",
                 str(history_id), user_id,
             )
         if not row:
@@ -272,7 +271,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM history WHERE id = $1 AND user_id = $2",
+                "DELETE FROM history WHERE sync_id = $1 AND user_id = $2",
                 str(history_id), user_id,
             )
         return result.endswith("1")
@@ -281,7 +280,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE history SET liked = $1, updated_at = $2 WHERE id = $3 AND user_id = $4",
+                "UPDATE history SET liked = $1, updated_at = $2 WHERE sync_id = $3 AND user_id = $4",
                 liked, _now(), str(history_id), user_id,
             )
         return result.endswith("1")
@@ -290,7 +289,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE history SET copied = true, updated_at = $1 WHERE id = $2 AND user_id = $3",
+                "UPDATE history SET copied = true, updated_at = $1 WHERE sync_id = $2 AND user_id = $3",
                 _now(), str(history_id), user_id,
             )
         return result.endswith("1")
@@ -299,7 +298,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE history SET edited_text = $1, updated_at = $2 WHERE id = $3 AND user_id = $4",
+                "UPDATE history SET edited_text = $1, updated_at = $2 WHERE sync_id = $3 AND user_id = $4",
                 edited_text, _now(), str(history_id), user_id,
             )
         return result.endswith("1")
@@ -519,21 +518,20 @@ class PgDatabase:
         user_id: str | None = None,
     ) -> dict[str, Any]:
         pool = await _get_pool()
-        record_id = str(uuid.uuid4())
         sync_id = str(uuid.uuid4())
         now = _now()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO templates
-                   (id, user_id, sync_id, name, test_type, tone,
+                   (user_id, sync_id, name, test_type, tone,
                     structure_instructions, closing_text, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
-                record_id, user_id, sync_id, name, test_type, tone,
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
+                user_id, sync_id, name, test_type, tone,
                 structure_instructions, closing_text, now, now,
             )
             row = await conn.fetchrow(
-                "SELECT * FROM templates WHERE id = $1 AND user_id = $2",
-                record_id, user_id,
+                "SELECT * FROM templates WHERE sync_id = $1 AND user_id = $2",
+                sync_id, user_id,
             )
         return _normalize_row(dict(row))
 
@@ -554,7 +552,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM templates WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM templates WHERE sync_id = $1 AND user_id = $2",
                 str(template_id), user_id,
             )
         return _normalize_row(dict(row)) if row else None
@@ -563,7 +561,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             existing = await conn.fetchrow(
-                "SELECT * FROM templates WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM templates WHERE sync_id = $1 AND user_id = $2",
                 str(template_id), user_id,
             )
             if not existing:
@@ -579,7 +577,7 @@ class PgDatabase:
                 test_type = updates.get("test_type", existing["test_type"])
                 if test_type:
                     await conn.execute(
-                        "UPDATE templates SET is_default = false WHERE test_type = $1 AND id != $2 AND user_id = $3",
+                        "UPDATE templates SET is_default = false WHERE test_type = $1 AND sync_id != $2 AND user_id = $3",
                         test_type, str(template_id), user_id,
                     )
 
@@ -597,7 +595,7 @@ class PgDatabase:
             values.append(user_id)
 
             await conn.execute(
-                f"UPDATE templates SET {', '.join(set_parts)} WHERE id = ${idx} AND user_id = ${idx+1}",
+                f"UPDATE templates SET {', '.join(set_parts)} WHERE sync_id = ${idx} AND user_id = ${idx+1}",
                 *values,
             )
 
@@ -616,7 +614,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM templates WHERE id = $1 AND user_id = $2",
+                "DELETE FROM templates WHERE sync_id = $1 AND user_id = $2",
                 str(template_id), user_id,
             )
         return result.endswith("1")
@@ -634,19 +632,18 @@ class PgDatabase:
         user_id: str | None = None,
     ) -> str:
         pool = await _get_pool()
-        record_id = str(uuid.uuid4())
         sync_id = str(uuid.uuid4())
         now = _now()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO letters
-                   (id, user_id, sync_id, prompt, content, letter_type,
+                   (user_id, sync_id, prompt, content, letter_type,
                     model_used, input_tokens, output_tokens, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
-                record_id, user_id, sync_id, prompt, content, letter_type,
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
+                user_id, sync_id, prompt, content, letter_type,
                 model_used, input_tokens, output_tokens, now, now,
             )
-        return record_id
+        return sync_id
 
     async def list_letters(
         self,
@@ -689,13 +686,13 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE letters SET content = $1, updated_at = $2 WHERE id = $3 AND user_id = $4",
+                "UPDATE letters SET content = $1, updated_at = $2 WHERE sync_id = $3 AND user_id = $4",
                 content, _now(), str(letter_id), user_id,
             )
             if not result.endswith("1"):
                 return None
             row = await conn.fetchrow(
-                "SELECT * FROM letters WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM letters WHERE sync_id = $1 AND user_id = $2",
                 str(letter_id), user_id,
             )
         return _normalize_row(dict(row)) if row else None
@@ -704,7 +701,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "UPDATE letters SET liked = $1, updated_at = $2 WHERE id = $3 AND user_id = $4",
+                "UPDATE letters SET liked = $1, updated_at = $2 WHERE sync_id = $3 AND user_id = $4",
                 liked, _now(), str(letter_id), user_id,
             )
         return result.endswith("1")
@@ -713,7 +710,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM letters WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM letters WHERE sync_id = $1 AND user_id = $2",
                 str(letter_id), user_id,
             )
         return _normalize_row(dict(row)) if row else None
@@ -722,7 +719,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM letters WHERE id = $1 AND user_id = $2",
+                "DELETE FROM letters WHERE sync_id = $1 AND user_id = $2",
                 str(letter_id), user_id,
             )
         return result.endswith("1")
@@ -733,19 +730,18 @@ class PgDatabase:
         self, text: str, test_type: str | None = None, user_id: str | None = None,
     ) -> dict[str, Any]:
         pool = await _get_pool()
-        record_id = str(uuid.uuid4())
         sync_id = str(uuid.uuid4())
         now = _now()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO teaching_points
-                   (id, user_id, sync_id, test_type, text, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-                record_id, user_id, sync_id, test_type, text, now, now,
+                   (user_id, sync_id, test_type, text, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6)""",
+                user_id, sync_id, test_type, text, now, now,
             )
             row = await conn.fetchrow(
-                "SELECT * FROM teaching_points WHERE id = $1 AND user_id = $2",
-                record_id, user_id,
+                "SELECT * FROM teaching_points WHERE sync_id = $1 AND user_id = $2",
+                sync_id, user_id,
             )
         return _normalize_row(dict(row))
 
@@ -775,7 +771,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM teaching_points WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM teaching_points WHERE sync_id = $1 AND user_id = $2",
                 str(point_id), user_id,
             )
             if row is None:
@@ -784,11 +780,11 @@ class PgDatabase:
             new_text = text if text is not None else current["text"]
             new_test_type = current["test_type"] if test_type == "UNSET" else test_type
             await conn.execute(
-                "UPDATE teaching_points SET text = $1, test_type = $2, updated_at = $3 WHERE id = $4 AND user_id = $5",
+                "UPDATE teaching_points SET text = $1, test_type = $2, updated_at = $3 WHERE sync_id = $4 AND user_id = $5",
                 new_text, new_test_type, _now(), str(point_id), user_id,
             )
             updated = await conn.fetchrow(
-                "SELECT * FROM teaching_points WHERE id = $1 AND user_id = $2",
+                "SELECT * FROM teaching_points WHERE sync_id = $1 AND user_id = $2",
                 str(point_id), user_id,
             )
         return dict(updated) if updated else None
@@ -797,7 +793,7 @@ class PgDatabase:
         pool = await _get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
-                "DELETE FROM teaching_points WHERE id = $1 AND user_id = $2",
+                "DELETE FROM teaching_points WHERE sync_id = $1 AND user_id = $2",
                 str(point_id), user_id,
             )
         return result.endswith("1")
