@@ -5,7 +5,7 @@
 /** True when running inside the Tauri desktop shell. */
 export const IS_TAURI = Boolean(
   typeof window !== "undefined" &&
-    (window as Record<string, unknown>).__TAURI_INTERNALS__,
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__,
 );
 
 /**
