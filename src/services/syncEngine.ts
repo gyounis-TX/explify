@@ -88,6 +88,7 @@ export function isSupabaseConfigured(): boolean {
 // ---------------------------------------------------------------------------
 
 export async function pullRemoteData(): Promise<void> {
+  if (!IS_TAURI) return; // Web mode: backend reads directly from Supabase PG
   const supabase = getSupabase();
   if (!supabase) return;
 
@@ -171,6 +172,7 @@ export function queueChange(
   operation: "upsert" | "delete",
   data: Record<string, unknown>,
 ): void {
+  if (!IS_TAURI) return; // Web mode: backend writes directly to Supabase PG
   // Don't queue setting changes for excluded keys
   if (
     table === "settings" &&
@@ -362,6 +364,7 @@ export async function queueUpsertAfterMutation(
  * Queue a settings key/value for sync.
  */
 export function queueSettingsUpsert(key: string, value: string): void {
+  if (!IS_TAURI) return; // Web mode: backend writes directly to Supabase PG
   if (!isSupabaseConfigured()) return;
   queueChange("settings", "upsert", {
     key,
