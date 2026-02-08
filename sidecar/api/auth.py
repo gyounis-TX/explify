@@ -22,8 +22,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.state.user_id = None
             return await call_next(request)
 
-        # Skip auth for health check
-        if request.url.path == "/health":
+        # Skip auth for health check and CORS preflight
+        if request.url.path == "/health" or request.method == "OPTIONS":
             request.state.user_id = None
             return await call_next(request)
 
