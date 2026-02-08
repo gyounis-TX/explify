@@ -22,7 +22,7 @@ class HistoryCreateRequest(BaseModel):
 class HistoryListItem(BaseModel):
     """Lightweight history entry (no full_response)."""
 
-    id: int
+    id: str | int
     created_at: str
     test_type: str
     test_type_display: str
@@ -45,7 +45,7 @@ class HistoryListResponse(BaseModel):
 class HistoryDetailResponse(BaseModel):
     """Single history record with full_response."""
 
-    id: int
+    id: str | int
     created_at: str
     test_type: str
     test_type_display: str
@@ -62,7 +62,7 @@ class HistoryDeleteResponse(BaseModel):
     """Response for DELETE /history/{id}."""
 
     deleted: bool
-    id: int
+    id: str | int
 
 
 class HistoryLikeRequest(BaseModel):
@@ -74,7 +74,7 @@ class HistoryLikeRequest(BaseModel):
 class HistoryLikeResponse(BaseModel):
     """Response for PATCH /history/{id}/like."""
 
-    id: int
+    id: str | int
     liked: bool
 
 

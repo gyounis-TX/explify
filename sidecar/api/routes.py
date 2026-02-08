@@ -1414,7 +1414,7 @@ async def get_default_template(request: Request, test_type: str):
 
 
 @router.patch("/templates/{template_id}", response_model=TemplateResponse)
-async def update_template(request: Request, template_id: int, body: TemplateUpdateRequest = Body(...)):
+async def update_template(request: Request, template_id: str, body: TemplateUpdateRequest = Body(...)):
     """Update an existing template."""
     user_id = _get_user_id(request)
     update_data = body.model_dump(exclude_unset=True)
@@ -1425,7 +1425,7 @@ async def update_template(request: Request, template_id: int, body: TemplateUpda
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(request: Request, template_id: int):
+async def delete_template(request: Request, template_id: str):
     """Delete a template."""
     user_id = _get_user_id(request)
     deleted = await _db_call("delete_template", template_id, user_id=user_id)
@@ -1470,7 +1470,7 @@ async def list_history(
 
 
 @router.get("/history/{history_id}", response_model=HistoryDetailResponse)
-async def get_history_detail(request: Request, history_id: int):
+async def get_history_detail(request: Request, history_id: str):
     """Return single history record with full_response."""
     user_id = _get_user_id(request)
     record = await _db_call("get_history", history_id, user_id=user_id)
@@ -1500,7 +1500,7 @@ async def create_history(request: Request, body: HistoryCreateRequest = Body(...
 
 
 @router.delete("/history/{history_id}", response_model=HistoryDeleteResponse)
-async def delete_history(request: Request, history_id: int):
+async def delete_history(request: Request, history_id: str):
     """Hard-delete a history record."""
     user_id = _get_user_id(request)
     deleted = await _db_call("delete_history", history_id, user_id=user_id)
@@ -1512,7 +1512,7 @@ async def delete_history(request: Request, history_id: int):
 @router.patch("/history/{history_id}/like", response_model=HistoryLikeResponse)
 async def toggle_history_liked(
     request: Request,
-    history_id: int,
+    history_id: str,
     body: HistoryLikeRequest = Body(...),
 ):
     """Toggle the liked status of a history record."""
@@ -1524,7 +1524,7 @@ async def toggle_history_liked(
 
 
 @router.put("/history/{history_id}/copied")
-async def mark_history_copied(request: Request, history_id: int):
+async def mark_history_copied(request: Request, history_id: str):
     """Mark a history record as copied (lightweight positive signal)."""
     user_id = _get_user_id(request)
     updated = await _db_call("mark_copied", history_id, user_id=user_id)
@@ -1538,7 +1538,7 @@ class EditedTextRequest(BaseModel):
 
 
 @router.patch("/history/{history_id}/edited_text")
-async def save_edited_text(request: Request, history_id: int, body: EditedTextRequest = Body(...)):
+async def save_edited_text(request: Request, history_id: str, body: EditedTextRequest = Body(...)):
     """Save the doctor's edited version of the explanation text."""
     user_id = _get_user_id(request)
     updated = await _db_call("save_edited_text", history_id, body.edited_text, user_id=user_id)
@@ -1663,7 +1663,7 @@ async def list_shared_teaching_points(request: Request, test_type: str | None = 
 
 
 @router.delete("/teaching-points/{point_id}")
-async def delete_teaching_point(request: Request, point_id: int):
+async def delete_teaching_point(request: Request, point_id: str):
     """Delete a teaching point."""
     user_id = _get_user_id(request)
     deleted = await _db_call("delete_teaching_point", point_id, user_id=user_id)
@@ -1673,7 +1673,7 @@ async def delete_teaching_point(request: Request, point_id: int):
 
 
 @router.put("/teaching-points/{point_id}")
-async def update_teaching_point(request: Request, point_id: int, body: dict = Body(...)):
+async def update_teaching_point(request: Request, point_id: str, body: dict = Body(...)):
     """Update a teaching point's text and/or test_type."""
     user_id = _get_user_id(request)
     updated = await _db_call(
@@ -1867,7 +1867,7 @@ async def list_letters(
 
 
 @router.get("/letters/{letter_id}", response_model=LetterResponse)
-async def get_letter(request: Request, letter_id: int):
+async def get_letter(request: Request, letter_id: str):
     """Return a single letter."""
     user_id = _get_user_id(request)
     record = await _db_call("get_letter", letter_id, user_id=user_id)
@@ -1877,7 +1877,7 @@ async def get_letter(request: Request, letter_id: int):
 
 
 @router.delete("/letters/{letter_id}", response_model=LetterDeleteResponse)
-async def delete_letter(request: Request, letter_id: int):
+async def delete_letter(request: Request, letter_id: str):
     """Delete a letter."""
     user_id = _get_user_id(request)
     deleted = await _db_call("delete_letter", letter_id, user_id=user_id)
@@ -1887,7 +1887,7 @@ async def delete_letter(request: Request, letter_id: int):
 
 
 @router.put("/letters/{letter_id}", response_model=LetterResponse)
-async def update_letter(request: Request, letter_id: int, body: LetterUpdateRequest = Body(...)):
+async def update_letter(request: Request, letter_id: str, body: LetterUpdateRequest = Body(...)):
     """Update a letter's content."""
     user_id = _get_user_id(request)
     record = await _db_call("update_letter", letter_id, body.content, user_id=user_id)
@@ -1897,7 +1897,7 @@ async def update_letter(request: Request, letter_id: int, body: LetterUpdateRequ
 
 
 @router.put("/letters/{letter_id}/like")
-async def toggle_letter_liked(request: Request, letter_id: int, body: LetterLikeRequest = Body(...)):
+async def toggle_letter_liked(request: Request, letter_id: str, body: LetterLikeRequest = Body(...)):
     """Toggle the liked status of a letter."""
     user_id = _get_user_id(request)
     updated = await _db_call("toggle_letter_liked", letter_id, body.liked, user_id=user_id)
@@ -1918,7 +1918,7 @@ async def sync_export_all(request: Request, table: str):
 
 
 @router.get("/sync/export/{table}/{record_id}")
-async def sync_export_record(request: Request, table: str, record_id: int):
+async def sync_export_record(request: Request, table: str, record_id: str):
     """Return a single row by local id (with sync_id)."""
     user_id = _get_user_id(request)
     record = await _db_call("export_record", table, record_id, user_id=user_id)

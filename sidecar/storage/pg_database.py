@@ -16,6 +16,19 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Convert native PostgreSQL types (datetime, UUID) to JSON-compatible primitives."""
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if isinstance(v, datetime):
+            out[k] = v.strftime("%Y-%m-%dT%H:%M:%SZ")
+        elif isinstance(v, uuid.UUID):
+            out[k] = str(v)
+        else:
+            out[k] = v
+    return out
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
@@ -186,7 +199,7 @@ class PgDatabase:
                 "SELECT * FROM history WHERE id = $1 AND user_id = $2",
                 record_id, user_id,
             )
-        result = dict(row)
+        result = _normalize_row(dict(row))
         if isinstance(result.get("full_response"), str):
             result["full_response"] = json.loads(result["full_response"])
         return result
@@ -232,7 +245,7 @@ class PgDatabase:
                 *params, limit, offset,
             )
 
-        return [dict(row) for row in rows], total
+        return [_normalize_row(dict(row)) for row in rows], total
 
     async def get_history(self, history_id: int | str, user_id: str | None = None) -> dict[str, Any] | None:
         pool = await _get_pool()
@@ -243,7 +256,7 @@ class PgDatabase:
             )
         if not row:
             return None
-        result = dict(row)
+        result = _normalize_row(dict(row))
         if isinstance(result.get("full_response"), str):
             result["full_response"] = json.loads(result["full_response"])
         return result
@@ -515,7 +528,7 @@ class PgDatabase:
                 "SELECT * FROM templates WHERE id = $1 AND user_id = $2",
                 record_id, user_id,
             )
-        return dict(row)
+        return _normalize_row(dict(row))
 
     async def list_templates(self, user_id: str | None = None) -> tuple[list[dict[str, Any]], int]:
         pool = await _get_pool()
@@ -528,7 +541,7 @@ class PgDatabase:
                 "SELECT * FROM templates WHERE user_id = $1 ORDER BY created_at DESC",
                 user_id,
             )
-        return [dict(row) for row in rows], total
+        return [_normalize_row(dict(row)) for row in rows], total
 
     async def get_template(self, template_id: int | str, user_id: str | None = None) -> dict[str, Any] | None:
         pool = await _get_pool()
@@ -537,7 +550,7 @@ class PgDatabase:
                 "SELECT * FROM templates WHERE id = $1 AND user_id = $2",
                 str(template_id), user_id,
             )
-        return dict(row) if row else None
+        return _normalize_row(dict(row)) if row else None
 
     async def update_template(self, template_id: int | str, user_id: str | None = None, **kwargs: Any) -> dict[str, Any] | None:
         pool = await _get_pool()
@@ -590,7 +603,7 @@ class PgDatabase:
                 "SELECT * FROM templates WHERE test_type = $1 AND is_default = true AND user_id = $2 LIMIT 1",
                 test_type, user_id,
             )
-        return dict(row) if row else None
+        return _normalize_row(dict(row)) if row else None
 
     async def delete_template(self, template_id: int | str, user_id: str | None = None) -> bool:
         pool = await _get_pool()
@@ -663,7 +676,7 @@ class PgDatabase:
                     LIMIT ${idx} OFFSET ${idx+1}""",
                 *params, limit, offset,
             )
-        return [dict(row) for row in rows], total
+        return [_normalize_row(dict(row)) for row in rows], total
 
     async def update_letter(self, letter_id: int | str, content: str, user_id: str | None = None) -> dict[str, Any] | None:
         pool = await _get_pool()
@@ -678,7 +691,7 @@ class PgDatabase:
                 "SELECT * FROM letters WHERE id = $1 AND user_id = $2",
                 str(letter_id), user_id,
             )
-        return dict(row) if row else None
+        return _normalize_row(dict(row)) if row else None
 
     async def toggle_letter_liked(self, letter_id: int | str, liked: bool, user_id: str | None = None) -> bool:
         pool = await _get_pool()
@@ -696,7 +709,7 @@ class PgDatabase:
                 "SELECT * FROM letters WHERE id = $1 AND user_id = $2",
                 str(letter_id), user_id,
             )
-        return dict(row) if row else None
+        return _normalize_row(dict(row)) if row else None
 
     async def delete_letter(self, letter_id: int | str, user_id: str | None = None) -> bool:
         pool = await _get_pool()
@@ -727,7 +740,7 @@ class PgDatabase:
                 "SELECT * FROM teaching_points WHERE id = $1 AND user_id = $2",
                 record_id, user_id,
             )
-        return dict(row)
+        return _normalize_row(dict(row))
 
     async def list_teaching_points(
         self, test_type: str | None = None, user_id: str | None = None,
@@ -746,7 +759,7 @@ class PgDatabase:
                     "SELECT * FROM teaching_points WHERE user_id = $1 ORDER BY created_at DESC",
                     user_id,
                 )
-        return [dict(row) for row in rows]
+        return [_normalize_row(dict(row)) for row in rows]
 
     async def update_teaching_point(
         self, point_id: int | str, text: str | None = None,
@@ -760,7 +773,7 @@ class PgDatabase:
             )
             if row is None:
                 return None
-            current = dict(row)
+            current = _normalize_row(dict(row))
             new_text = text if text is not None else current["text"]
             new_test_type = current["test_type"] if test_type == "UNSET" else test_type
             await conn.execute(
@@ -791,7 +804,7 @@ class PgDatabase:
                    ORDER BY test_type_display""",
                 user_id,
             )
-        return [dict(row) for row in rows]
+        return [_normalize_row(dict(row)) for row in rows]
 
     # --- Shared Teaching Points (stubs for web mode) ---
     # In web mode, sharing is handled at the Supabase level, not locally cached.

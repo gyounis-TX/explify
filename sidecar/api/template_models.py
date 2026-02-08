@@ -32,7 +32,7 @@ class TemplateUpdateRequest(BaseModel):
 class TemplateResponse(BaseModel):
     """Single template response."""
 
-    id: int
+    id: str | int
     name: str
     test_type: Optional[str] = None
     tone: Optional[str] = None

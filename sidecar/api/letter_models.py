@@ -20,7 +20,7 @@ class LetterGenerateRequest(BaseModel):
 class LetterResponse(BaseModel):
     """Single letter record."""
 
-    id: int
+    id: str | int
     created_at: str
     prompt: str
     content: str
@@ -56,4 +56,4 @@ class LetterDeleteResponse(BaseModel):
     """Response for DELETE /letters/{id}."""
 
     deleted: bool
-    id: int
+    id: str | int
