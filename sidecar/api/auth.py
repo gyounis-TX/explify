@@ -2,17 +2,59 @@
 
 In desktop mode (REQUIRE_AUTH not set), all requests pass through with user_id=None.
 In web mode, validates Supabase JWT tokens and extracts user_id from the 'sub' claim.
+Supports both HS256 (legacy) and RS256 (modern Supabase) signing algorithms.
 """
 
 import os
 
 import jwt
+from jwt import PyJWKClient
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "").lower() == "true"
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+
+# Cache for JWKS clients keyed by issuer URL
+_jwks_clients: dict[str, PyJWKClient] = {}
+
+
+def _get_jwks_client(issuer: str) -> PyJWKClient:
+    """Get or create a cached PyJWKClient for the given issuer."""
+    if issuer not in _jwks_clients:
+        jwks_url = f"{issuer}/.well-known/jwks.json"
+        _jwks_clients[issuer] = PyJWKClient(jwks_url)
+    return _jwks_clients[issuer]
+
+
+def _decode_token(token: str) -> dict:
+    """Decode a Supabase JWT, supporting both HS256 and RS256."""
+    header = jwt.get_unverified_header(token)
+    alg = header.get("alg", "HS256")
+
+    if alg == "HS256":
+        return jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+
+    # RS256 or other asymmetric algorithm — fetch public key from JWKS
+    unverified = jwt.decode(token, options={"verify_signature": False})
+    issuer = unverified.get("iss", "")
+    if not issuer:
+        raise jwt.InvalidTokenError("Token missing iss claim for JWKS lookup")
+
+    jwks_client = _get_jwks_client(issuer)
+    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    return jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=[alg],
+        audience="authenticated",
+    )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -36,12 +78,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         token = auth_header[7:]
         try:
-            payload = jwt.decode(
-                token,
-                SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
-                audience="authenticated",
-            )
+            payload = _decode_token(token)
             request.state.user_id = payload.get("sub")
             if not request.state.user_id:
                 return JSONResponse(
