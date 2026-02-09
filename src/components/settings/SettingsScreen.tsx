@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { IS_TAURI, APP_VERSION } from "../../services/platform";
+import { IS_TAURI } from "../../services/platform";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueSettingsUpsert } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
@@ -91,19 +91,6 @@ export function SettingsScreen() {
   const [includeLifestyleRecommendations, setIncludeLifestyleRecommendations] = useState(true);
   const [defaultCommentMode, setDefaultCommentMode] = useState<"short" | "long" | "sms">("short");
 
-  // About / Update state
-  const [appVersion, setAppVersion] = useState(APP_VERSION);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [updateCheck, setUpdateCheck] = useState<any>(null);
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "updating" | "up-to-date">("idle");
-
-  useEffect(() => {
-    if (IS_TAURI) {
-      import("@tauri-apps/api/app").then(({ getVersion }) =>
-        getVersion().then(setAppVersion).catch(() => {}),
-      );
-    }
-  }, []);
 
   useEffect(() => {
     async function loadSettings() {
@@ -213,44 +200,6 @@ export function SettingsScreen() {
     return () => clearTimeout(timer);
   }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, quickReasons, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, defaultCommentMode]);
 
-  const handleCheckForUpdates = async () => {
-    setUpdateStatus("checking");
-    setUpdateCheck(null);
-    try {
-      const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check();
-      if (update?.available) {
-        setUpdateCheck(update);
-        setUpdateStatus("idle");
-      } else {
-        setUpdateStatus("up-to-date");
-      }
-    } catch {
-      setUpdateStatus("idle");
-      showToast("error", "Failed to check for updates.");
-    }
-  };
-
-  const handleApplyUpdate = async () => {
-    if (!updateCheck) return;
-    setUpdateStatus("updating");
-    try {
-      if (navigator.userAgent.includes("Windows")) {
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          await invoke("kill_sidecar");
-        } catch {
-          // Non-fatal: NSIS hook will kill sidecar if needed
-        }
-      }
-      await updateCheck.downloadAndInstall();
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
-    } catch {
-      setUpdateStatus("idle");
-      showToast("error", "Update failed.");
-    }
-  };
 
   if (loading) {
     return (
@@ -873,38 +822,14 @@ export function SettingsScreen() {
         {/* Sharing */}
         <SharingPanel />
 
-        {/* About */}
+        {/* Branding */}
         <section className="settings-section about-section">
-          <h3 className="settings-section-title">About</h3>
-          <p className="settings-description">
-            Explify v{appVersion || "..."}
+          <p className="lumen-branding">
+            A product of Lumen Innovations<br />
+            <a href="https://www.lumen-innovations.com" target="_blank" rel="noopener noreferrer">
+              www.lumen-innovations.com
+            </a>
           </p>
-          {IS_TAURI && (
-            <div className="about-update-row">
-              {updateCheck ? (
-                <button
-                  className="save-btn"
-                  onClick={handleApplyUpdate}
-                  disabled={updateStatus === "updating"}
-                >
-                  {updateStatus === "updating"
-                    ? "Updating..."
-                    : `Update to v${updateCheck.version}`}
-                </button>
-              ) : (
-                <button
-                  className="save-btn about-check-btn"
-                  onClick={handleCheckForUpdates}
-                  disabled={updateStatus === "checking"}
-                >
-                  {updateStatus === "checking" ? "Checking..." : "Check for Updates"}
-                </button>
-              )}
-              {updateStatus === "up-to-date" && (
-                <span className="save-success">You're on the latest version.</span>
-              )}
-            </div>
-          )}
         </section>
       </div>
     </div>

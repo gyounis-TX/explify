@@ -504,26 +504,27 @@
   color: #dc2626;
 }
 
-/* About Section */
+/* Branding Section */
 .about-section {
   margin-top: var(--space-2xl);
   padding-top: var(--space-xl);
   border-top: 1px solid var(--color-border);
 }
 
-.about-update-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  margin-top: var(--space-md);
+.lumen-branding {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
-.about-check-btn {
-  background-color: var(--color-gray-600, #4b5563);
+.lumen-branding a {
+  color: var(--color-primary);
+  text-decoration: none;
 }
 
-.about-check-btn:hover:not(:disabled) {
-  background-color: var(--color-gray-700, #374151);
+.lumen-branding a:hover {
+  text-decoration: underline;
 }
 
 /* Sharing Panel */
