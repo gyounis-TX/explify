@@ -353,10 +353,10 @@ export function ImportScreen() {
 
   const validateFile = (file: File): string | null => {
     const name = file.name.toLowerCase();
-    const validExts = [".pdf", ".jpg", ".jpeg", ".png", ".txt"];
+    const validExts = [".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".txt"];
     const hasValidExt = validExts.some((ext) => name.endsWith(ext));
     if (!hasValidExt) {
-      return `"${file.name}": Unsupported file type. Accepted: PDF, JPG, PNG, TXT.`;
+      return `"${file.name}": Unsupported file type. Accepted: PDF, JPG, PNG, TIF, TXT.`;
     }
     if (file.size === 0) {
       return `"${file.name}": File is empty.`;
@@ -684,7 +684,7 @@ export function ImportScreen() {
       <header className="import-header">
         <h2 className="import-title">Import</h2>
         <p className="import-description">
-          Upload files (PDF, images, text), paste results from EHR, or ask a question.
+          Upload files (PDF, images, TIF, text), paste results from EHR, or ask a question.
         </p>
       </header>
 
@@ -700,7 +700,7 @@ export function ImportScreen() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.txt,application/pdf,image/jpeg,image/png,text/plain"
+              accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.txt,application/pdf,image/jpeg,image/png,image/tiff,text/plain"
               multiple
               onChange={handleInputChange}
               className="drop-zone-input"
@@ -834,7 +834,7 @@ export function ImportScreen() {
               <>
                 <textarea
                   className="text-input"
-                  placeholder={"\u2022 Paste a test result. Include header with title of test or lab\n\u2022 Drag and drop a PDF, JPG, PNG, or TXT file (up to 50 MB)\n\u2022 Ask for help explaining a question, topic, or situation to a patient"}
+                  placeholder={"\u2022 Paste a test result. Include header with title of test or lab\n\u2022 Drag and drop a PDF, JPG, PNG, TIF, or TXT file (up to 50 MB)\n\u2022 Ask for help explaining a question, topic, or situation to a patient"}
                   value={pastedText}
                   onChange={(e) => {
                     setPastedText(e.target.value);

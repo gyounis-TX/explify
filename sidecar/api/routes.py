@@ -149,7 +149,7 @@ async def extract_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="No filename provided.")
 
     ext = os.path.splitext(file.filename.lower())[1]
-    supported = {".pdf", ".jpg", ".jpeg", ".png", ".txt"}
+    supported = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".txt"}
     if ext not in supported:
         raise HTTPException(
             status_code=400,
@@ -175,7 +175,7 @@ async def extract_file(file: UploadFile = File(...)):
             result.filename = file.filename
             return result
 
-        elif ext in (".jpg", ".jpeg", ".png"):
+        elif ext in (".jpg", ".jpeg", ".png", ".tif", ".tiff"):
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
                 tmp.write(content)
                 tmp_path = tmp.name
