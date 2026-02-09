@@ -2,8 +2,10 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
-import type { ExtractionResult, Template, SharedTemplate, DetectTypeResponse, TestTypeInfo } from "../../types/sidecar";
+import type { ExtractionResult, Template, SharedTemplate, DetectTypeResponse } from "../../types/sidecar";
+import { groupTypesByCategory } from "../../utils/testTypeCategories";
 import "./ImportScreen.css";
+import "../shared/TypeModal.css";
 
 type ImportMode = "pdf" | "text";
 type ImportStatus = "idle" | "extracting" | "success" | "error";
@@ -87,53 +89,6 @@ export function clearImportCache(): void {
   _cache = freshCache();
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  cardiac: "Cardiac",
-  interventional: "Interventional / Procedures",
-  vascular: "Vascular",
-  lab: "Laboratory",
-  imaging_ct: "CT Scans",
-  imaging_mri: "MRI",
-  imaging_ultrasound: "Ultrasound",
-  imaging_xray: "X-Ray / Radiography",
-  pulmonary: "Pulmonary",
-  neurophysiology: "Neurophysiology",
-  endoscopy: "Endoscopy",
-  pathology: "Pathology",
-  allergy: "Allergy / Immunology",
-  dermatology: "Dermatology",
-};
-
-const CATEGORY_ORDER = [
-  "cardiac", "interventional", "vascular", "lab",
-  "imaging_ct", "imaging_mri", "imaging_ultrasound", "imaging_xray",
-  "pulmonary", "neurophysiology", "endoscopy", "pathology",
-  "allergy", "dermatology",
-];
-
-function groupTypesByCategory(types: TestTypeInfo[]): [string, TestTypeInfo[]][] {
-  const groups = new Map<string, TestTypeInfo[]>();
-  for (const t of types) {
-    const cat = t.category ?? "other";
-    if (!groups.has(cat)) groups.set(cat, []);
-    groups.get(cat)!.push(t);
-  }
-  const result: [string, TestTypeInfo[]][] = [];
-  for (const cat of CATEGORY_ORDER) {
-    const items = groups.get(cat);
-    if (items) {
-      result.push([CATEGORY_LABELS[cat] ?? cat, items]);
-      groups.delete(cat);
-    }
-  }
-  // Append any remaining categories not in the predefined order
-  for (const [cat, items] of groups) {
-    const label = CATEGORY_LABELS[cat] ?? cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    result.push([label, items]);
-  }
-  return result;
-}
-
 export function ImportScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -194,6 +149,9 @@ export function ImportScreen() {
   const [modalSelectedType, setModalSelectedType] = useState<string | null>(null);
   const [modalCustomType, setModalCustomType] = useState("");
   const [modalEditingKey, setModalEditingKey] = useState<string | null>(null);
+
+  // Single-report preview collapse state
+  const [singlePreviewExpanded, setSinglePreviewExpanded] = useState(false);
 
   // Track whether we've applied location state (to avoid re-applying on re-renders)
   const [appliedLocationState, setAppliedLocationState] = useState(false);
@@ -1071,59 +1029,76 @@ export function ImportScreen() {
                   );
                 }
 
-                // Single result — existing stats + text preview
+                // Single result — collapsible stats + text preview
                 return (
-                  <>
-                    <div className="preview-stats">
-                      <div className="stat">
-                        <span className="stat-label">Pages</span>
-                        <span className="stat-value">{result.total_pages}</span>
-                      </div>
-                      <div className="stat">
-                        <span className="stat-label">Characters</span>
-                        <span className="stat-value">
-                          {result.total_chars.toLocaleString()}
-                        </span>
-                      </div>
-                      {result.detection && (
-                        <div className="stat">
-                          <span className="stat-label">Type</span>
-                          <span className="stat-value">
-                            {result.detection.overall_type}
-                          </span>
+                  <div className="single-preview-collapsible">
+                    <button
+                      className="preview-card-header"
+                      onClick={() => setSinglePreviewExpanded((prev) => !prev)}
+                    >
+                      <span className="preview-card-label">Extraction Preview</span>
+                      <span className="preview-card-stats">
+                        {result.total_pages} pg &middot; {result.total_chars.toLocaleString()} chars
+                        {result.tables.length > 0 && ` \u00b7 ${result.tables.length} tables`}
+                      </span>
+                      <span className={`preview-card-chevron${singlePreviewExpanded ? " preview-card-chevron--open" : ""}`}>
+                        &#9662;
+                      </span>
+                    </button>
+                    {singlePreviewExpanded && (
+                      <div className="single-preview-body">
+                        <div className="preview-stats">
+                          <div className="stat">
+                            <span className="stat-label">Pages</span>
+                            <span className="stat-value">{result.total_pages}</span>
+                          </div>
+                          <div className="stat">
+                            <span className="stat-label">Characters</span>
+                            <span className="stat-value">
+                              {result.total_chars.toLocaleString()}
+                            </span>
+                          </div>
+                          {result.detection && (
+                            <div className="stat">
+                              <span className="stat-label">Type</span>
+                              <span className="stat-value">
+                                {result.detection.overall_type}
+                              </span>
+                            </div>
+                          )}
+                          {result.tables.length > 0 && (
+                            <div className="stat">
+                              <span className="stat-label">Tables</span>
+                              <span className="stat-value">{result.tables.length}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {result.tables.length > 0 && (
-                        <div className="stat">
-                          <span className="stat-label">Tables</span>
-                          <span className="stat-value">{result.tables.length}</span>
-                        </div>
-                      )}
-                    </div>
 
-                    {result.warnings.length > 0 && (
-                      <div className="preview-warnings">
-                        {result.warnings.map((w, i) => (
-                          <p key={i} className="warning-text">
-                            {w}
-                          </p>
-                        ))}
+                        {result.warnings.length > 0 && (
+                          <div className="preview-warnings">
+                            {result.warnings.map((w, i) => (
+                              <p key={i} className="warning-text">
+                                {w}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="preview-text-container">
+                          {isScrubbing ? (
+                            <div className="extraction-progress">
+                              <div className="spinner" />
+                              <p>Scrubbing PHI...</p>
+                            </div>
+                          ) : (
+                            <pre className="preview-text">
+                              {scrubbedText ?? result.full_text}
+                            </pre>
+                          )}
+                        </div>
                       </div>
                     )}
-
-                    <div className="preview-text-container">
-                      {isScrubbing ? (
-                        <div className="extraction-progress">
-                          <div className="spinner" />
-                          <p>Scrubbing PHI...</p>
-                        </div>
-                      ) : (
-                        <pre className="preview-text">
-                          {scrubbedText ?? result.full_text}
-                        </pre>
-                      )}
-                    </div>
-                  </>
+                  </div>
                 );
               })()}
 

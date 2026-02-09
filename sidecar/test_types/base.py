@@ -69,6 +69,15 @@ class BaseTestType(ABC):
         Default returns empty dict; override in subclass."""
         return {}
 
+    def resolve_subtype(self, extraction_result: ExtractionResult) -> tuple[str, str] | None:
+        """Resolve to a more specific subtype based on report content.
+
+        Returns (subtype_id, subtype_display_name) or None if this handler
+        does not support subtype resolution.
+        Override in subclass for family-style handlers.
+        """
+        return None
+
     def get_metadata(self) -> dict:
         """Return metadata for listing in registry."""
         return {

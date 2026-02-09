@@ -9,6 +9,67 @@ from .glossary import STRESS_GLOSSARY
 from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
+# Lazy import to avoid circular dependency at module level
+_pet_extractor = None
+_pet_ref_ranges = None
+_pet_glossary = None
+
+
+def _load_pet():
+    global _pet_extractor, _pet_ref_ranges, _pet_glossary
+    if _pet_extractor is None:
+        from test_types.extractors.cardiac_pet import (
+            extract_cardiac_pet_measurements,
+            CARDIAC_PET_REFERENCE_RANGES,
+            CARDIAC_PET_GLOSSARY,
+        )
+        _pet_extractor = extract_cardiac_pet_measurements
+        _pet_ref_ranges = CARDIAC_PET_REFERENCE_RANGES
+        _pet_glossary = CARDIAC_PET_GLOSSARY
+
+
+# ---------------------------------------------------------------------------
+# Subtype definitions
+# ---------------------------------------------------------------------------
+_SUBTYPES = {
+    # (is_pharma, modality) -> (type_id, display_name)
+    (False, "ecg"):   ("exercise_treadmill_test", "Exercise Treadmill Test"),
+    (True,  "ecg"):   ("pharma_spect_stress", "Pharmacologic SPECT Nuclear Stress"),  # pharma without imaging → default to SPECT
+    (True,  "spect"): ("pharma_spect_stress", "Pharmacologic SPECT Nuclear Stress"),
+    (False, "spect"): ("exercise_spect_stress", "Exercise SPECT Nuclear Stress"),
+    (True,  "pet"):   ("pharma_pet_stress", "Pharmacologic PET/PET-CT Stress"),
+    (False, "pet"):   ("exercise_pet_stress", "Exercise PET/PET-CT Stress"),
+    (False, "echo"):  ("exercise_stress_echo", "Exercise Stress Echocardiogram"),
+    (True,  "echo"):  ("pharma_stress_echo", "Pharmacologic Stress Echocardiogram"),
+}
+
+# Pharmacologic agents (vasodilators + dobutamine)
+_PHARMA_AGENTS = [
+    "lexiscan", "regadenoson", "adenosine", "dipyridamole",
+    "persantine", "dobutamine", "pharmacologic",
+]
+
+# Modality keyword sets (checked in priority order: PET > SPECT > Echo > ECG)
+_PET_KEYWORDS = [
+    "pet/ct", "pet-ct", "pet ct", "rb-82", "rubidium",
+    "n-13", "ammonia pet", "positron emission", "cardiac pet",
+    "myocardial blood flow", "mbf", "coronary flow reserve", "cfr",
+    "positron", "n-13 ammonia",
+]
+
+_SPECT_KEYWORDS = [
+    "spect", "sestamibi", "technetium", "tc-99m", "myoview",
+    "cardiolite", "thallium", "nuclear stress", "myocardial perfusion imaging",
+    "nuclear cardiology", "mpi",
+]
+
+_ECHO_KEYWORDS = [
+    "stress echo", "stress echocardiogram", "dobutamine echo",
+    "dobutamine stress echo", "exercise echo", "bicycle stress",
+    "wall motion at stress", "exercise echocardiogram",
+    "treadmill echo", "dobutamine echocardiogram",
+]
+
 
 class StressTestHandler(BaseTestType):
 
@@ -44,12 +105,81 @@ class StressTestHandler(BaseTestType):
             "chronotropic",
             "rate pressure product",
             "exercise capacity",
+            # Nuclear / SPECT
+            "nuclear stress",
+            "myocardial perfusion",
+            "spect",
+            "sestamibi",
+            # PET
+            "cardiac pet",
+            "pet/ct",
+            "pet-ct",
+            "rb-82",
+            "rubidium",
+            "mbf",
+            "coronary flow reserve",
+            # Pharmacologic
+            "lexiscan",
+            "regadenoson",
+            "adenosine stress",
+            "pharmacologic stress",
+            # Echo
+            "stress echocardiogram",
+            "stress echo",
+            "dobutamine stress",
+            "dobutamine echo",
+            "bicycle stress",
         ]
 
     @property
     def category(self) -> str:
         return "cardiac"
 
+    # ------------------------------------------------------------------
+    # Subtype resolution (used by registry.detect)
+    # ------------------------------------------------------------------
+    def resolve_subtype(self, extraction_result: ExtractionResult) -> tuple[str, str] | None:
+        """Return the resolved stress subtype for this report."""
+        return self._classify_subtype(extraction_result.full_text)
+
+    # ------------------------------------------------------------------
+    # Subtype classification
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _classify_subtype(text: str) -> tuple[str, str]:
+        """Determine the specific stress test subtype.
+
+        Returns (type_id, display_name).
+        """
+        lower = text.lower()
+
+        # Axis 1: pharmacologic vs exercise
+        is_pharma = any(agent in lower for agent in _PHARMA_AGENTS)
+
+        # Axis 2: imaging modality (priority: PET > SPECT > Echo > ECG-only)
+        if any(kw in lower for kw in _PET_KEYWORDS):
+            modality = "pet"
+        elif any(kw in lower for kw in _SPECT_KEYWORDS):
+            modality = "spect"
+        elif any(kw in lower for kw in _ECHO_KEYWORDS):
+            modality = "echo"
+        else:
+            modality = "ecg"
+
+        # Special dobutamine rule: if dobutamine is detected AND echo
+        # keywords are present → pharma_stress_echo. If dobutamine is
+        # detected WITHOUT echo keywords, it's still pharmacologic but
+        # modality depends on other imaging keywords.
+        if "dobutamine" in lower and modality != "echo":
+            # Dobutamine without echo keywords — still pharmacologic,
+            # modality determined by other keywords above
+            pass
+
+        return _SUBTYPES[(is_pharma, modality)]
+
+    # ------------------------------------------------------------------
+    # Detection
+    # ------------------------------------------------------------------
     def detect(self, extraction_result: ExtractionResult) -> float:
         """Keyword-based detection with tiered scoring."""
         text = extraction_result.full_text.lower()
@@ -69,6 +199,17 @@ class StressTestHandler(BaseTestType):
             "exercise ekg",
             "exercise electrocardiogram",
             "treadmill exercise test",
+            # Nuclear / SPECT
+            "nuclear stress test",
+            "myocardial perfusion imaging",
+            "pharmacologic stress",
+            # PET
+            "cardiac pet",
+            "myocardial blood flow",
+            "coronary flow reserve",
+            # Echo
+            "stress echocardiogram",
+            "dobutamine stress",
         ]
         moderate_keywords = [
             "mets achieved",
@@ -93,6 +234,29 @@ class StressTestHandler(BaseTestType):
             "exercise stage",
             "recovery phase",
             "peak exercise",
+            # Nuclear / SPECT
+            "spect",
+            "sestamibi",
+            "technetium",
+            "tc-99m",
+            "myoview",
+            "thallium",
+            # PET
+            "pet/ct",
+            "pet-ct",
+            "rb-82",
+            "rubidium",
+            "positron",
+            # Pharmacologic agents
+            "lexiscan",
+            "regadenoson",
+            "adenosine",
+            "dipyridamole",
+            "dobutamine",
+            # Echo
+            "wall motion at stress",
+            "bicycle stress",
+            "stress echo",
         ]
         weak_keywords = [
             "treadmill",
@@ -104,6 +268,9 @@ class StressTestHandler(BaseTestType):
             "mets",
             "arrhythmia",
             "pvcs",
+            "perfusion",
+            "ischemia",
+            "nuclear",
         ]
 
         strong_count = sum(1 for k in strong_keywords if k in text)
@@ -122,6 +289,9 @@ class StressTestHandler(BaseTestType):
         bonus = min(0.3, moderate_count * 0.05 + weak_count * 0.02)
         return min(1.0, base + bonus)
 
+    # ------------------------------------------------------------------
+    # Parsing
+    # ------------------------------------------------------------------
     def parse(
         self,
         extraction_result: ExtractionResult,
@@ -132,24 +302,31 @@ class StressTestHandler(BaseTestType):
         text = extraction_result.full_text
         warnings: list[str] = []
 
-        raw_measurements = extract_measurements(text, extraction_result.pages)
+        subtype_id, subtype_display = self._classify_subtype(text)
 
+        # Choose measurement extractor based on subtype
         parsed_measurements: list[ParsedMeasurement] = []
-        for m in raw_measurements:
-            classification = classify_measurement(m.abbreviation, m.value)
-            parsed_measurements.append(
-                ParsedMeasurement(
-                    name=m.name,
-                    abbreviation=m.abbreviation,
-                    value=m.value,
-                    unit=m.unit,
-                    status=classification.status,
-                    direction=classification.direction,
-                    reference_range=classification.reference_range_str,
-                    raw_text=m.raw_text,
-                    page_number=m.page_number,
+        if subtype_id in ("pharma_pet_stress", "exercise_pet_stress"):
+            _load_pet()
+            parsed_measurements = _pet_extractor(text, gender)
+        else:
+            # Use stress test measurements for treadmill/SPECT/echo subtypes
+            raw_measurements = extract_measurements(text, extraction_result.pages)
+            for m in raw_measurements:
+                classification = classify_measurement(m.abbreviation, m.value)
+                parsed_measurements.append(
+                    ParsedMeasurement(
+                        name=m.name,
+                        abbreviation=m.abbreviation,
+                        value=m.value,
+                        unit=m.unit,
+                        status=classification.status,
+                        direction=classification.direction,
+                        reference_range=classification.reference_range_str,
+                        raw_text=m.raw_text,
+                        page_number=m.page_number,
+                    )
                 )
-            )
 
         sections = self._extract_sections(text)
         findings = self._extract_findings(text)
@@ -163,8 +340,8 @@ class StressTestHandler(BaseTestType):
         detection_confidence = self.detect(extraction_result)
 
         return ParsedReport(
-            test_type=self.test_type_id,
-            test_type_display=self.display_name,
+            test_type=subtype_id,
+            test_type_display=subtype_display,
             detection_confidence=detection_confidence,
             measurements=parsed_measurements,
             sections=sections,
@@ -172,6 +349,9 @@ class StressTestHandler(BaseTestType):
             warnings=warnings,
         )
 
+    # ------------------------------------------------------------------
+    # Reference ranges & glossary
+    # ------------------------------------------------------------------
     def get_reference_ranges(self) -> dict:
         return {
             abbr: {
@@ -186,20 +366,41 @@ class StressTestHandler(BaseTestType):
     def get_glossary(self) -> dict[str, str]:
         return STRESS_GLOSSARY
 
-    _PHARMA_AGENTS = ["lexiscan", "adenosine", "regadenoson"]
-
-    def _is_pharmacological(self, text: str) -> bool:
-        """Return True if the report mentions a pharmacological stress agent."""
-        lower = text.lower()
-        return any(agent in lower for agent in self._PHARMA_AGENTS)
-
+    # ------------------------------------------------------------------
+    # Prompt context (subtype-specific)
+    # ------------------------------------------------------------------
     def get_prompt_context(self, extraction_result: ExtractionResult | None = None) -> dict:
         text = extraction_result.full_text if extraction_result else ""
-        is_pharma = self._is_pharmacological(text)
+        subtype_id, _ = self._classify_subtype(text)
 
-        if is_pharma:
-            explanation_style = (
-                "This is a pharmacological stress test (not exercise-based). "
+        base = {
+            "specialty": "cardiology",
+            "category": "cardiac",
+            "guidelines": "ACC/AHA 2002 Guideline Update for Exercise Testing",
+        }
+
+        if subtype_id == "exercise_treadmill_test":
+            base["test_type"] = "exercise_stress_test"
+            base["explanation_style"] = (
+                "Focus on exercise capacity (METs), heart rate response "
+                "(% of max predicted), blood pressure response, ECG changes "
+                "(ST depression/elevation), and overall interpretation "
+                "(positive, negative, equivocal, non-diagnostic). "
+                "Comment on whether the patient reached target heart rate "
+                "only because they exercised on a treadmill. "
+                "Explain what the results mean for the patient's heart health."
+            )
+
+        elif subtype_id == "pharma_spect_stress":
+            base["test_type"] = "pharma_spect_stress"
+            base["explanation_style"] = (
+                "This is a pharmacologic SPECT nuclear stress test. "
+                "The PRIMARY focus is the presence or absence of ISCHEMIA "
+                "(reversible perfusion defects). ALWAYS discuss ischemia and "
+                "perfusion findings FIRST, BEFORE mentioning ejection fraction "
+                "or pump strength. Ejection fraction should be mentioned as a "
+                "secondary data point later in the explanation — do not celebrate "
+                "or emphasize a normal EF, simply note it.\n"
                 "IMPORTANT pharmacological stress rules:\n"
                 "- Do NOT mention heart rate response to stress AT ALL. "
                 "Heart rate response to exercise is invalid with pharmacological "
@@ -212,32 +413,214 @@ class StressTestHandler(BaseTestType):
                 "- Do NOT state that the heart rate response may limit "
                 "interpretation of the EKG stress test. That caveat only "
                 "applies to exercise-based tests.\n"
-                "- If the test is inconclusive due to ST/T wave abnormalities, "
-                "simply state that without attributing it to heart rate response.\n"
-                "Focus on perfusion findings, wall motion, ejection fraction, "
-                "ECG changes, and overall interpretation "
-                "(normal, abnormal, equivocal). "
-                "Explain what the results mean for the patient's heart health."
+                "- Focus on perfusion findings (fixed vs reversible defects), "
+                "wall motion, and overall interpretation."
             )
-        else:
-            explanation_style = (
-                "Focus on exercise capacity (METs), heart rate response "
-                "(% of max predicted), blood pressure response, ECG changes "
-                "(ST depression/elevation), and overall interpretation "
-                "(positive, negative, equivocal, non-diagnostic). "
-                "Comment on whether the patient reached target heart rate "
-                "only because they exercised on a treadmill. "
-                "Explain what the results mean for the patient's heart health."
+            base["interpretation_rules"] = (
+                "SPECT NUCLEAR STRESS INTERPRETATION PRIORITIES:\n"
+                "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
+                "ischemia / perfusion findings BEFORE any mention of ejection "
+                "fraction or pump strength. Do NOT lead with EF. If there is "
+                "no ischemia, say so first, then mention EF afterward.\n"
+                "1. ISCHEMIA is the primary focus. State clearly whether "
+                "ischemia is present or absent. Describe the location, extent, "
+                "and severity of any perfusion defects.\n"
+                "2. Distinguish fixed defects (scar/infarct) from reversible "
+                "defects (ischemia).\n"
+                "3. Ejection fraction is secondary — mention it AFTER perfusion "
+                "findings. Do not emphasize or celebrate a normal EF.\n"
+                "4. Summed stress/rest/difference scores (SSS/SRS/SDS) quantify "
+                "perfusion abnormality if present.\n"
+                "5. Wall motion abnormalities at stress (stunning) are "
+                "significant markers of ischemia."
             )
 
-        return {
-            "specialty": "cardiology",
-            "test_type": "pharmacological_stress_test" if is_pharma else "exercise_stress_test",
-            "category": "cardiac",
-            "guidelines": "ACC/AHA 2002 Guideline Update for Exercise Testing",
-            "explanation_style": explanation_style,
-        }
+        elif subtype_id == "exercise_spect_stress":
+            base["test_type"] = "exercise_spect_stress"
+            base["explanation_style"] = (
+                "This is an exercise SPECT nuclear stress test. "
+                "The PRIMARY focus is the presence or absence of ISCHEMIA "
+                "(reversible perfusion defects). ALWAYS discuss ischemia and "
+                "perfusion findings FIRST, BEFORE mentioning ejection fraction "
+                "or pump strength. Also comment on exercise capacity (METs), "
+                "heart rate response (% of max predicted), and ECG changes. "
+                "Ejection fraction should be mentioned as a secondary data "
+                "point later in the explanation — do not celebrate or emphasize "
+                "a normal EF, simply note it."
+            )
+            base["interpretation_rules"] = (
+                "SPECT NUCLEAR STRESS INTERPRETATION PRIORITIES:\n"
+                "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
+                "ischemia / perfusion findings BEFORE any mention of ejection "
+                "fraction or pump strength. Do NOT lead with EF. If there is "
+                "no ischemia, say so first, then mention EF afterward.\n"
+                "1. ISCHEMIA is the primary focus. State clearly whether "
+                "ischemia is present or absent. Describe the location, extent, "
+                "and severity of any perfusion defects.\n"
+                "2. Distinguish fixed defects (scar/infarct) from reversible "
+                "defects (ischemia).\n"
+                "3. Exercise capacity and heart rate response provide context "
+                "for the adequacy of the test.\n"
+                "4. Ejection fraction is secondary — mention it AFTER perfusion "
+                "findings. Do not emphasize or celebrate a normal EF.\n"
+                "5. Summed stress/rest/difference scores (SSS/SRS/SDS) quantify "
+                "perfusion abnormality if present.\n"
+                "6. Wall motion abnormalities at stress (stunning) are "
+                "significant markers of ischemia."
+            )
 
+        elif subtype_id == "pharma_pet_stress":
+            base["test_type"] = "pharma_pet_stress"
+            base["guidelines"] = "ASNC 2016 PET Myocardial Perfusion Imaging Guidelines"
+            base["explanation_style"] = (
+                "This is a pharmacologic cardiac PET/PET-CT perfusion study. "
+                "The PRIMARY focus is the presence or absence of ISCHEMIA "
+                "(reversible perfusion defects). ALWAYS discuss ischemia and "
+                "perfusion findings FIRST, BEFORE mentioning ejection fraction "
+                "or pump strength. Ejection fraction should be mentioned as a "
+                "secondary data point later in the explanation — do not celebrate "
+                "or emphasize a normal EF, simply note it.\n"
+                "For coronary flow reserve (CFR) and myocardial flow reserve "
+                "(MFR): do NOT state 'we may make adjustments based on mild "
+                "reductions in flow reserve.' Instead, only mention CFR/MFR "
+                "if there are significant defects (CFR < 1.5 in a territory) "
+                "that support or corroborate perfusion defect findings. Mildly "
+                "reduced CFR (1.5-2.0) in the absence of perfusion defects "
+                "should be noted briefly without alarm.\n"
+                "IMPORTANT pharmacological stress rules:\n"
+                "- Do NOT mention heart rate response to stress AT ALL. "
+                "Heart rate response to exercise is invalid with pharmacological "
+                "stress. Do NOT comment on target heart rate, predicted maximum "
+                "heart rate, or % of max predicted heart rate.\n"
+                "- Do NOT state that the heart rate response may limit "
+                "interpretation of the EKG stress test."
+            )
+            base["interpretation_rules"] = (
+                "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
+                "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
+                "ischemia / perfusion findings BEFORE any mention of ejection "
+                "fraction or pump strength. Do NOT lead with EF. If there is "
+                "no ischemia, say so first, then mention EF afterward.\n"
+                "1. ISCHEMIA is the primary focus. State clearly whether "
+                "ischemia is present or absent. Describe the location, extent, "
+                "and severity of any perfusion defects.\n"
+                "2. Ejection fraction is secondary — mention it AFTER perfusion "
+                "findings. Do not emphasize or celebrate a normal EF. Do not "
+                "make EF the headline of the explanation.\n"
+                "3. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
+                "   - Do NOT say 'we may need to make adjustments based on "
+                "mild reductions in flow reserve'\n"
+                "   - If CFR is significantly reduced (< 1.5) in a territory "
+                "AND there are corresponding perfusion defects, mention that "
+                "the reduced flow reserve supports/corroborates the perfusion "
+                "findings\n"
+                "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
+                "defects, note it briefly as a finding without alarm (e.g., "
+                "'flow reserve was mildly reduced in this territory')\n"
+                "   - Globally reduced CFR without focal perfusion defects "
+                "may suggest microvascular disease\n"
+                "4. Wall motion abnormalities during stress (stunning) are "
+                "significant markers of ischemia."
+            )
+
+        elif subtype_id == "exercise_pet_stress":
+            base["test_type"] = "exercise_pet_stress"
+            base["guidelines"] = "ASNC 2016 PET Myocardial Perfusion Imaging Guidelines"
+            base["explanation_style"] = (
+                "This is an exercise cardiac PET/PET-CT perfusion study. "
+                "The PRIMARY focus is the presence or absence of ISCHEMIA "
+                "(reversible perfusion defects). ALWAYS discuss ischemia and "
+                "perfusion findings FIRST, BEFORE mentioning ejection fraction "
+                "or pump strength. Also comment on exercise capacity (METs) "
+                "and heart rate response. Ejection fraction should be mentioned "
+                "as a secondary data point later in the explanation — do not "
+                "celebrate or emphasize a normal EF, simply note it.\n"
+                "For coronary flow reserve (CFR) and myocardial flow reserve "
+                "(MFR): do NOT state 'we may make adjustments based on mild "
+                "reductions in flow reserve.' Instead, only mention CFR/MFR "
+                "if there are significant defects (CFR < 1.5 in a territory) "
+                "that support or corroborate perfusion defect findings. Mildly "
+                "reduced CFR (1.5-2.0) in the absence of perfusion defects "
+                "should be noted briefly without alarm."
+            )
+            base["interpretation_rules"] = (
+                "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
+                "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
+                "ischemia / perfusion findings BEFORE any mention of ejection "
+                "fraction or pump strength. Do NOT lead with EF. If there is "
+                "no ischemia, say so first, then mention EF afterward.\n"
+                "1. ISCHEMIA is the primary focus. State clearly whether "
+                "ischemia is present or absent. Describe the location, extent, "
+                "and severity of any perfusion defects.\n"
+                "2. Exercise capacity and heart rate response provide context "
+                "for the adequacy of the test.\n"
+                "3. Ejection fraction is secondary — mention it AFTER perfusion "
+                "findings. Do not emphasize or celebrate a normal EF.\n"
+                "4. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
+                "   - Do NOT say 'we may need to make adjustments based on "
+                "mild reductions in flow reserve'\n"
+                "   - If CFR is significantly reduced (< 1.5) in a territory "
+                "AND there are corresponding perfusion defects, mention that "
+                "the reduced flow reserve supports/corroborates the perfusion "
+                "findings\n"
+                "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
+                "defects, note it briefly without alarm\n"
+                "   - Globally reduced CFR without focal perfusion defects "
+                "may suggest microvascular disease\n"
+                "5. Wall motion abnormalities during stress (stunning) are "
+                "significant markers of ischemia."
+            )
+
+        elif subtype_id == "exercise_stress_echo":
+            base["test_type"] = "exercise_stress_echo"
+            base["explanation_style"] = (
+                "This is an exercise stress echocardiogram. Focus on wall "
+                "motion abnormalities at rest vs stress, new wall motion "
+                "abnormalities induced by exercise, and EF change with stress. "
+                "Also comment on exercise capacity (METs), heart rate response "
+                "(% of max predicted), and overall interpretation. "
+                "Explain what the results mean for the patient's heart health."
+            )
+            base["interpretation_rules"] = (
+                "STRESS ECHOCARDIOGRAM INTERPRETATION PRIORITIES:\n"
+                "1. Wall motion at rest vs stress is the primary comparison.\n"
+                "2. New wall motion abnormalities at peak stress indicate "
+                "inducible ischemia.\n"
+                "3. EF change with stress: normally EF increases with exercise.\n"
+                "4. Exercise capacity and heart rate response provide context.\n"
+                "5. Valvular changes with exercise (e.g., dynamic mitral "
+                "regurgitation) should be noted if present."
+            )
+
+        elif subtype_id == "pharma_stress_echo":
+            base["test_type"] = "pharma_stress_echo"
+            base["explanation_style"] = (
+                "This is a pharmacologic (dobutamine) stress echocardiogram. "
+                "Focus on wall motion abnormalities at rest vs stress, new "
+                "wall motion abnormalities induced by dobutamine, and EF "
+                "change with stress. Heart rate response IS relevant with "
+                "dobutamine since it increases heart rate. "
+                "Explain what the results mean for the patient's heart health."
+            )
+            base["interpretation_rules"] = (
+                "DOBUTAMINE STRESS ECHO INTERPRETATION PRIORITIES:\n"
+                "1. Wall motion at rest vs peak dobutamine is the primary "
+                "comparison.\n"
+                "2. New wall motion abnormalities at peak dose indicate "
+                "inducible ischemia.\n"
+                "3. Biphasic response (improvement at low dose, worsening at "
+                "high dose) suggests viable but ischemic myocardium.\n"
+                "4. Heart rate response to dobutamine IS relevant — adequate "
+                "heart rate should be achieved for a diagnostic study.\n"
+                "5. EF change with stress: normally EF increases.\n"
+                "6. Valvular changes with dobutamine should be noted."
+            )
+
+        return base
+
+    # ------------------------------------------------------------------
+    # Section / findings extraction (unchanged)
+    # ------------------------------------------------------------------
     def _extract_sections(self, text: str) -> list[ReportSection]:
         """Split report text into labeled sections."""
         section_headers = [
@@ -253,6 +636,12 @@ class StressTestHandler(BaseTestType):
             r"SYMPTOMS|SYMPTOM\s+RESPONSE",
             r"ARRHYTHMIA|RHYTHM",
             r"RECOVERY|POST[- ]?EXERCISE",
+            r"PERFUSION|PERFUSION\s+(?:FINDINGS|IMAGES|RESULTS)",
+            r"GATED\s+(?:IMAGES|SPECT|DATA)",
+            r"WALL\s+MOTION",
+            r"STRESS\s+(?:IMAGES|DATA|RESULTS)",
+            r"REST\s+(?:IMAGES|DATA|RESULTS)",
+            r"FLOW\s+(?:DATA|QUANTIFICATION|RESERVE)",
             r"CONCLUSION|IMPRESSION|SUMMARY|INTERPRETATION|FINDINGS",
         ]
 

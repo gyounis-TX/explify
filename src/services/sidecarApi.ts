@@ -520,7 +520,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async listTestTypes(): Promise<{ id: string; name: string }[]> {
+  async listTestTypes(): Promise<{ id: string; name: string; category?: string }[]> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/test-types`);
     if (!response.ok) return [];

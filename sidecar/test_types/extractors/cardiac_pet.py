@@ -36,12 +36,36 @@ def extract_cardiac_pet_measurements(
                     continue
                 if not (mdef["min"] <= value <= mdef["max"]):
                     continue
+                # Classify against reference ranges
+                abbr = mdef["abbr"]
+                ref = CARDIAC_PET_REFERENCE_RANGES.get(abbr, {})
+                normal_range = ref.get("normal")
+                if normal_range and len(normal_range) == 2:
+                    lo, hi = normal_range
+                    if lo <= value <= hi:
+                        status = "normal"
+                        direction = "normal"
+                    elif value < lo:
+                        status = "abnormal"
+                        direction = "low"
+                    else:
+                        status = "abnormal"
+                        direction = "high"
+                    ref_str = f"{lo}–{hi} {mdef['unit']}".strip()
+                else:
+                    status = "normal"
+                    direction = "normal"
+                    ref_str = ""
                 results.append(
                     ParsedMeasurement(
                         name=mdef["name"],
-                        value=str(value),
+                        abbreviation=abbr,
+                        value=value,
                         unit=mdef["unit"],
-                        status="normal",
+                        status=status,
+                        direction=direction,
+                        reference_range=ref_str,
+                        raw_text=match.group(0),
                     )
                 )
                 seen.add(mdef["abbr"])

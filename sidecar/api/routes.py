@@ -673,9 +673,11 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
     import logging
     _logger = logging.getLogger(__name__)
     _logger.warning(
-        "Prompt sizes -- system: %d chars, user: %d chars, short_comment: %s, sms: %s",
+        "Prompt sizes -- system: %d chars, user: %d chars, short_comment: %s, sms: %s, test_type: %s",
         len(system_prompt), len(user_prompt), bool(body.short_comment), is_sms,
+        parsed.test_type,
     )
+    _logger.warning("User prompt tail (last 600 chars): %s", user_prompt[-600:])
 
     # 7. Call LLM with retry
     llm_provider = LLMProvider(provider_str)
@@ -1443,11 +1445,37 @@ async def delete_template(request: Request, template_id: str):
 # --- History Endpoints ---
 
 
+# Deprecated type IDs that have been replaced by specific subtypes
+_DEPRECATED_TYPE_MAP: dict[str, tuple[str, str]] = {
+    "cardiac_pet": ("pharma_pet_stress", "Pharmacologic PET/PET-CT Stress"),
+    "nuclear_stress": ("pharma_spect_stress", "Pharmacologic SPECT Nuclear Stress"),
+    "stress_test": ("exercise_treadmill_test", "Exercise Treadmill Test"),
+    "pharmacological_stress_test": ("pharma_spect_stress", "Pharmacologic SPECT Nuclear Stress"),
+}
+
+
 @router.get("/history/test-types")
 async def list_history_test_types(request: Request):
-    """Return distinct test types from user's history."""
+    """Return distinct test types from user's history.
+
+    Normalises deprecated type IDs to their modern replacements so the
+    dropdown never shows stale entries like 'Cardiac PET / PET-CT'.
+    """
     user_id = _get_user_id(request)
-    return await _db_call("list_history_test_types", user_id=user_id)
+    raw: list[dict] = await _db_call("list_history_test_types", user_id=user_id)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for row in raw:
+        tid = row.get("test_type", "")
+        if tid in _DEPRECATED_TYPE_MAP:
+            new_id, new_display = _DEPRECATED_TYPE_MAP[tid]
+            tid = new_id
+            row = {"test_type": new_id, "test_type_display": new_display}
+        if tid not in seen:
+            seen.add(tid)
+            out.append(row)
+    out.sort(key=lambda r: r.get("test_type_display", ""))
+    return out
 
 
 @router.get("/history", response_model=HistoryListResponse)
@@ -1622,7 +1650,7 @@ async def list_test_types():
     """Return all registered test type IDs and display names."""
     from test_types import registry
     types = registry.list_types()
-    return [{"id": t["test_type_id"], "name": t["display_name"]} for t in types]
+    return [{"id": t["test_type_id"], "name": t["display_name"], "category": t.get("category", "other")} for t in types]
 
 
 # --- Teaching Points Endpoints ---

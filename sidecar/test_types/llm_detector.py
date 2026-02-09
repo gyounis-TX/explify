@@ -76,6 +76,15 @@ def _build_system_prompt(registry_types: list[dict]) -> str:
         '"confidence": <0.0-1.0>, "reasoning": "<one sentence>"}'
     )
     lines.append(
+        "PHARMACOLOGIC STRESS MAPPING: If the report mentions lexiscan, "
+        "regadenoson, adenosine, or dipyridamole, it is a pharmacologic "
+        "(not exercise) stress test. If it mentions dobutamine, it is "
+        "pharmacologic — and if combined with echocardiogram/echo, it is "
+        "pharma_stress_echo. Map SPECT/sestamibi/technetium to the SPECT "
+        "variants, and PET/rubidium/Rb-82/positron to the PET variants."
+    )
+    lines.append("")
+    lines.append(
         "If the report does not match any listed type, use the CLOSEST "
         "match or create a descriptive snake_case ID."
     )

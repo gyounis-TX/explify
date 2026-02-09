@@ -1007,86 +1007,88 @@ that help the patient understand their health.
 
 """
 
+_INTERPRETATION_STRUCTURE_PERFUSION = """\
+## Interpretation Guidance (Nuclear Perfusion Study)
+
+Write a clear, natural explanation organized by clinical significance.
+Do NOT use section headers or labels. Separate paragraphs with blank lines.
+
+The patient already has their results — synthesize findings into clinical
+meaning rather than reciting values they can already read.
+
+Paragraph order for nuclear perfusion studies:
+1. FIRST paragraph: Perfusion and ischemia — whether blood flow to all
+   regions of the heart is normal or abnormal. This is the primary
+   purpose of this test. Describe any perfusion defects, reversible
+   defects, or fixed defects. If there is no ischemia, say so clearly.
+2. SECOND paragraph: Supporting perfusion details — wall motion, flow
+   reserve (CFR/MFR if applicable), scoring (SSS/SRS/SDS if applicable).
+   Continue discussing blood-flow-related findings.
+3. THIRD paragraph or later: Only NOW may you mention ejection fraction
+   or how well the heart pumps. Keep it brief — one sentence is enough
+   if EF is normal. Do not celebrate a normal EF.
+4. Final paragraph: Practical takeaway connecting findings to the
+   patient's daily life.
+
+Do NOT mention ejection fraction, pumping function, pump strength, or
+how well/strongly the heart pumps in paragraphs 1 or 2.
+
+Principles:
+- Tie findings to the patient's real-world experience when possible
+- Use softened language for concerning findings ("something to discuss",
+  "worth a conversation") — never "warrants" or alarm language
+- Vary paragraph count (3-6) and length based on complexity
+
+"""
+
 _INTERPRETATION_STRUCTURE = """\
-## Required Interpretation Structure
+## Interpretation Guidance
 
-Organize the overall_summary into these sections IN ORDER, each as its own
-paragraph separated by a blank line (\\n\\n). Use the section labels as
-mental structure — do NOT print the labels as headers in the output.
+Write a clear, natural explanation organized by clinical significance.
+Do NOT use section headers or labels. Separate paragraphs with blank lines.
 
-Remember: the patient already has their results. Do not recite values they
-can already read. Synthesize findings into clinical meaning.
+The patient already has their results — synthesize findings into clinical
+meaning rather than reciting values they can already read.
 
-## Core Purpose: "Why This Report Matters"
+## Core Purpose
 
 Every interpretation must answer: "Why does this report matter to ME?"
-The patient wants to know:
-- Am I okay? Is something wrong?
-- What does this mean for my daily life?
-- Do I need to worry or change anything?
-- Does this explain my symptoms?
+The patient wants to know: Am I okay? What does this mean for my daily
+life? Do I need to worry? Does this explain my symptoms?
 
 Frame findings in terms of their real-world impact, not just medical status.
 A "normal ejection fraction" means nothing to patients — "your heart is
 pumping blood effectively" connects to their life.
 
-1. BOTTOM LINE — 1-2 sentences stating what matters most and whether the
-   findings are overall reassuring or concerning. Lead with the answer to
-   "Am I okay?" before any details.
-
-2. WHAT IS REASSURING — Synthesize normal or stable findings into a
-   meaningful clinical statement. Group related normal findings together
-   rather than listing each individually. For example, instead of listing
-   every normal chamber size, say "Your heart chambers are all a normal
-   size and your heart is pumping well."
-
-   Connect to real life: "This means your heart is doing its job well and
-   supporting your daily activities."
-
-3. WHAT TO DISCUSS — Abnormal or noteworthy findings, prioritized
-   by clinical significance. Explain what each finding means for the
-   patient, not just what the value is. Use softened, non-conclusive
-   language scaled to severity — pick from the pool below and do NOT
-   reuse the same phrase for multiple findings:
-   - Mild: "worth mentioning", "something to be aware of", "good to know
-     about", "worth noting"
-   - Moderate: "something to discuss", "worth a conversation", "worth
-     talking through", "something your doctor will want to review"
-   - Severe: "important to discuss", "something to talk through carefully",
-     "a key finding to review together"
-   NEVER use "warrants" — it sounds legalistic.
-   NEVER use definitive alarm language like "needs attention", "requires
-   immediate action", or "is dangerous". The physician will determine
-   urgency and next steps.
-   a. More significant findings first, then less significant.
-   b. Mild STENOSIS is clinically noteworthy — include with context.
-   c. Mild REGURGITATION is very common and usually insignificant — mention
-      only briefly in passing (e.g. "trace/mild regurgitation, which is
-      common and typically not concerning"). Do NOT elevate it as an
-      important finding.
-   d. Only comment on valvular stenosis or regurgitation if the report
-      specifically names and grades it (e.g. "trace mitral regurgitation",
-      "mild aortic regurgitation"). A blanket exclusion such as "no
-      significant valvular regurgitation" or "no significant stenosis" means
-      nothing was found — do NOT interpret it as trace or mild disease.
-
-4. HOW THIS RELATES TO YOUR SYMPTOMS — Tie findings directly to the
-   patient's complaint or clinical context when provided. If no clinical
-   context was given, omit this section.
-
-5. WHAT THIS MEANS FOR YOU — A brief closing that summarizes the practical
-   takeaway. What can the patient expect? What should they feel confident
-   about? This reduces follow-up questions and improves understanding.
-
-### Structural Variety:
-- Vary paragraph count between 3-6 depending on complexity of findings
-- NOT every section needs its own paragraph — combine sections 2 and 3 if
-  there's little to discuss
-- Omit sections entirely when they don't apply (e.g., skip "symptoms"
-  section if no clinical context was provided)
-- The bottom line can be 1 sentence or 3 — match the complexity
-- Don't make every paragraph the same length — mix short punchy paragraphs
-  with longer explanatory ones
+Principles:
+- Lead with what matters most — the clinically significant findings
+- Group related normal findings into brief, meaningful statements rather
+  than listing each one individually
+- Present concerning findings prioritized by clinical significance, most
+  significant first
+- Tie findings to the patient's symptoms or clinical context when provided
+- Close with a practical takeaway
+- Use softened, non-conclusive language scaled to severity — do NOT reuse
+  the same phrase for multiple findings:
+  - Mild: "worth mentioning", "something to be aware of", "good to know
+    about", "worth noting"
+  - Moderate: "something to discuss", "worth a conversation", "worth
+    talking through", "something your doctor will want to review"
+  - Severe: "important to discuss", "something to talk through carefully",
+    "a key finding to review together"
+  NEVER use "warrants" — it sounds legalistic.
+  NEVER use definitive alarm language like "needs attention", "requires
+  immediate action", or "is dangerous". The physician will determine
+  urgency and next steps.
+- Mild STENOSIS is clinically noteworthy — include with context.
+- Mild REGURGITATION is very common and usually insignificant — mention
+  only briefly in passing. Do NOT elevate it as an important finding.
+- Only comment on valvular stenosis or regurgitation if the report
+  specifically names and grades it. A blanket exclusion such as "no
+  significant valvular regurgitation" means nothing was found — do NOT
+  interpret it as trace or mild disease.
+- Vary paragraph count (3-6) and length based on complexity. Mix short
+  punchy paragraphs with longer explanatory ones.
 
 """
 
@@ -2530,7 +2532,11 @@ def _select_domain_knowledge(prompt_context: dict) -> str:
     elif test_type == "pft":
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_PFT
     elif test_type in ("nuclear_stress", "ct_calcium_score", "cardiac_pet",
-                       "pharmacological_stress_test"):
+                       "pharmacological_stress_test",
+                       "pharma_spect_stress", "exercise_spect_stress",
+                       "pharma_pet_stress", "exercise_pet_stress",
+                       "exercise_treadmill_test", "exercise_stress_test",
+                       "exercise_stress_echo", "pharma_stress_echo"):
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_NUCLEAR
     elif category == "lab":
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_LABS
@@ -2935,6 +2941,14 @@ class PromptEngine:
             f"## Explanation Style\n{explanation_style}\n\n" if explanation_style else ""
         )
 
+        # For perfusion studies (PET/SPECT), inject a hard ordering override
+        _PERFUSION_TYPES = {
+            "pharma_spect_stress", "exercise_spect_stress",
+            "pharma_pet_stress", "exercise_pet_stress",
+        }
+        is_perfusion = prompt_context.get("test_type", "") in _PERFUSION_TYPES
+        perfusion_override = is_perfusion
+
         # Select graduated anxiety guidance
         anxiety_section = _select_anxiety_section(high_anxiety_mode, anxiety_level)
 
@@ -2953,7 +2967,7 @@ class PromptEngine:
             f"{_CLINICAL_CONTEXT_RULE}"
             f"{_INTERPRETATION_QUALITY_RULE}"
             f"{_select_domain_knowledge(prompt_context)}"
-            f"{_INTERPRETATION_STRUCTURE}"
+            f"{_INTERPRETATION_STRUCTURE_PERFUSION if perfusion_override else _INTERPRETATION_STRUCTURE}"
             f"{anxiety_section}"
             f"{analogy_section}"
             f"## Literacy Level\n{literacy_desc}\n\n"
@@ -2977,7 +2991,8 @@ class PromptEngine:
             f"## Validation Rule\n"
             f"If the output reads like a neutral summary, report recap, "
             f"uses banned AI phrases, or contains treatment suggestions "
-            f"or hypothetical next steps, regenerate.\n"
+            f"or hypothetical next steps, regenerate."
+            f"{' If ejection fraction or pumping function is mentioned before perfusion/ischemia findings, regenerate.' if perfusion_override else ''}\n"
         )
 
     def build_user_prompt(
@@ -3444,6 +3459,12 @@ class PromptEngine:
             sections.append(refinement_instruction)
 
         # 7. Instructions
+        _PERFUSION_TYPES = {
+            "pharma_spect_stress", "exercise_spect_stress",
+            "pharma_pet_stress", "exercise_pet_stress",
+        }
+        is_perfusion = parsed_report.test_type in _PERFUSION_TYPES
+
         sections.append(
             "\n## Instructions\n"
             "Using ONLY the data above, write a clinical interpretation as "
@@ -3452,5 +3473,17 @@ class PromptEngine:
             "listed above. Do not add measurements, findings, or treatment "
             "recommendations not present in the data."
         )
+
+        if is_perfusion:
+            sections.append(
+                "\n**ORDERING REQUIREMENT**: This is a nuclear perfusion study. "
+                "Your FIRST paragraph must address perfusion and ischemia findings "
+                "(whether blood flow to all parts of the heart is adequate, whether "
+                "there are any perfusion defects or areas of reduced blood flow). "
+                "Do NOT mention ejection fraction, pumping function, or how "
+                "strongly/effectively the heart pumps until AFTER you have fully "
+                "discussed perfusion/ischemia findings. Ejection fraction should "
+                "appear no earlier than the third paragraph."
+            )
 
         return "\n".join(sections)

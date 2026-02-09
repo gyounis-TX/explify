@@ -45,21 +45,48 @@ _CARDIAC: list[GenericTestType] = [
         "holter", "ambulatory monitor", "24-hour monitor", "48-hour monitor",
         "event monitor", "continuous monitoring",
     ], category="cardiac"),
-    GenericTestType("cardiac_pet", "Cardiac PET / PET-CT", [
-        "cardiac pet", "pet/ct", "pet-ct", "pet ct",
-        "rb-82", "rubidium", "positron",
-        "n-13 ammonia", "ammonia pet",
-        "myocardial blood flow", "mbf", "coronary flow reserve", "cfr",
-        "myocardial perfusion pet", "positron emission",
+    # Stress test subtypes — these provide dropdown entries and LLM detection
+    # listings. The StressFamilyHandler (registered separately) handles actual
+    # detection with higher confidence, so these generic entries serve as
+    # fallback and type-listing purposes.
+    GenericTestType("exercise_treadmill_test", "Exercise Treadmill Test", [
+        "exercise treadmill", "treadmill test", "exercise stress test",
+        "bruce protocol", "exercise tolerance test", "graded exercise test",
+        "exercise ecg", "exercise ekg",
+    ], category="cardiac"),
+    GenericTestType("pharma_spect_stress", "Pharmacologic SPECT Nuclear Stress", [
+        "pharmacologic stress", "lexiscan", "regadenoson", "adenosine stress",
+        "spect", "sestamibi", "myocardial perfusion", "nuclear stress",
+    ], category="cardiac"),
+    GenericTestType("exercise_spect_stress", "Exercise SPECT Nuclear Stress", [
+        "exercise spect", "exercise nuclear", "exercise myocardial perfusion",
+        "spect", "sestamibi", "treadmill nuclear",
+    ], category="cardiac"),
+    GenericTestType("pharma_pet_stress", "Pharmacologic PET/PET-CT Stress", [
+        "cardiac pet", "pet/ct", "pet-ct", "rb-82", "rubidium", "positron",
+        "n-13 ammonia", "myocardial blood flow", "mbf", "coronary flow reserve",
+        "pharmacologic", "lexiscan", "regadenoson", "adenosine",
     ], category="cardiac",
         measurement_extractor=extract_cardiac_pet_measurements,
         reference_ranges=CARDIAC_PET_REFERENCE_RANGES,
         glossary=CARDIAC_PET_GLOSSARY,
     ),
-    GenericTestType("nuclear_stress", "Nuclear Stress Test", [
-        "nuclear stress", "myocardial perfusion", "spect", "sestamibi",
-        "lexiscan", "adenosine stress", "regadenoson", "persantine",
-        "pharmacologic stress", "nuclear cardiology",
+    GenericTestType("exercise_pet_stress", "Exercise PET/PET-CT Stress", [
+        "cardiac pet", "pet/ct", "pet-ct", "rb-82", "rubidium", "positron",
+        "exercise", "treadmill", "myocardial blood flow", "mbf",
+    ], category="cardiac",
+        measurement_extractor=extract_cardiac_pet_measurements,
+        reference_ranges=CARDIAC_PET_REFERENCE_RANGES,
+        glossary=CARDIAC_PET_GLOSSARY,
+    ),
+    GenericTestType("exercise_stress_echo", "Exercise Stress Echocardiogram", [
+        "stress echocardiogram", "stress echo", "exercise echo",
+        "bicycle stress", "treadmill echo", "exercise echocardiogram",
+        "wall motion at stress",
+    ], category="cardiac"),
+    GenericTestType("pharma_stress_echo", "Pharmacologic Stress Echocardiogram", [
+        "dobutamine stress", "dobutamine echo", "dobutamine echocardiogram",
+        "pharmacologic stress echocardiogram", "pharmacologic echo",
     ], category="cardiac"),
     GenericTestType("right_heart_cath", "Right Heart Catheterization", [
         "right heart cath", "right heart catheterization", "swan-ganz",

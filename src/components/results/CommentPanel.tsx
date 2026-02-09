@@ -16,6 +16,7 @@ interface CommentPanelProps {
   onToggleLike: () => void;
   smsEnabled: boolean;
   testTypeDisplay?: string;
+  onChangeType?: () => void;
 }
 
 export function CommentPanel({
@@ -36,6 +37,7 @@ export function CommentPanel({
   onToggleLike,
   smsEnabled,
   testTypeDisplay,
+  onChangeType,
 }: CommentPanelProps) {
   const isLoading =
     (isGeneratingComment && commentMode === "short") ||
@@ -102,6 +104,11 @@ export function CommentPanel({
         <div className="comment-test-type">
           <span className="comment-test-type-label">Identified as:</span>{" "}
           <span className="comment-test-type-value">{testTypeDisplay}</span>
+          {onChangeType && (
+            <button className="comment-change-type-btn" onClick={onChangeType}>
+              Change
+            </button>
+          )}
         </div>
       )}
       <button className="comment-copy-btn" onClick={onCopy}>

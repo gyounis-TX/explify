@@ -12,18 +12,21 @@ import type {
   SharedTeachingPoint,
   Template,
   SharedTemplate,
+  TestTypeInfo,
 } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
 import { logUsage } from "../../services/usageTracker";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
 import { clearImportCache } from "../import/ImportScreen";
+import { groupTypesByCategory } from "../../utils/testTypeCategories";
 import { CommentPanel } from "./CommentPanel";
 import { KeyFindingsPanel } from "./KeyFindingsPanel";
 import { MeasurementsTable } from "./MeasurementsTable";
 import { RefinementSidebar } from "./RefinementSidebar";
 import { TeachingPointsPanel } from "./TeachingPointsPanel";
 import "./ResultsScreen.css";
+import "../shared/TypeModal.css";
 
 function replacePhysician(text: string, physicianName?: string): string {
   if (!physicianName) return text;
@@ -224,6 +227,12 @@ export function ResultsScreen() {
   const [isEditingCombined, setIsEditingCombined] = useState(false);
   const [editedCombinedSummary, setEditedCombinedSummary] = useState("");
 
+  // Type change modal state
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [modalSelectedType, setModalSelectedType] = useState<string | null>(null);
+  const [modalCustomType, setModalCustomType] = useState("");
+  const [availableTypes, setAvailableTypes] = useState<TestTypeInfo[]>([]);
+
   const effectiveTestType = currentResponse?.parsed_report.test_type || "";
   const effectiveTestTypeDisplay = currentResponse?.parsed_report.test_type_display || "this type";
 
@@ -325,6 +334,18 @@ export function ResultsScreen() {
         );
         if (defaultTpl) setSelectedTemplateId(defaultTpl.id);
       }
+    }).catch(() => {});
+  }, []);
+
+  // Load available test types for the change-type modal
+  useEffect(() => {
+    sidecarApi.listTestTypes().then((types) => {
+      setAvailableTypes(types.map((t) => ({
+        test_type_id: t.id,
+        display_name: t.name,
+        keywords: [],
+        category: t.category,
+      })));
     }).catch(() => {});
   }, []);
 
@@ -445,6 +466,41 @@ export function ResultsScreen() {
       showToast("success", "Explanation regenerated.");
     } catch {
       showToast("error", "Failed to regenerate explanation.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [extractionResult, commentMode, buildRequestParams, sectionSettings, refinementInstruction, deepAnalysis, showToast]);
+
+  const handleOpenChangeType = useCallback(() => {
+    setModalSelectedType(effectiveTestType || null);
+    setModalCustomType("");
+    setShowTypeModal(true);
+  }, [effectiveTestType]);
+
+  const handleConfirmTypeChange = useCallback(async (newTestType: string) => {
+    if (!extractionResult) return;
+    setShowTypeModal(false);
+    setIsRegenerating(true);
+    const isShort = commentMode === "short";
+    const isSms = commentMode === "sms";
+    try {
+      const response = await sidecarApi.explainReport(buildRequestParams({
+        test_type: newTestType,
+        short_comment: isShort,
+        sms_summary: isSms,
+        include_key_findings: (isShort || isSms) ? true : sectionSettings.include_key_findings,
+        include_measurements: (isShort || isSms) ? true : sectionSettings.include_measurements,
+        refinement_instruction: refinementInstruction.trim() || undefined,
+      }));
+      if (isSms) setSmsText(response.explanation.overall_summary);
+      else if (isShort) setShortCommentText(response.explanation.overall_summary);
+      else setLongExplanationResponse(response);
+      setCurrentResponse(response);
+      logUsage({ model_used: response.model_used, input_tokens: response.input_tokens, output_tokens: response.output_tokens, request_type: "explain", deep_analysis: deepAnalysis });
+      setCombinedSummary(null);
+      showToast("success", `Type changed to ${response.parsed_report.test_type_display || newTestType}. Explanation regenerated.`);
+    } catch {
+      showToast("error", "Failed to regenerate with new type.");
     } finally {
       setIsRegenerating(false);
     }
@@ -866,7 +922,6 @@ export function ResultsScreen() {
             <button
               className="results-back-btn results-back-btn--secondary"
               onClick={() => {
-                clearImportCache();
                 navigate("/", { state: { preservedClinicalContext: clinicalContext, preservedQuickReasons: quickReasons } });
               }}
             >
@@ -1069,6 +1124,7 @@ export function ResultsScreen() {
               onToggleLike={handleToggleLike}
               smsEnabled={smsEnabled}
               testTypeDisplay={effectiveTestTypeDisplay}
+              onChangeType={canRefine ? handleOpenChangeType : undefined}
             />
 
             {sectionSettings.include_key_findings && (
@@ -1124,7 +1180,6 @@ export function ResultsScreen() {
             className="results-back-btn results-back-btn--secondary"
             onClick={() => {
               if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
-              clearImportCache();
               navigate("/", { state: { preservedClinicalContext: clinicalContext, preservedQuickReasons: quickReasons } });
             }}
           >
@@ -1145,6 +1200,80 @@ export function ResultsScreen() {
       </div>
 
       {canRefine && <RefinementSidebar {...sidebarProps} />}
+
+      {/* Type Change Modal */}
+      {showTypeModal && (
+        <div className="type-modal-backdrop" onClick={() => setShowTypeModal(false)}>
+          <div className="type-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="type-modal-title">Change Report Type</h3>
+            <p className="type-modal-subtitle">
+              Currently identified as <strong>{effectiveTestTypeDisplay}</strong>.
+              Select a different type to regenerate the explanation.
+            </p>
+
+            {availableTypes.length > 0 && (
+              <div className="type-modal-categories">
+                {groupTypesByCategory(availableTypes).map(([label, types]) => (
+                  <div key={label} className="type-modal-category">
+                    <span className="type-modal-category-label">{label}</span>
+                    <div className="type-modal-category-buttons">
+                      {types.map((t) => (
+                        <button
+                          key={t.test_type_id}
+                          className={`detection-type-btn${
+                            modalSelectedType === t.test_type_id && !modalCustomType
+                              ? " detection-type-btn--active"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            setModalSelectedType(t.test_type_id);
+                            setModalCustomType("");
+                          }}
+                        >
+                          {t.display_name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="type-modal-other">
+              <label className="type-modal-other-label">Other:</label>
+              <input
+                type="text"
+                className="type-modal-other-input"
+                placeholder='e.g. "calcium score", "renal ultrasound"'
+                value={modalCustomType}
+                onChange={(e) => {
+                  setModalCustomType(e.target.value);
+                  if (e.target.value) setModalSelectedType(null);
+                }}
+              />
+            </div>
+
+            <div className="type-modal-actions">
+              <button
+                className="type-modal-cancel"
+                onClick={() => setShowTypeModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="type-modal-confirm"
+                disabled={!modalSelectedType && !modalCustomType.trim()}
+                onClick={() => {
+                  const chosen = modalCustomType.trim() || modalSelectedType;
+                  if (chosen) handleConfirmTypeChange(chosen);
+                }}
+              >
+                Confirm &amp; Regenerate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

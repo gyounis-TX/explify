@@ -231,6 +231,11 @@ export function AdminScreen() {
             OpenAI
           </button>
         </div>
+        {settings?.llm_provider && (
+          <p className="admin-active-provider">
+            Currently active: <strong>{settings.llm_provider === "claude" ? "Claude (Anthropic)" : settings.llm_provider === "bedrock" ? "AWS Bedrock" : "OpenAI"}</strong>
+          </p>
+        )}
         {provider === "bedrock" && (
           <p className="settings-description" style={{ marginTop: "var(--space-sm)" }}>
             Uses Claude models via AWS Bedrock. Covered under your AWS BAA for HIPAA compliance.

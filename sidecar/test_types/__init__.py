@@ -12,10 +12,19 @@ registry = TestTypeRegistry()
 # Specialized handlers (with structured measurement parsing)
 registry.register(EchocardiogramHandler())
 registry.register(LabResultsHandler())
-registry.register(StressTestHandler())
+_stress_handler = StressTestHandler()
+registry.register(_stress_handler)
 registry.register(CarotidDopplerHandler())
 registry.register(ArterialDopplerHandler())
 registry.register(VenousDopplerHandler())
+
+# Register stress subtype IDs so they resolve to the family handler
+for _subtype_id in (
+    "exercise_treadmill_test", "pharma_spect_stress", "exercise_spect_stress",
+    "pharma_pet_stress", "exercise_pet_stress",
+    "exercise_stress_echo", "pharma_stress_echo",
+):
+    registry.register_subtype(_subtype_id, _stress_handler)
 
 # Generic keyword + LLM types (defined in _registry_data.py)
 for gt in GENERIC_TYPES:
