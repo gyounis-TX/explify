@@ -1,6 +1,5 @@
 import os
 
-import pytesseract
 from PIL import Image
 
 from api.models import (
@@ -50,10 +49,16 @@ class ExtractionPipeline:
                 page_results.extend(ocr_results)
 
                 for r in ocr_results:
-                    if r.confidence < 0.5:
+                    if r.confidence < 0.3:
+                        warnings.append(
+                            f"Page {r.page_number}: very low OCR confidence "
+                            f"({r.confidence:.0%}). Text is likely unreliable — "
+                            "consider re-scanning at higher resolution."
+                        )
+                    elif r.confidence < 0.5:
                         warnings.append(
                             f"Page {r.page_number}: low OCR confidence "
-                            f"({r.confidence:.0%}). Text may be inaccurate."
+                            f"({r.confidence:.0%}). Some text may be inaccurate."
                         )
             except Exception as e:
                 warnings.append(
@@ -97,27 +102,20 @@ class ExtractionPipeline:
         preprocessor = ImagePreprocessor()
         processed = preprocessor.preprocess(image, source_dpi=72)
 
-        data = pytesseract.image_to_data(
-            processed,
-            output_type=pytesseract.Output.DICT,
-            config="--psm 6",
-        )
-        text = pytesseract.image_to_string(processed, config="--psm 6").strip()
+        ocr = OCRExtractor.__new__(OCRExtractor)
+        ocr.preprocessor = preprocessor
+        text, avg_confidence = ocr._ocr_with_best_psm(processed)
 
-        confidences = [
-            int(c) for c in data["conf"]
-            if str(c).lstrip("-").isdigit() and int(c) > 0
-        ]
-        avg_confidence = (
-            sum(confidences) / len(confidences) / 100.0
-            if confidences
-            else 0.0
-        )
-
-        if avg_confidence < 0.5:
+        if avg_confidence < 0.3:
+            warnings.append(
+                f"Very low OCR confidence ({avg_confidence:.0%}). "
+                "Text is likely unreliable — consider re-scanning at "
+                "higher resolution."
+            )
+        elif avg_confidence < 0.5:
             warnings.append(
                 f"Low OCR confidence ({avg_confidence:.0%}). "
-                "Text may be inaccurate."
+                "Some text may be inaccurate."
             )
 
         if not text:

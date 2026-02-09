@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from api.models import ExtractionResult
 from .base import BaseTestType
 
 logger = logging.getLogger(__name__)
+
+_HEADER_PATTERNS = [
+    re.compile(r"(?i)(?:report|procedure|study|exam(?:ination)?|test)\s*(?:type)?[:\-]\s*(.+)", re.MULTILINE),
+    re.compile(r"(?i)^(?:IMPRESSION|INDICATION|FINDINGS)\s+(?:FOR|OF)\s+(.+)", re.MULTILINE),
+]
 
 
 class TestTypeRegistry:
@@ -32,10 +38,27 @@ class TestTypeRegistry:
         # Hide the parent from type listings (replaced by subtypes)
         self._hidden_ids.add(parent_handler.test_type_id)
 
+    def detect_from_header(self, extraction_result: ExtractionResult) -> tuple[Optional[str], float]:
+        """Pre-pass: scan first 500 chars for explicit report type labels."""
+        header_text = extraction_result.full_text[:500]
+        for pattern in _HEADER_PATTERNS:
+            m = pattern.search(header_text)
+            if m:
+                label = m.group(1).strip().rstrip(".")
+                resolved_id, handler = self.resolve(label)
+                if resolved_id is not None:
+                    return (resolved_id, 0.85)
+        return (None, 0.0)
+
     def detect(
         self, extraction_result: ExtractionResult
     ) -> tuple[Optional[str], float]:
         """Auto-detect test type. Returns (type_id, confidence) or (None, 0.0)."""
+        # Pre-pass: explicit header labels
+        header_id, header_conf = self.detect_from_header(extraction_result)
+        if header_id is not None:
+            return (header_id, header_conf)
+
         best_id: Optional[str] = None
         best_confidence: float = 0.0
         best_handler: Optional[BaseTestType] = None
@@ -67,6 +90,12 @@ class TestTypeRegistry:
         The first entry is the primary type.
         """
         results: list[tuple[str, float]] = []
+
+        # Pre-pass: explicit header labels
+        header_id, header_conf = self.detect_from_header(extraction_result)
+        if header_id is not None:
+            results.append((header_id, header_conf))
+
         for type_id, handler in self._handlers.items():
             try:
                 confidence = handler.detect(extraction_result)

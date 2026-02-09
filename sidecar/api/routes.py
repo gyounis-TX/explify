@@ -313,9 +313,19 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
             llm_attempted = True
             provider_enum = LLMProvider(provider_str)
             client = LLMClient(provider=provider_enum, api_key=api_key)
+
+            # Gather context for structured LLM excerpt
+            keyword_candidates = registry.detect_multi(extraction_result, threshold=0.1)
+            tables_for_llm = [
+                {"headers": t.headers, "page_number": t.page_number}
+                for t in (extraction_result.tables or [])
+            ]
+
             llm_type_id, llm_confidence, llm_display = await llm_detect_test_type(
                 client, extraction_result.full_text, body.user_hint,
                 registry_types=available,
+                tables=tables_for_llm,
+                keyword_candidates=keyword_candidates,
             )
 
             if llm_type_id is not None and llm_confidence >= 0.5:

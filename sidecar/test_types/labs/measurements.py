@@ -59,7 +59,8 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         name="Glucose",
         abbreviation="GLU",
         unit="mg/dL",
-        table_aliases=["glucose", "glu", "fasting glucose", "blood glucose"],
+        table_aliases=["glucose", "glu", "fasting glucose", "blood glucose",
+                        "blood sugar fasting", "blood sugar", "fbs"],
         patterns=[
             rf"(?i)(?:fasting\s+)?glucose{_SEP}{_NUM}\s*(?:mg\/dL|mg\/dl)?",
             rf"(?i)\bGLU\b{_SEP}{_NUM}\s*(?:mg\/dL|mg\/dl)?",
@@ -71,7 +72,7 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         name="BUN",
         abbreviation="BUN",
         unit="mg/dL",
-        table_aliases=["bun", "blood urea nitrogen", "urea nitrogen"],
+        table_aliases=["bun", "blood urea nitrogen", "urea nitrogen", "urea"],
         patterns=[
             rf"(?i)\bBUN\b{_SEP}{_NUM}\s*(?:mg\/dL|mg\/dl)?",
             rf"(?i)blood\s+urea\s+nitrogen{_SEP}{_NUM}\s*(?:mg\/dL)?",
@@ -844,7 +845,9 @@ for _mdef in MEASUREMENT_DEFS:
 # Header keywords that identify a lab-result table
 _TABLE_HEADER_KEYWORDS = {"test", "result", "value", "units", "unit",
                           "reference", "range", "flag", "status", "analyte",
-                          "component", "name"}
+                          "component", "name", "investigation", "parameter",
+                          "observed", "specimen", "normal", "biological ref",
+                          "bio. ref", "method", "remarks"}
 
 
 def _is_lab_table(headers: list[str]) -> bool:
@@ -855,11 +858,31 @@ def _is_lab_table(headers: list[str]) -> bool:
     return matched >= 2
 
 
+def _is_lab_table_by_content(rows: list[list[str]]) -> bool:
+    """Detect lab tables by content patterns even without standard headers.
+
+    Heuristic: if >=3 rows match a known analyte alias AND contain a numeric
+    value, this is likely a lab table regardless of header keywords.
+    """
+    match_count = 0
+    for row in rows[:15]:
+        if not row:
+            continue
+        if _match_row_to_analyte(row[0]) is not None:
+            for cell in row[1:]:
+                if _extract_numeric(cell) is not None:
+                    match_count += 1
+                    break
+    return match_count >= 3
+
+
 def _find_result_column(headers: list[str]) -> Optional[int]:
     """Find the column index that contains numeric results."""
     for i, h in enumerate(headers):
         hl = h.lower().strip()
-        if hl in ("result", "value", "results", "values"):
+        if hl in ("result", "value", "results", "values",
+                  "observed value", "findings", "report",
+                  "patient value", "obtained", "your result"):
             return i
     return None
 
@@ -924,7 +947,7 @@ def _extract_from_tables(
     seen: set[str] = set()
 
     for table in tables:
-        if not table.headers or not _is_lab_table(table.headers):
+        if not table.headers or (not _is_lab_table(table.headers) and not _is_lab_table_by_content(table.rows)):
             continue
 
         result_col = _find_result_column(table.headers)
