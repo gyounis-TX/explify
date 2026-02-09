@@ -129,6 +129,41 @@ def extract_flags_from_text(text: str) -> dict[str, str]:
     return flags
 
 
+def enrich_measurements_with_flags(
+    measurements: list[Any],
+    text: str,
+) -> None:
+    """Enrich parsed measurements with H/L flags and lab-printed ref ranges.
+
+    Modifies measurements in-place, adding lab_flag and lab_ref_range
+    attributes when matching data is found in the text.
+    """
+    flags = extract_flags_from_text(text)
+    ranges = extract_reference_ranges(text)
+
+    # Build range lookup by abbreviation
+    range_lookup: dict[str, LabReferenceRange] = {}
+    for r in ranges:
+        range_lookup[r.abbreviation] = r
+
+    for m in measurements:
+        abbr = m.abbreviation if hasattr(m, "abbreviation") else None
+        name = m.name.upper() if hasattr(m, "name") else None
+        if not abbr:
+            continue
+
+        # Try to find flag by abbreviation or name
+        flag = flags.get(abbr) or flags.get(name) if name else flags.get(abbr)
+        if flag and hasattr(m, "__dict__"):
+            m.lab_flag = flag
+
+        # Try to find lab-printed range
+        lr = range_lookup.get(abbr)
+        if lr and hasattr(m, "__dict__"):
+            if lr.lab_ref_min is not None and lr.lab_ref_max is not None:
+                m.lab_ref_range = f"{lr.lab_ref_min}-{lr.lab_ref_max}"
+
+
 def merge_reference_ranges(
     lab_ranges: list[LabReferenceRange],
     builtin_ranges: dict[str, dict],

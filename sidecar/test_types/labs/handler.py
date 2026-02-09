@@ -4,6 +4,7 @@ import re
 
 from api.models import ExtractionResult
 from api.analysis_models import ParsedMeasurement, ParsedReport, PriorValue, ReportSection
+from extraction.reference_range_extractor import enrich_measurements_with_flags
 from test_types.base import BaseTestType
 from .glossary import LAB_GLOSSARY
 from .measurements import extract_measurements
@@ -215,6 +216,9 @@ class LabResultsHandler(BaseTestType):
                     page_number=m.page_number,
                 )
             )
+
+        # Enrich measurements with H/L flags from report text
+        enrich_measurements_with_flags(parsed_measurements, text)
 
         sections = self._extract_sections(text)
         findings = self._extract_findings(text)

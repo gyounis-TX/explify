@@ -50,7 +50,7 @@ class MeasurementDef:
 
 
 _NUM = r"(?P<value>\d+\.?\d*)"
-_SEP = r"[\s:=]+\s*"
+_SEP = r"[\s:=|]+\s*"
 
 
 MEASUREMENT_DEFS: list[MeasurementDef] = [
@@ -1014,9 +1014,9 @@ def _extract_from_text(
         if mdef.abbreviation in seen:
             continue
 
+        found = False
         for pattern in mdef.patterns:
-            match = re.search(pattern, full_text)
-            if match:
+            for match in re.finditer(pattern, full_text):
                 try:
                     value = float(match.group("value"))
                 except (ValueError, IndexError):
@@ -1037,6 +1037,9 @@ def _extract_from_text(
                     )
                 )
                 seen.add(mdef.abbreviation)
+                found = True
+                break
+            if found:
                 break
 
     return results
