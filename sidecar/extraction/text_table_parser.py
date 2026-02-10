@@ -28,6 +28,22 @@ _SEPARATOR_LINE = re.compile(r"^[\s\-=_|+]+$")
 # Lines that are blank or only whitespace
 _BLANK_LINE = re.compile(r"^\s*$")
 
+# Common lab units — used to identify unit columns in headerless tables
+_UNIT_PATTERNS = re.compile(
+    r"^(?:"
+    r"mg/dL|g/dL|ng/dL|ug/dL|pg/mL|ng/mL|IU/mL|"
+    r"mmol/L|umol/L|mEq/L|"
+    r"U/L|mU/L|IU/L|"
+    r"cells/uL|cells/mcL|x10[Ee]?[369]/uL|10\^[369]/uL|K/uL|M/uL|"
+    r"mL/min(?:/1\.73m2)?|"
+    r"mm/hr|sec|seconds|%|fL|pg|g/L|ratio|index|"
+    r"mIU/L|mIU/mL|uIU/mL|"
+    r"mg/L|ug/L|ng/L|"
+    r"mmHg|bpm|cm|mm|mL|L"
+    r")$",
+    re.IGNORECASE,
+)
+
 
 def parse_text_tables(
     text: str,
@@ -181,14 +197,12 @@ def _try_tab_delimited(lines: list[str]) -> list[ExtractedTable]:
         headers = first_cells
         data_start = first_tab_idx + 1
     else:
-        # No recognizable header — synthesize generic headers
-        headers = _synthesize_headers(len(first_cells))
         data_start = first_tab_idx
 
-    if len(headers) < _MIN_COLS:
+    expected_cols = len(first_cells)
+    if expected_cols < _MIN_COLS:
         return []
 
-    expected_cols = len(headers)
     rows: list[list[str]] = []
 
     for line in lines[data_start:]:
@@ -204,6 +218,10 @@ def _try_tab_delimited(lines: list[str]) -> list[ExtractedTable]:
 
     if not rows:
         return []
+
+    if not has_header:
+        # Synthesize headers using content analysis of the parsed rows
+        headers = _synthesize_headers(expected_cols, sample_rows=rows[:10])
 
     return [ExtractedTable(
         page_number=1,
@@ -267,18 +285,22 @@ def _try_fixed_width(lines: list[str]) -> list[ExtractedTable]:
         headers = first_row
         data_rows = filtered[1:]
     else:
-        headers = _synthesize_headers(modal_cols)
         data_rows = filtered
 
     # Normalize rows to header length
+    target_cols = len(headers) if has_header else modal_cols
     rows: list[list[str]] = []
     for row in data_rows:
-        while len(row) < len(headers):
+        while len(row) < target_cols:
             row.append("")
-        rows.append(row[:len(headers)])
+        rows.append(row[:target_cols])
 
     if not rows:
         return []
+
+    if not has_header:
+        # Synthesize headers using content analysis of the parsed rows
+        headers = _synthesize_headers(modal_cols, sample_rows=rows[:10])
 
     return [ExtractedTable(
         page_number=1,
@@ -288,13 +310,77 @@ def _try_fixed_width(lines: list[str]) -> list[ExtractedTable]:
     )]
 
 
-def _synthesize_headers(num_cols: int) -> list[str]:
+def _synthesize_headers(
+    num_cols: int,
+    sample_rows: list[list[str]] | None = None,
+) -> list[str]:
     """Generate synthetic headers for headerless tables.
 
     Uses common lab column order: Name, Value, Units, Range, Flag.
+    If sample_rows are provided, uses content analysis to detect unit and
+    range columns for more accurate header assignment.
     """
     default_names = ["Name", "Value", "Units", "Range", "Flag"]
-    if num_cols <= len(default_names):
+    if num_cols <= len(default_names) and not sample_rows:
         return default_names[:num_cols]
-    # For extra columns, add generic names
-    return default_names + [f"Col{i}" for i in range(len(default_names), num_cols)]
+    if not sample_rows:
+        return default_names + [f"Col{i}" for i in range(len(default_names), num_cols)]
+
+    # Content-based header detection
+    headers = [""] * num_cols
+    headers[0] = "Name"  # First column is always the test name
+
+    for col in range(1, num_cols):
+        col_vals = [
+            row[col].strip() for row in sample_rows
+            if col < len(row) and row[col].strip()
+        ]
+        if not col_vals:
+            continue
+
+        # Check if column looks like units
+        unit_matches = sum(1 for v in col_vals if _UNIT_PATTERNS.match(v))
+        if unit_matches >= len(col_vals) * 0.4 and unit_matches >= 2:
+            headers[col] = "Units"
+            continue
+
+        # Check if column looks like a reference range (e.g. "70-100", "<200", "0.4-4.0")
+        range_matches = sum(
+            1 for v in col_vals
+            if re.match(r"^[<>]?\s*\d+\.?\d*\s*[-–]\s*\d+\.?\d*$", v)
+            or re.match(r"^[<>]\s*\d+\.?\d*$", v)
+        )
+        if range_matches >= len(col_vals) * 0.3 and range_matches >= 2:
+            headers[col] = "Range"
+            continue
+
+        # Check if column looks like flags (H, L, HH, LL, A, *)
+        flag_matches = sum(
+            1 for v in col_vals
+            if re.match(r"^[HLA\*]{1,2}$", v, re.IGNORECASE)
+        )
+        if flag_matches >= len(col_vals) * 0.2 and flag_matches >= 1:
+            headers[col] = "Flag"
+            continue
+
+        # Check if column looks like numeric values
+        num_matches = sum(
+            1 for v in col_vals
+            if re.match(r"^[<>]?\s*\d+\.?\d*$", v)
+        )
+        if num_matches >= len(col_vals) * 0.5:
+            headers[col] = "Value" if "Value" not in headers else f"Value{col}"
+
+    # Fill remaining empty headers with defaults
+    used = {h for h in headers if h}
+    for i in range(num_cols):
+        if not headers[i]:
+            for default in default_names:
+                if default not in used:
+                    headers[i] = default
+                    used.add(default)
+                    break
+            else:
+                headers[i] = f"Col{i}"
+
+    return headers

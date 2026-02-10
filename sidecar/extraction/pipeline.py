@@ -116,11 +116,23 @@ class ExtractionPipeline:
 
         page_results.sort(key=lambda r: r.page_number)
 
-        # Step 3: Extract tables from text pages
+        # Step 3: Extract tables from text pages (pdfplumber geometry)
         tables = []
         if text_pages:
             table_extractor = TableExtractor(file_path)
             tables = table_extractor.extract_tables(text_pages)
+
+        # Step 3b: Extract tables from scanned page OCR text
+        # The text_table_parser can detect tabular structure in OCR output
+        # (fixed-width columns, pipe/tab delimiters) that pdfplumber can't see.
+        from .text_table_parser import parse_text_tables
+
+        for r in page_results:
+            if r.extraction_method in ("ocr", "vision_ocr") and r.text:
+                ocr_tables = parse_text_tables(r.text)
+                for t in ocr_tables:
+                    t.page_number = r.page_number
+                tables.extend(ocr_tables)
 
         # Step 4: Combine into full text
         full_text = "\n\n".join(r.text for r in page_results if r.text)

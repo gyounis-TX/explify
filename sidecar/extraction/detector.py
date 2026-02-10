@@ -1,8 +1,22 @@
+import string
+
 import pdfplumber
 
 from api.models import DetectionResult, PageDetection, PageType
 
 TEXT_CHAR_THRESHOLD = 50
+
+# If extracted text has fewer than this ratio of printable characters,
+# treat as garbled/corrupted even if char count exceeds the threshold.
+_MIN_PRINTABLE_RATIO = 0.70
+
+
+def _printable_ratio(text: str) -> float:
+    """Fraction of characters that are printable ASCII or common whitespace."""
+    if not text:
+        return 0.0
+    printable = sum(1 for c in text if c in string.printable or ord(c) > 127)
+    return printable / len(text)
 
 
 class PDFDetector:
@@ -17,18 +31,31 @@ class PDFDetector:
                 text = page.extract_text() or ""
                 char_count = len(text.strip())
 
-                if char_count >= TEXT_CHAR_THRESHOLD:
+                # A page is TEXT only if it has enough characters AND
+                # those characters are mostly printable (not garbled)
+                ratio = _printable_ratio(text.strip())
+                is_real_text = (
+                    char_count >= TEXT_CHAR_THRESHOLD
+                    and ratio >= _MIN_PRINTABLE_RATIO
+                )
+
+                if is_real_text:
                     page_type = PageType.TEXT
-                    confidence = min(1.0, char_count / 200)
+                    confidence = min(1.0, char_count / 200) * min(1.0, ratio / 0.9)
                 else:
                     page_type = PageType.SCANNED
-                    confidence = 1.0 - (char_count / TEXT_CHAR_THRESHOLD) if TEXT_CHAR_THRESHOLD > 0 else 1.0
+                    # High confidence scanned when few chars or garbled
+                    if char_count < TEXT_CHAR_THRESHOLD:
+                        confidence = 1.0 - (char_count / TEXT_CHAR_THRESHOLD)
+                    else:
+                        # Had enough chars but they were garbled
+                        confidence = 1.0 - ratio
 
                 pages.append(PageDetection(
                     page_number=i + 1,
                     page_type=page_type,
                     char_count=char_count,
-                    confidence=round(confidence, 3),
+                    confidence=round(max(0.0, min(1.0, confidence)), 3),
                 ))
 
         overall_type = self._classify_overall(pages)
