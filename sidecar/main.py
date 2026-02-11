@@ -85,11 +85,9 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     _init_sentry()
     app = FastAPI(title="Explify Sidecar", version="0.4.0", lifespan=lifespan)
-    # Auth middleware added first (inner); CORS added last (outer) so CORS
-    # headers appear on all responses including auth errors.
+    # Middleware order (inner → outer): Auth → Audit → CORS
+    # CORS must be outermost so ALL responses (including 500s) get headers.
     app.add_middleware(AuthMiddleware)
-    add_cors_middleware(app)
-    # Audit logging and rate limiting (web mode only)
     if REQUIRE_AUTH:
         from api.audit import AuditMiddleware
         from api.rate_limit import limiter, rate_limit_exceeded_handler
@@ -98,6 +96,7 @@ def create_app() -> FastAPI:
         app.add_middleware(AuditMiddleware)
         app.state.limiter = limiter
         app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+    add_cors_middleware(app)
     # Catch-all exception handler so unhandled errors still return JSON
     # with CORS headers (instead of a bare 500 that the browser blocks).
     @app.exception_handler(Exception)
@@ -109,6 +108,10 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(router)
+    # Account management endpoints (web mode only)
+    if REQUIRE_AUTH:
+        from api.account import router as account_router
+        app.include_router(account_router)
     return app
 
 
