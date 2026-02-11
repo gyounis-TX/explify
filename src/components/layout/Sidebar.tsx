@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, Link, useNavigate } from "react-router-dom";
 import { getSession, signOut, onAuthStateChange } from "../../services/supabase";
 import { isSupabaseConfigured, fullSync } from "../../services/syncEngine";
 import { isAdmin } from "../../services/adminAuth";
@@ -7,7 +7,7 @@ import { IS_TAURI } from "../../services/platform";
 import "./Sidebar.css";
 
 const baseNavItems = [
-  { path: "/", label: "Import" },
+  { path: IS_TAURI ? "/" : "/import", label: "Import" },
   { path: "/results", label: "Explanation" },
   { path: "/history", label: "History" },
   { path: "/teaching-points", label: "Teaching Points" },
@@ -164,12 +164,12 @@ export function Sidebar() {
           </>
         )}
       </div>
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" role="navigation" aria-label="Main navigation">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
-            end={item.path === "/"}
+            end={item.path === "/" || item.path === "/import"}
             className={({ isActive }) =>
               `sidebar-link ${isActive ? "sidebar-link--active" : ""}`
             }
@@ -197,6 +197,11 @@ export function Sidebar() {
           )}
         </div>
       )}
+      <div className="sidebar-legal">
+        <Link to="/terms" className="sidebar-legal-link">Terms</Link>
+        <span className="sidebar-legal-sep">&middot;</span>
+        <Link to="/privacy" className="sidebar-legal-link">Privacy</Link>
+      </div>
     </aside>
   );
 }

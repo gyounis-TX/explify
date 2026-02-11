@@ -87,7 +87,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast, showUndoToast }}>
       {children}
-      <div className="toast-container">
+      <div className="toast-container" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <ToastItem
             key={toast.id}
@@ -129,7 +129,7 @@ function ToastItem({
   if (toast.type === "undo") {
     const progress = remainingMs / toast.duration;
     return (
-      <div className="toast toast--undo">
+      <div className="toast toast--undo" role="alert">
         <span className="toast-undo-message">{toast.message}</span>
         <button className="toast-undo-btn" onClick={onUndo}>
           Undo <kbd className="toast-undo-kbd">{navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl+"}Z</kbd>
@@ -147,6 +147,7 @@ function ToastItem({
   return (
     <div
       className={`toast toast--${toast.type}`}
+      role={toast.type === "error" ? "alert" : "status"}
       onClick={onDismiss}
     >
       {toast.message}

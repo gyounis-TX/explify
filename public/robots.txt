@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /results
+Disallow: /processing
+Sitemap: https://explify.app/sitemap.xml

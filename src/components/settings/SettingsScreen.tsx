@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueSettingsUpsert } from "../../services/syncEngine";
+import { getSession, signOut } from "../../services/supabase";
+import { IS_TAURI } from "../../services/platform";
 import { useToast } from "../shared/Toast";
 import { SharingPanel } from "../teaching-points/SharingPanel";
 import type { LiteracyLevel, ExplanationVoice, PhysicianNameSource, FooterType } from "../../types/sidecar";
@@ -868,6 +870,9 @@ export function SettingsScreen() {
         {/* Sharing */}
         <SharingPanel />
 
+        {/* Account Management — web mode only */}
+        {!IS_TAURI && <AccountSection />}
+
         {/* Branding */}
         <section className="settings-section about-section">
           <p className="lumen-branding">
@@ -879,5 +884,124 @@ export function SettingsScreen() {
         </section>
       </div>
     </div>
+  );
+}
+
+
+function AccountSection() {
+  const { showToast } = useToast();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    getSession().then((s) => setIsAuthenticated(!!s));
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const blob = await sidecarApi.exportAccountData();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "explify-data-export.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("success", "Data exported successfully.");
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }, [showToast]);
+
+  const handleDelete = useCallback(async () => {
+    if (deleteConfirm !== "DELETE") return;
+    setDeleting(true);
+    try {
+      await sidecarApi.deleteAccount("DELETE");
+      showToast("success", "Account deleted.");
+      await signOut();
+      window.location.reload();
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Deletion failed.");
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirm, showToast]);
+
+  if (!isAuthenticated) return null;
+
+  return (
+    <section className="settings-section account-section">
+      <h3 className="settings-section-title">Account</h3>
+      <p className="settings-description" style={{ marginBottom: "var(--space-md)" }}>
+        Manage your account data and privacy.
+      </p>
+
+      <div className="account-actions">
+        <button
+          className="account-export-btn"
+          onClick={handleExport}
+          disabled={exporting}
+        >
+          {exporting ? "Exporting..." : "Export My Data"}
+        </button>
+
+        <button
+          className="account-delete-btn"
+          onClick={() => setShowDeleteModal(true)}
+        >
+          Delete My Account
+        </button>
+      </div>
+
+      {showDeleteModal && (
+        <div className="account-delete-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" onClick={() => setShowDeleteModal(false)}>
+          <div className="account-delete-modal" onClick={(e) => e.stopPropagation()}>
+            <h4 className="account-delete-modal-title" id="delete-account-title">Delete Account</h4>
+            <p className="account-delete-modal-text">
+              This will permanently delete your account and all associated data
+              (history, templates, letters, teaching points, and settings).
+              This action cannot be undone.
+            </p>
+            <label className="account-delete-modal-label">
+              Type <strong>DELETE</strong> to confirm:
+              <input
+                type="text"
+                className="form-input account-delete-modal-input"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="DELETE"
+                autoFocus
+              />
+            </label>
+            <div className="account-delete-modal-actions">
+              <button
+                className="account-delete-modal-cancel"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirm("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="account-delete-modal-confirm"
+                disabled={deleteConfirm !== "DELETE" || deleting}
+                onClick={handleDelete}
+              >
+                {deleting ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

@@ -21,3 +21,14 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Visible focus outlines for keyboard navigation (a11y) */
+:focus-visible {
+  outline: 2px solid var(--color-primary-400, #818cf8);
+  outline-offset: 2px;
+}
+
+/* Remove focus outline for mouse/touch users */
+:focus:not(:focus-visible) {
+  outline: none;
+}

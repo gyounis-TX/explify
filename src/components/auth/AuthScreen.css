@@ -137,3 +137,81 @@
   text-align: center;
   font-style: italic;
 }
+
+/* Google OAuth button */
+.auth-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.auth-google-btn:hover:not(:disabled) {
+  background-color: var(--color-gray-50, #f9fafb);
+  border-color: var(--color-gray-300, #d1d5db);
+}
+
+.auth-google-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-google-icon {
+  flex-shrink: 0;
+}
+
+/* Divider between OAuth and email */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: var(--space-lg) 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-border);
+}
+
+.auth-divider-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-transform: lowercase;
+}
+
+/* Forgot password link */
+.auth-forgot {
+  text-align: right;
+  margin-top: calc(-1 * var(--space-xs));
+}
+
+/* Legal links on signup */
+.auth-legal {
+  margin-top: var(--space-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.auth-legal-link {
+  color: var(--color-primary-600);
+  text-decoration: underline;
+}
+
+.auth-legal-link:hover {
+  color: var(--color-primary-700);
+}

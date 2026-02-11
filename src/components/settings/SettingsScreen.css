@@ -693,3 +693,144 @@
   color: var(--color-text-secondary);
   line-height: 1.4;
 }
+
+/* Account Management Section */
+.account-section {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.account-actions {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.account-export-btn {
+  padding: var(--space-sm) var(--space-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.account-export-btn:hover:not(:disabled) {
+  background-color: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+.account-export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.account-delete-btn {
+  padding: var(--space-sm) var(--space-lg);
+  background-color: var(--color-surface);
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.account-delete-btn:hover {
+  background-color: #fef2f2;
+  border-color: #dc2626;
+}
+
+/* Delete Account Modal */
+.account-delete-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.account-delete-modal {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.account-delete-modal-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: #dc2626;
+  margin-bottom: var(--space-sm);
+}
+
+.account-delete-modal-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-lg);
+}
+
+.account-delete-modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  margin-bottom: var(--space-lg);
+}
+
+.account-delete-modal-input {
+  margin-top: var(--space-xs);
+}
+
+.account-delete-modal-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+.account-delete-modal-cancel {
+  padding: var(--space-sm) var(--space-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.account-delete-modal-cancel:hover {
+  background-color: var(--color-gray-50);
+}
+
+.account-delete-modal-confirm {
+  padding: var(--space-sm) var(--space-lg);
+  background-color: #dc2626;
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.account-delete-modal-confirm:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.account-delete-modal-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

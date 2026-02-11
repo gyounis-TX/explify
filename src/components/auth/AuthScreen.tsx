@@ -1,5 +1,16 @@
-import { useState, useCallback, useRef } from "react";
-import { signIn, signUp, verifyOtp, resendSignupOtp, type SignUpResult } from "../../services/supabase";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
+import {
+  signIn,
+  signUp,
+  verifyOtp,
+  resendSignupOtp,
+  resetPassword,
+  updatePassword,
+  signInWithGoogle,
+  isSupabaseConfigured,
+  type SignUpResult,
+} from "../../services/supabase";
 import { useToast } from "../shared/Toast";
 import "./AuthScreen.css";
 
@@ -7,14 +18,31 @@ interface AuthScreenProps {
   onAuthSuccess: () => void;
 }
 
+type AuthMode = "signin" | "signup" | "verify" | "forgot" | "reset";
+
 export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   const { showToast } = useToast();
-  const [mode, setMode] = useState<"signin" | "signup" | "verify">("signin");
+  const [mode, setMode] = useState<AuthMode>(() => {
+    // Check URL for ?mode=reset (password reset redirect from Supabase email)
+    const hash = window.location.hash;
+    if (hash.includes("mode=reset")) return "reset";
+    return "signin";
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [code, setCode] = useState(["", "", "", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // On mount, consume access_token from hash if present (password reset flow)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes("access_token=") && hash.includes("type=recovery")) {
+      setMode("reset");
+    }
+  }, []);
 
   const handleCodeChange = useCallback(
     (index: number, value: string) => {
@@ -71,7 +99,6 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           if (result.error) {
             showToast("error", result.error);
           } else if ("confirmed" in result && result.confirmed) {
-            // Auto-confirmed (no email verification required)
             showToast("success", "Account created.");
             onAuthSuccess();
           } else {
@@ -129,6 +156,188 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
     }
   }, [email, showToast]);
 
+  const handleForgotPassword = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!email.trim()) return;
+
+      setLoading(true);
+      try {
+        const result = await resetPassword(email);
+        if (result.error) {
+          showToast("error", result.error);
+        } else {
+          setResetSent(true);
+          showToast("success", "Check your email for a reset link.");
+        }
+      } catch {
+        showToast("error", "Could not send reset email.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [email, showToast],
+  );
+
+  const handleResetPassword = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!password.trim() || password.length < 6) {
+        showToast("error", "Password must be at least 6 characters.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        showToast("error", "Passwords do not match.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const result = await updatePassword(password);
+        if (result.error) {
+          showToast("error", result.error);
+        } else {
+          showToast("success", "Password updated. You can now sign in.");
+          setPassword("");
+          setConfirmPassword("");
+          setMode("signin");
+        }
+      } catch {
+        showToast("error", "Could not update password.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [password, confirmPassword, showToast],
+  );
+
+  const handleGoogleSignIn = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.error) {
+        showToast("error", result.error);
+        setLoading(false);
+      }
+      // On success, Supabase redirects to Google — no further action needed
+    } catch {
+      showToast("error", "Google sign-in failed.");
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  // Reset password screen
+  if (mode === "reset") {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <h2 className="auth-title">Set New Password</h2>
+          <p className="auth-subtitle">Enter your new password below.</p>
+
+          <form className="auth-form" onSubmit={handleResetPassword}>
+            <label className="auth-label">
+              New Password
+              <input
+                type="password"
+                className="auth-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="New password"
+                required
+                minLength={6}
+                autoFocus
+              />
+            </label>
+
+            <label className="auth-label">
+              Confirm Password
+              <input
+                type="password"
+                className="auth-input"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                required
+                minLength={6}
+              />
+            </label>
+
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={loading || !password || !confirmPassword}
+            >
+              {loading ? "Updating..." : "Update Password"}
+            </button>
+          </form>
+
+          <p className="auth-switch">
+            <button
+              className="auth-switch-btn"
+              onClick={() => setMode("signin")}
+            >
+              Back to sign in
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Forgot password screen
+  if (mode === "forgot") {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <h2 className="auth-title">Reset Password</h2>
+          <p className="auth-subtitle">
+            {resetSent
+              ? "Check your email for a password reset link."
+              : "Enter your email and we'll send you a reset link."}
+          </p>
+
+          {!resetSent && (
+            <form className="auth-form" onSubmit={handleForgotPassword}>
+              <label className="auth-label">
+                Email
+                <input
+                  type="email"
+                  className="auth-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoFocus
+                />
+              </label>
+
+              <button
+                type="submit"
+                className="auth-submit-btn"
+                disabled={loading || !email.trim()}
+              >
+                {loading ? "Sending..." : "Send Reset Link"}
+              </button>
+            </form>
+          )}
+
+          <p className="auth-switch">
+            <button
+              className="auth-switch-btn"
+              onClick={() => {
+                setResetSent(false);
+                setMode("signin");
+              }}
+            >
+              Back to sign in
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // OTP verification screen
   if (mode === "verify") {
     return (
       <div className="auth-screen">
@@ -189,6 +398,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
     );
   }
 
+  // Sign in / Sign up screen
   return (
     <div className="auth-screen">
       <div className="auth-card">
@@ -200,6 +410,28 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             ? "Sign in to sync your data across devices."
             : "Create an account to enable cloud sync."}
         </p>
+
+        {isSupabaseConfigured() && (
+          <>
+            <button
+              type="button"
+              className="auth-google-btn"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+            >
+              <svg className="auth-google-icon" viewBox="0 0 24 24" width="18" height="18">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Continue with Google
+            </button>
+            <div className="auth-divider">
+              <span className="auth-divider-text">or</span>
+            </div>
+          </>
+        )}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label">
@@ -226,6 +458,18 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
               minLength={6}
             />
           </label>
+
+          {mode === "signin" && (
+            <div className="auth-forgot">
+              <button
+                type="button"
+                className="auth-switch-btn"
+                onClick={() => setMode("forgot")}
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -263,6 +507,15 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             </>
           )}
         </p>
+
+        {mode === "signup" && (
+          <p className="auth-legal">
+            By creating an account, you agree to our{" "}
+            <Link to="/terms" className="auth-legal-link">Terms of Service</Link>
+            {" "}and{" "}
+            <Link to="/privacy" className="auth-legal-link">Privacy Policy</Link>.
+          </p>
+        )}
 
         <p className="auth-note">
           API keys are never synced and remain local to this device.

@@ -80,6 +80,13 @@ class SidecarApi {
   }
 
   private async handleErrorResponse(response: Response): Promise<never> {
+    // Rate limit — throw a specific message so the UI can inform the user
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After");
+      const wait = retryAfter ? ` Try again in ${retryAfter} seconds.` : "";
+      throw new Error(`Rate limit exceeded.${wait} Please wait before making more requests.`);
+    }
+
     let detail = `Request failed: ${response.status}`;
     try {
       const body = await response.json();
@@ -1065,6 +1072,29 @@ class SidecarApi {
         labels,
         clinical_context: clinicalContext ?? "",
       }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+  // --- Account Management ---
+
+  async exportAccountData(): Promise<Blob> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/account/export`);
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.blob();
+  }
+
+  async deleteAccount(confirmation: string): Promise<{ deleted: boolean }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/account/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation }),
     });
     if (!response.ok) {
       await this.handleErrorResponse(response);

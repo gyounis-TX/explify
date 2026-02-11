@@ -35,7 +35,7 @@ export function AppShell() {
         }
         // No session — check if Supabase is actually reachable before
         // requiring login. If it's down, skip auth entirely.
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? "").trim();
         if (!supabaseUrl) {
           setIsAuthenticated(true);
           setAuthChecked(true);

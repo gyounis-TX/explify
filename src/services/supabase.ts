@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient, type Session } from "@supabase/supabase-js";
 
 // These should be replaced with actual values from a Supabase project
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
 
 let supabaseInstance: SupabaseClient | null = null;
 

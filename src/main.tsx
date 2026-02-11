@@ -5,7 +5,11 @@ import App from "./App";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { ToastProvider } from "./components/shared/Toast";
 import { getSupabase } from "./services/supabase";
+import { initSentry } from "./services/sentry";
 import "./styles/global.css";
+
+// Initialize Sentry as early as possible
+initSentry();
 
 // Supabase email confirmation redirects put the token in the hash fragment.
 // Check the full URL since HashRouter may interfere with the hash.

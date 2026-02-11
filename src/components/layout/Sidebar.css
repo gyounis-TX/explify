@@ -180,3 +180,25 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Legal links footer */
+.sidebar-legal {
+  padding: var(--space-sm) var(--space-md);
+  text-align: center;
+  font-size: var(--font-size-xs);
+}
+
+.sidebar-legal-link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.sidebar-legal-link:hover {
+  color: var(--color-primary-600);
+  text-decoration: underline;
+}
+
+.sidebar-legal-sep {
+  margin: 0 var(--space-xs);
+  color: var(--color-text-secondary);
+}

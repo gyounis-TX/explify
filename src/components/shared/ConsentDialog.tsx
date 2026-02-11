@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import "./ConsentDialog.css";
 
 interface ConsentDialogProps {
@@ -5,10 +6,24 @@ interface ConsentDialogProps {
 }
 
 export function ConsentDialog({ onConsent }: ConsentDialogProps) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    btnRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onConsent();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onConsent]);
+
   return (
-    <div className="consent-overlay">
+    <div className="consent-overlay" role="dialog" aria-modal="true" aria-labelledby="consent-title">
       <div className="consent-card">
-        <h2 className="consent-title">Privacy & Data Notice</h2>
+        <h2 className="consent-title" id="consent-title">Privacy & Data Notice</h2>
         <ul className="consent-list">
           <li>All report processing happens locally on your device.</li>
           <li>Your medical data never leaves your computer without your action.</li>
@@ -16,7 +31,7 @@ export function ConsentDialog({ onConsent }: ConsentDialogProps) {
           <li>Analysis history is saved locally and can be permanently deleted at any time.</li>
           <li>When you request an AI explanation, only anonymized text (with personal health information scrubbed) is sent to the AI provider.</li>
         </ul>
-        <button className="consent-btn" onClick={onConsent}>
+        <button className="consent-btn" ref={btnRef} onClick={onConsent}>
           I Understand
         </button>
       </div>
