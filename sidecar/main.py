@@ -1,7 +1,10 @@
+import logging
 import os
+import re
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from api.auth import AuthMiddleware, REQUIRE_AUTH
 from api.middleware import add_cors_middleware
@@ -9,7 +12,55 @@ from api.routes import router
 from server import find_free_port, start_server
 from storage import get_db, get_keychain
 
+_logger = logging.getLogger(__name__)
+
 _USE_PG = bool(os.getenv("DATABASE_URL", ""))
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+
+# PHI patterns to scrub from error reports
+_PHI_PATTERNS = [
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),                    # SSN
+    re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),        # dates
+    re.compile(r"\b[A-Z]{1,2}\d{6,10}\b"),                    # MRN
+    re.compile(r"\b\d{10}\b"),                                 # phone
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
+]
+
+
+def _scrub_phi(text: str) -> str:
+    for pattern in _PHI_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
+def _init_sentry() -> None:
+    if not _SENTRY_DSN:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+
+        def before_send(event, hint):
+            # Scrub PHI from exception values
+            if "exception" in event:
+                for exc_info in event["exception"].get("values", []):
+                    if exc_info.get("value"):
+                        exc_info["value"] = _scrub_phi(exc_info["value"])
+            # Scrub breadcrumbs
+            for bc in event.get("breadcrumbs", {}).get("values", []):
+                if bc.get("message"):
+                    bc["message"] = _scrub_phi(bc["message"])
+            return event
+
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
+            integrations=[FastApiIntegration(), StarletteIntegration()],
+            before_send=before_send,
+        )
+    except ImportError:
+        pass
 
 
 @asynccontextmanager
@@ -32,6 +83,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    _init_sentry()
     app = FastAPI(title="Explify Sidecar", version="0.4.0", lifespan=lifespan)
     # Auth middleware added first (inner); CORS added last (outer) so CORS
     # headers appear on all responses including auth errors.
@@ -46,6 +98,16 @@ def create_app() -> FastAPI:
         app.add_middleware(AuditMiddleware)
         app.state.limiter = limiter
         app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+    # Catch-all exception handler so unhandled errors still return JSON
+    # with CORS headers (instead of a bare 500 that the browser blocks).
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request: Request, exc: Exception):
+        _logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal server error: {type(exc).__name__}: {exc}"},
+        )
+
     app.include_router(router)
     return app
 
