@@ -76,6 +76,43 @@ export async function resendSignupOtp(
   return { error: error?.message ?? null };
 }
 
+export async function resetPassword(
+  email: string,
+): Promise<{ error: string | null }> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Supabase not configured." };
+  const redirectTo = `${window.location.origin}${window.location.pathname}#/auth?mode=reset`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo,
+  });
+  return { error: error?.message ?? null };
+}
+
+export async function updatePassword(
+  newPassword: string,
+): Promise<{ error: string | null }> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Supabase not configured." };
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  return { error: error?.message ?? null };
+}
+
+export async function signInWithGoogle(): Promise<{ error: string | null }> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Supabase not configured." };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}${window.location.pathname}`,
+    },
+  });
+  return { error: error?.message ?? null };
+}
+
+export function isSupabaseConfigured(): boolean {
+  return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
 export async function signOut(): Promise<void> {
   const supabase = getSupabase();
   if (supabase) {
