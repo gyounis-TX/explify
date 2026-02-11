@@ -3240,10 +3240,14 @@ class PromptEngine:
         #    parsed data is sufficient. However, for unknown test types (no
         #    handler), the parsed report is empty, so include the raw text so
         #    the LLM can interpret the report directly.
+        #    Also always include raw text for hand-drawn/OCR-heavy report types
+        #    (e.g. coronary diagrams) where regex extraction is incomplete.
+        _ALWAYS_INCLUDE_RAW_TEXT_TYPES = {"coronary_diagram"}
         has_structured_data = bool(
             parsed_report.measurements or parsed_report.sections or parsed_report.findings
         )
-        if not has_structured_data and scrubbed_text:
+        force_raw = parsed_report.test_type in _ALWAYS_INCLUDE_RAW_TEXT_TYPES
+        if (not has_structured_data or force_raw) and scrubbed_text:
             sections.append("## Full Report Text (PHI Scrubbed)")
             sections.append(scrubbed_text)
 
@@ -3851,6 +3855,10 @@ class PromptEngine:
         physician_name: str | None = None,
         explanation_voice: str = "third_person",
         name_drop: bool = True,
+        literacy_level: "LiteracyLevel | None" = None,
+        tone_preference: int = 3,
+        humanization_level: int = 3,
+        custom_phrases: list[str] | None = None,
     ) -> str:
         """Build a minimal system prompt for quick-normal reassurance messages."""
         specialty = prompt_context.get("specialty", "physician")
@@ -3869,12 +3877,43 @@ class PromptEngine:
             "- Do NOT start with 'Great news' or 'Good news'.",
         ]
 
+        # Literacy level
+        if literacy_level is not None:
+            literacy_map = {
+                "grade_4": "very simple words, short sentences (4th-grade reading level)",
+                "grade_6": "simple, clear language (6th-grade reading level)",
+                "grade_8": "clear with some medical terms explained (8th-grade reading level)",
+                "grade_12": "adult language, medical terms in context (12th-grade reading level)",
+                "clinical": "standard medical terminology",
+            }
+            level_str = literacy_level.value if hasattr(literacy_level, "value") else str(literacy_level)
+            desc = literacy_map.get(level_str, "")
+            if desc:
+                parts.append(f"- Use {desc}.")
+
+        # Tone: 1=clinical, 5=warm
+        if tone_preference >= 4:
+            parts.append("- Use a warm, empathetic, conversational tone.")
+        elif tone_preference <= 2:
+            parts.append("- Use a concise, professional, clinical tone.")
+
+        # Humanization level
+        if humanization_level >= 4:
+            parts.append("- Sound like a real physician speaking naturally to a patient, not a generated message.")
+        elif humanization_level <= 2:
+            parts.append("- Keep the language polished and clinical.")
+
         if name_drop and physician_name:
             voice_label = "first person (I/my)" if explanation_voice == "first_person" else "third person"
             parts.append(
                 f"\n## Physician Voice\n"
                 f"Write in {voice_label} as Dr. {physician_name}, {specialty}."
             )
+        elif explanation_voice == "first_person":
+            parts.append(f"\n## Voice\nWrite in first person (I/my).")
+
+        if custom_phrases:
+            parts.append(f"\n## Preferred Phrases\nTry to incorporate: {', '.join(custom_phrases[:5])}")
 
         return "\n".join(parts)
 
@@ -3896,3 +3935,93 @@ class PromptEngine:
             "Call the explain_report tool with your response."
         )
         return "\n".join(parts)
+
+    # ------------------------------------------------------------------
+    # Interpret (doctor-to-doctor clinical interpretation)
+    # ------------------------------------------------------------------
+
+    def build_interpret_system_prompt(self, prompt_context: dict) -> str:
+        """Build a system prompt for doctor-to-doctor clinical interpretation."""
+        specialty = prompt_context.get("specialty", "general medicine")
+        domain = _select_domain_knowledge(prompt_context)
+
+        return (
+            f"You are a {specialty} specialist interpreting a medical document "
+            "for another physician.\n\n"
+            "Your task: provide a concise, structured clinical interpretation of "
+            "the document. Write as you would in a colleague-to-colleague "
+            "consultation note.\n\n"
+            "Guidelines:\n"
+            "- Use standard medical terminology (no lay-person language needed)\n"
+            "- Organize findings logically by clinical significance\n"
+            "- Flag abnormal values and their clinical implications\n"
+            "- Note the procedure performed, technique/equipment used, and key findings\n"
+            "- Include a brief clinical impression/summary at the end\n"
+            "- If reference ranges are provided, compare values against them\n"
+            "- Do NOT add disclaimers, patient-facing language, or lifestyle advice\n"
+            "- Do NOT fabricate findings not present in the document\n"
+            "- Do NOT use markdown formatting (no ###, **, *, or other markup). "
+            "Use plain text only. Use CAPS or spacing for emphasis if needed.\n\n"
+            f"{domain}"
+        )
+
+    def build_interpret_user_prompt(
+        self,
+        scrubbed_text: str,
+        parsed_report: "ParsedReport",
+        reference_ranges: dict,
+        glossary: dict[str, str],
+    ) -> str:
+        """Build the user prompt for clinical interpretation."""
+        sections: list[str] = []
+
+        # Always include full raw text
+        if scrubbed_text:
+            sections.append("## Document Text (PHI Scrubbed)")
+            sections.append(scrubbed_text)
+
+        # Include parsed measurements if any
+        if parsed_report.measurements:
+            sections.append("\n## Extracted Measurements")
+            for m in parsed_report.measurements:
+                ref = f" (ref: {m.reference_range})" if m.reference_range else ""
+                flag = f" [{m.status.value}]" if m.status.value != "normal" else ""
+                sections.append(
+                    f"- {m.name} ({m.abbreviation}): {m.value} {m.unit}{ref}{flag}"
+                )
+
+        # Include parsed findings
+        if parsed_report.findings:
+            sections.append("\n## Report Findings/Conclusions")
+            for f in parsed_report.findings:
+                sections.append(f"- {f}")
+
+        # Include parsed sections
+        if parsed_report.sections:
+            sections.append("\n## Report Sections")
+            for s in parsed_report.sections:
+                sections.append(f"### {s.name}")
+                sections.append(s.content)
+
+        # Reference ranges
+        if reference_ranges:
+            sections.append("\n## Reference Ranges")
+            for abbr, rr in reference_ranges.items():
+                lo = rr.get("normal_min", "")
+                hi = rr.get("normal_max", "")
+                unit = rr.get("unit", "")
+                if lo and hi:
+                    sections.append(f"- {abbr}: {lo}-{hi} {unit}")
+                elif lo:
+                    sections.append(f"- {abbr}: >= {lo} {unit}")
+                elif hi:
+                    sections.append(f"- {abbr}: <= {hi} {unit}")
+
+        sections.append(
+            "\n## Instructions\n"
+            "Using the data above, provide a structured clinical interpretation "
+            "of this document. Include all relevant findings, measurements, and "
+            "clinical significance."
+        )
+
+        return "\n".join(sections)

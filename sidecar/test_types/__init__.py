@@ -5,6 +5,7 @@ from .stress import StressTestHandler
 from .carotid import CarotidDopplerHandler
 from .arterial import ArterialDopplerHandler
 from .venous import VenousDopplerHandler
+from .coronary_diagram import CoronaryDiagramHandler
 from ._registry_data import GENERIC_TYPES
 
 registry = TestTypeRegistry()
@@ -17,6 +18,7 @@ registry.register(_stress_handler)
 registry.register(CarotidDopplerHandler())
 registry.register(ArterialDopplerHandler())
 registry.register(VenousDopplerHandler())
+registry.register(CoronaryDiagramHandler())
 
 # Register stress subtype IDs so they resolve to the family handler
 for _subtype_id in (

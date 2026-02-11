@@ -80,6 +80,24 @@ class ExplainRequest(BaseModel):
     quick_normal: Optional[bool] = None
 
 
+class InterpretRequest(BaseModel):
+    """Request for doctor-to-doctor clinical interpretation."""
+
+    extraction_result: dict
+    test_type: Optional[str] = None
+
+
+class InterpretResponse(BaseModel):
+    """Response from POST /analyze/interpret."""
+
+    interpretation: str
+    test_type: str
+    test_type_display: str
+    model_used: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
 # --- Response sub-models ---
 
 
@@ -121,6 +139,7 @@ class ExplainResponse(BaseModel):
     output_tokens: int = 0
     severity_score: Optional[float] = None
     tone_auto_adjusted: bool = False
+    personalization_metadata: Optional[dict] = None
 
 
 # --- Settings ---

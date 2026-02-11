@@ -118,9 +118,10 @@ def _build_structured_excerpt(
 
     # 2. Section headers (scan full text)
     section_re = re.compile(
-        r"(?m)^[A-Z][A-Z\s/&]{3,50}:\s*$|"
-        r"(?m)^(?:IMPRESSION|FINDINGS|CONCLUSION|INDICATION|TECHNIQUE|"
+        r"^[A-Z][A-Z\s/&]{3,50}:\s*$|"
+        r"^(?:IMPRESSION|FINDINGS|CONCLUSION|INDICATION|TECHNIQUE|"
         r"COMPARISON|PROCEDURE|REPORT|RESULT)[S]?\s*[:\-]",
+        re.MULTILINE,
     )
     headers_found = [m.group().strip() for m in section_re.finditer(report_text)]
     if headers_found:

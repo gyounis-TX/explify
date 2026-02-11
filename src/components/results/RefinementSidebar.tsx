@@ -143,6 +143,36 @@ export function RefinementSidebar({
 
   return (
     <div className="results-right-column">
+      {/* Learning from You */}
+      {!letterMode && (() => {
+        const pm = currentResponse?.personalization_metadata;
+        const chips: { label: string; count: number }[] = [];
+        if (pm?.style_sample_count) chips.push({ label: "Style", count: pm.style_sample_count });
+        if (pm?.edit_corrections_count) chips.push({ label: "Edits", count: pm.edit_corrections_count });
+        if (pm?.feedback_adjustments_count) chips.push({ label: "Feedback", count: pm.feedback_adjustments_count });
+        if (pm?.vocab_preferences_count) chips.push({ label: "Vocabulary", count: pm.vocab_preferences_count });
+        if (pm?.term_preferences_count) chips.push({ label: "Terms", count: pm.term_preferences_count });
+        if (pm?.liked_examples_count) chips.push({ label: "Liked", count: pm.liked_examples_count });
+        return (
+          <div className="learning-section">
+            <h4 className="learning-section-title">Learning from You</h4>
+            {chips.length > 0 ? (
+              <div className="learning-chips">
+                {chips.map((c) => (
+                  <span key={c.label} className="learning-chip">
+                    {c.label}: {c.count} {c.label === "Style" ? "reports" : c.label === "Edits" ? "patterns" : c.label === "Feedback" ? "adjustments" : "preferences"}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="learning-placeholder">
+                Personalization builds as you rate and edit results
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Refine Panel */}
       <div className="results-refine-panel">
         <h3>Refine Context</h3>

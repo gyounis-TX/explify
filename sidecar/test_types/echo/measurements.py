@@ -48,6 +48,7 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         unit="cm",
         patterns=[
             rf"(?i)LVIDd{_SEP}{_NUM}\s*(?:cm|mm)?",
+            rf"(?i)LV\s*\(D\){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)LV\s+(?:internal\s+)?(?:diameter|dimension)[\s,]*(?:diastol|end[- ]?diastol){_SEP}{_NUM}\s*(?:cm|mm)?",
         ],
         value_min=1.0,
@@ -59,6 +60,7 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         unit="cm",
         patterns=[
             rf"(?i)LVIDs{_SEP}{_NUM}\s*(?:cm|mm)?",
+            rf"(?i)LV\s*\(S\){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)LV\s+(?:internal\s+)?(?:diameter|dimension)[\s,]*(?:systol|end[- ]?systol){_SEP}{_NUM}\s*(?:cm|mm)?",
         ],
         value_min=1.0,
@@ -70,6 +72,7 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         unit="cm",
         patterns=[
             rf"(?i)IVSd{_SEP}{_NUM}\s*(?:cm|mm)?",
+            rf"(?i)IVS\s*\(D\){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)(?:interventricular|IV)\s+sept(?:um|al)[\s,]*(?:diastol|d\.?){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)septal\s+(?:wall\s+)?thickness{_SEP}{_NUM}\s*(?:cm|mm)?",
         ],
@@ -82,6 +85,7 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         unit="cm",
         patterns=[
             rf"(?i)LVPWd{_SEP}{_NUM}\s*(?:cm|mm)?",
+            rf"(?i)LVPW\s*\(D\){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)(?:LV\s+)?(?:posterior|post)\s+wall[\s,]*(?:diastol|d\.?){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)PW\s*d{_SEP}{_NUM}\s*(?:cm|mm)?",
         ],
@@ -117,7 +121,7 @@ MEASUREMENT_DEFS: list[MeasurementDef] = [
         abbreviation="LA",
         unit="cm",
         patterns=[
-            rf"(?i)(?:LA|left\s+atri(?:um|al))\s+(?:diameter|dimension|size){_SEP}{_NUM}\s*(?:cm|mm)?",
+            rf"(?i)(?:LA|left\s+atri(?:um|al))\s+(?:diam(?:eter)?|dimension|size){_SEP}{_NUM}\s*(?:cm|mm)?",
             rf"(?i)LA{_SEP}{_NUM}\s*cm",
         ],
         value_min=1.0,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import uuid
 from typing import TYPE_CHECKING
 
 from PIL import Image
@@ -25,6 +27,43 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _VISION_CONFIDENCE_THRESHOLD = 0.5
+
+# ---------------------------------------------------------------------------
+# Server-side image cache for re-OCR with handler-specific vision hints.
+# Keyed by extraction_id; entries expire after _CACHE_TTL seconds.
+# ---------------------------------------------------------------------------
+_page_image_cache: dict[str, dict] = {}
+_CACHE_TTL = 600  # 10 minutes
+
+
+def _cache_page_images(extraction_id: str, images: dict[int, Image.Image]) -> None:
+    """Store page images for later re-OCR."""
+    _evict_expired()
+    _page_image_cache[extraction_id] = {
+        "images": images,
+        "created": time.time(),
+    }
+    logger.info(
+        "Cached %d page image(s) for extraction_id=%s",
+        len(images), extraction_id,
+    )
+
+
+def get_cached_images(extraction_id: str) -> dict[int, Image.Image] | None:
+    """Retrieve cached page images, or None if expired/missing."""
+    _evict_expired()
+    entry = _page_image_cache.get(extraction_id)
+    if entry is None:
+        return None
+    return entry["images"]
+
+
+def _evict_expired() -> None:
+    """Remove expired cache entries."""
+    now = time.time()
+    expired = [k for k, v in _page_image_cache.items() if now - v["created"] > _CACHE_TTL]
+    for k in expired:
+        del _page_image_cache[k]
 
 
 class ExtractionPipeline:
@@ -116,6 +155,18 @@ class ExtractionPipeline:
 
         page_results.sort(key=lambda r: r.page_number)
 
+        # Cache page images for OCR/vision_ocr pages (for later re-OCR)
+        extraction_id = None
+        ocr_page_images: dict[int, Image.Image] = {}
+        for r in page_results:
+            if r.extraction_method in ("ocr", "vision_ocr"):
+                page_img = self._get_pdf_page_image(file_path, r.page_number)
+                if page_img:
+                    ocr_page_images[r.page_number] = page_img
+        if ocr_page_images:
+            extraction_id = str(uuid.uuid4())
+            _cache_page_images(extraction_id, ocr_page_images)
+
         # Step 3: Extract tables from text pages (pdfplumber geometry)
         tables = []
         if text_pages:
@@ -156,6 +207,7 @@ class ExtractionPipeline:
             warnings=warnings,
             emr_source=emr_fp.source.value if emr_fp.source.value != "unknown" else None,
             emr_source_confidence=emr_fp.confidence,
+            extraction_id=extraction_id,
         )
 
     async def extract_from_image(
@@ -235,6 +287,20 @@ class ExtractionPipeline:
         if not full_text.strip() and n_frames > 1:
             warnings.append("No text could be extracted from this image.")
 
+        # Cache page images for OCR/vision_ocr pages (for later re-OCR)
+        extraction_id = None
+        ocr_page_images: dict[int, Image.Image] = {}
+        image_reopen = Image.open(file_path)
+        for r in page_results:
+            if r.extraction_method in ("ocr", "vision_ocr"):
+                frame_idx = r.page_number - 1
+                if getattr(image_reopen, "n_frames", 1) > 1:
+                    image_reopen.seek(frame_idx)
+                ocr_page_images[r.page_number] = image_reopen.copy().convert("RGB")
+        if ocr_page_images:
+            extraction_id = str(uuid.uuid4())
+            _cache_page_images(extraction_id, ocr_page_images)
+
         return ExtractionResult(
             input_mode=InputMode.IMAGE,
             full_text=full_text,
@@ -245,6 +311,7 @@ class ExtractionPipeline:
             total_chars=len(full_text),
             filename=os.path.basename(file_path),
             warnings=warnings,
+            extraction_id=extraction_id,
         )
 
     def extract_from_text(self, text: str) -> ExtractionResult:

@@ -340,14 +340,28 @@ export function ResultsScreen() {
 
   // Load available test types for the change-type modal
   useEffect(() => {
-    sidecarApi.listTestTypes().then((types) => {
-      setAvailableTypes(types.map((t) => ({
-        test_type_id: t.id,
-        display_name: t.name,
-        keywords: [],
-        category: t.category,
-      })));
-    }).catch(() => {});
+    let cancelled = false;
+    async function loadTypes(attempts = 3, backoffMs = 1000) {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const types = await sidecarApi.listTestTypes();
+          if (!cancelled && types.length > 0) {
+            setAvailableTypes(types.map((t) => ({
+              test_type_id: t.id,
+              display_name: t.name,
+              keywords: [],
+              category: t.category,
+            })));
+            return;
+          }
+        } catch { /* retry */ }
+        if (i < attempts - 1) {
+          await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+        }
+      }
+    }
+    loadTypes();
+    return () => { cancelled = true; };
   }, []);
 
   // Load settings
@@ -639,7 +653,11 @@ export function ResultsScreen() {
     try {
       await sidecarApi.rateHistory(historyId, rating, note);
       setQualityRating(rating);
-      showToast("success", `Rated ${rating}/5. ${rating >= 4 ? "Thanks!" : "Thanks for the feedback."}`);
+      showToast("success", rating >= 4
+        ? `Rated ${rating}/5 \u2014 this helps personalize future results`
+        : note
+          ? `Feedback saved \u2014 future results will reflect your input`
+          : `Rated ${rating}/5. Add a note to help us improve.`);
     } catch {
       showToast("error", "Failed to save rating.");
     }
@@ -1170,6 +1188,23 @@ export function ResultsScreen() {
                 Model: {currentResponse.model_used} | Tokens:{" "}
                 {currentResponse.input_tokens} in / {currentResponse.output_tokens} out
               </span>
+              {(() => {
+                const pm = currentResponse.personalization_metadata;
+                if (!pm) return null;
+                const parts: string[] = [];
+                if (pm.style_sample_count) parts.push(`${pm.style_sample_count} reports`);
+                if (pm.edit_corrections_count) parts.push(`${pm.edit_corrections_count} edits`);
+                if (pm.feedback_adjustments_count) parts.push(`${pm.feedback_adjustments_count} feedback`);
+                if (pm.vocab_preferences_count) parts.push(`${pm.vocab_preferences_count} vocab`);
+                if (pm.term_preferences_count) parts.push(`${pm.term_preferences_count} terms`);
+                if (pm.liked_examples_count) parts.push(`${pm.liked_examples_count} liked`);
+                if (parts.length === 0) return null;
+                return (
+                  <span className="results-personalization">
+                    {"\u2728"} Personalized &mdash; learned from {parts.join(", ")}
+                  </span>
+                );
+              })()}
               {currentResponse.validation_warnings.length > 0 && (
                 <details className="validation-warnings">
                   <summary>Validation Warnings ({currentResponse.validation_warnings.length})</summary>

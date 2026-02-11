@@ -88,12 +88,12 @@ export function CommentPanel({
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
-                  className={`star-btn${(hoverRating || qualityRating || 0) >= star ? " star-btn--filled" : ""}`}
+                  className={`star-btn${(hoverRating || pendingRating || qualityRating || 0) >= star ? " star-btn--filled" : ""}`}
                   onMouseEnter={() => setHoverRating(star)}
                   onClick={() => handleStarClick(star)}
                   title={`Rate ${star}/5`}
                 >
-                  {(hoverRating || qualityRating || 0) >= star ? "\u2605" : "\u2606"}
+                  {(hoverRating || pendingRating || qualityRating || 0) >= star ? "\u2605" : "\u2606"}
                 </button>
               ))}
             </div>

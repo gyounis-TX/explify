@@ -10,7 +10,7 @@ from .base import BaseTestType
 logger = logging.getLogger(__name__)
 
 _HEADER_PATTERNS = [
-    re.compile(r"(?i)(?:report|procedure|study|exam(?:ination)?|test)\s*(?:type)?[:\-]\s*(.+)", re.MULTILINE),
+    re.compile(r"(?i)(?:report|exam(?:ination)?|test)\s*(?:type)?[:\-]\s*(.+)", re.MULTILINE),
     re.compile(r"(?i)^(?:IMPRESSION|INDICATION|FINDINGS)\s+(?:FOR|OF)\s+(.+)", re.MULTILINE),
 ]
 

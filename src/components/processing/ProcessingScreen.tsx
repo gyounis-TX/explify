@@ -580,8 +580,13 @@ export function ProcessingScreen() {
               <div className="step-content">
                 <span className="step-label">{step.label}</span>
                 <span className="step-description">
-                  {stepMessages[step.id] || step.description}
+                  {step.description}
                 </span>
+                {isActive && stepMessages[step.id] && stepMessages[step.id] !== step.description && (
+                  <span className="step-sub-description">
+                    {stepMessages[step.id]}
+                  </span>
+                )}
               </div>
             </div>
           );

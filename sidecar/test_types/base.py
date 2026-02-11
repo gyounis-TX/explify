@@ -78,6 +78,15 @@ class BaseTestType(ABC):
         """
         return None
 
+    def get_vision_hints(self) -> str | None:
+        """Return additional vision OCR hints specific to this test type.
+
+        When a handler returns a non-None string, it signals that re-OCR
+        with these hints could improve extraction quality for scanned/image
+        documents. Return None (default) to skip re-OCR.
+        """
+        return None
+
     def get_metadata(self) -> dict:
         """Return metadata for listing in registry."""
         return {

@@ -43,6 +43,7 @@ export interface ExtractionResult {
   total_chars: number;
   filename: string | null;
   warnings: string[];
+  extraction_id?: string;
 }
 
 export interface ExtractionError {
@@ -188,6 +189,15 @@ export interface ExplainRequest {
   quick_normal?: boolean;
 }
 
+export interface PersonalizationMetadata {
+  style_sample_count?: number;
+  edit_corrections_count?: number;
+  feedback_adjustments_count?: number;
+  vocab_preferences_count?: number;
+  term_preferences_count?: number;
+  liked_examples_count?: number;
+}
+
 export interface ExplainResponse {
   explanation: ExplanationResult;
   parsed_report: ParsedReport;
@@ -197,6 +207,7 @@ export interface ExplainResponse {
   model_used: string;
   input_tokens: number;
   output_tokens: number;
+  personalization_metadata?: PersonalizationMetadata | null;
 }
 
 export interface GlossaryResponse {

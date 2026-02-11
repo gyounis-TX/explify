@@ -608,16 +608,40 @@
   word-break: break-word;
 }
 
-/* PHI Notice */
-.phi-notice {
-  font-size: var(--font-size-xs);
-  color: var(--color-accent-600);
-  font-style: italic;
+/* PHI Badge */
+.phi-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
   margin-bottom: var(--space-md);
-  padding: var(--space-xs) var(--space-sm);
-  background-color: var(--color-accent-50);
-  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
   line-height: 1.4;
+}
+
+.phi-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.phi-badge--found {
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+}
+
+.phi-badge--clean {
+  background-color: var(--color-gray-50);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.phi-badge--scanning {
+  background-color: var(--color-primary-50);
+  border: 1px solid var(--color-primary-200);
+  color: var(--color-primary-700);
 }
 
 .preview-text {

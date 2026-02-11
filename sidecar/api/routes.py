@@ -12,6 +12,8 @@ from api.explain_models import (
     AppSettings,
     ExplainRequest,
     ExplainResponse,
+    InterpretRequest,
+    InterpretResponse,
     SettingsUpdate,
 )
 from api.template_models import (
@@ -40,7 +42,7 @@ from api.letter_models import (
     LetterResponse,
     LetterUpdateRequest,
 )
-from api.models import DetectionResult, ExtractionResult
+from api.models import DetectionResult, ExtractionResult, PageExtractionResult
 from api import settings_store
 from storage import get_active_db
 from storage.database import get_db
@@ -284,6 +286,11 @@ async def scrub_preview(body: dict = Body(...)):
     }
 
 
+_QUICK_NORMAL_EXCLUDED_TYPES = frozenset({
+    "coronary_diagram",  # invasive procedure -- always requires full interpretation
+})
+
+
 def _assess_normalcy(type_id: str | None, extraction_result: "ExtractionResult") -> bool:
     """Check if all parsed measurements are NORMAL or UNDETERMINED.
 
@@ -291,6 +298,8 @@ def _assess_normalcy(type_id: str | None, extraction_result: "ExtractionResult")
     Returns False on any failure, no handler, no measurements, or any abnormal status.
     """
     if not type_id:
+        return False
+    if type_id in _QUICK_NORMAL_EXCLUDED_TYPES:
         return False
     try:
         from api.analysis_models import SeverityStatus
@@ -306,6 +315,102 @@ def _assess_normalcy(type_id: str | None, extraction_result: "ExtractionResult")
         return True
     except Exception:
         return False
+
+
+async def _try_re_ocr(
+    extraction_result: "ExtractionResult",
+    handler,
+    user_id: str | None,
+) -> "ExtractionResult":
+    """Re-OCR scanned pages with handler-specific vision hints.
+
+    Returns the original extraction_result unchanged if re-OCR is not
+    applicable or fails.
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    vision_hints = handler.get_vision_hints()
+    if vision_hints is None:
+        return extraction_result
+
+    # Only re-OCR pages that used OCR/vision_ocr
+    has_ocr_pages = any(
+        p.extraction_method in ("ocr", "vision_ocr")
+        for p in extraction_result.pages
+    )
+    if not has_ocr_pages:
+        return extraction_result
+
+    extraction_id = extraction_result.extraction_id
+    if not extraction_id:
+        return extraction_result
+
+    from extraction.pipeline import get_cached_images
+    cached_images = get_cached_images(extraction_id)
+    if not cached_images:
+        _logger.debug("No cached images for extraction_id=%s", extraction_id)
+        return extraction_result
+
+    # Get LLM client for re-OCR
+    try:
+        settings = await settings_store.get_settings(user_id=user_id)
+        provider_str = settings.llm_provider.value
+        api_key = settings_store.get_api_key_for_provider(provider_str)
+        if not api_key:
+            return extraction_result
+
+        from extraction.vision_ocr import vision_ocr_page
+        llm_client = LLMClient(provider=LLMProvider(provider_str), api_key=api_key)
+
+        updated_pages = list(extraction_result.pages)
+        re_ocr_count = 0
+
+        for i, page in enumerate(updated_pages):
+            if page.extraction_method not in ("ocr", "vision_ocr"):
+                continue
+            page_img = cached_images.get(page.page_number)
+            if not page_img:
+                continue
+
+            new_text, new_conf = await vision_ocr_page(
+                llm_client, page_img, additional_hints=vision_hints,
+            )
+            # Guard: only accept if re-OCR produced meaningful text
+            if new_conf > 0 and len(new_text) >= len(page.text) * 0.5:
+                updated_pages[i] = PageExtractionResult(
+                    page_number=page.page_number,
+                    text=new_text,
+                    extraction_method="vision_ocr_enhanced",
+                    confidence=new_conf,
+                    char_count=len(new_text),
+                )
+                re_ocr_count += 1
+
+        if re_ocr_count > 0:
+            full_text = "\n\n".join(p.text for p in updated_pages if p.text)
+            _logger.info(
+                "Re-OCR enhanced %d page(s) for extraction_id=%s",
+                re_ocr_count, extraction_id,
+            )
+            return ExtractionResult(
+                input_mode=extraction_result.input_mode,
+                full_text=full_text,
+                pages=updated_pages,
+                tables=extraction_result.tables,
+                detection=extraction_result.detection,
+                total_pages=extraction_result.total_pages,
+                total_chars=len(full_text),
+                filename=extraction_result.filename,
+                warnings=extraction_result.warnings + [
+                    f"{re_ocr_count} page(s) re-analyzed with enhanced OCR."
+                ],
+                extraction_id=extraction_id,
+            )
+    except Exception:
+        _logger.exception("Re-OCR failed, continuing with original text")
+
+    return extraction_result
 
 
 @router.post("/analyze/detect-type", response_model=DetectTypeResponse)
@@ -1200,6 +1305,19 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             test_type.replace("_", " ").title(),
         )
 
+        # Stage 1b: Re-OCR with handler-specific vision hints (if applicable)
+        if handler is not None:
+            try:
+                updated = await _try_re_ocr(extraction_result, handler, user_id)
+                if updated is not extraction_result:
+                    yield _sse_event({
+                        "stage": "detecting",
+                        "message": f"Re-analyzing images for {display_name} details...",
+                    })
+                    extraction_result = updated
+            except Exception:
+                _logger.exception("Re-OCR stage failed, continuing with original text")
+
         # Stage 2: Parse
         yield _sse_event({"stage": "parsing", "message": f"Parsing {display_name} report..."})
 
@@ -1586,6 +1704,21 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             return
 
         # Stage 5: Done
+        # Assemble personalization metadata for the frontend
+        _p_meta: dict = {}
+        if style_profile and style_profile.get("sample_count", 0) >= 3:
+            _p_meta["style_sample_count"] = style_profile["sample_count"]
+        if edit_corrections:
+            _p_meta["edit_corrections_count"] = len(edit_corrections)
+        if quality_feedback:
+            _p_meta["feedback_adjustments_count"] = len(quality_feedback)
+        if vocab_prefs:
+            _p_meta["vocab_preferences_count"] = len(vocab_prefs)
+        if term_preferences:
+            _p_meta["term_preferences_count"] = len(term_preferences)
+        if liked_examples:
+            _p_meta["liked_examples_count"] = len(liked_examples)
+
         response = ExplainResponse(
             explanation=explanation,
             parsed_report=parsed_report,
@@ -1597,6 +1730,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             output_tokens=llm_response.output_tokens,
             severity_score=severity_score if severity_score > 0 else None,
             tone_auto_adjusted=tone_auto_adjusted,
+            personalization_metadata=_p_meta if _p_meta else None,
         )
 
         yield _sse_event({"stage": "done", "data": response.model_dump(mode="json")})
@@ -1604,6 +1738,112 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
     except Exception as e:
         _logger.exception("Unexpected error in explain stream")
         yield _sse_event({"stage": "error", "message": str(e)})
+
+
+@router.post("/analyze/interpret", response_model=InterpretResponse)
+@limiter.limit(ANALYZE_RATE_LIMIT)
+async def interpret_report(request: Request, body: InterpretRequest = Body(...)):
+    """Doctor-to-doctor clinical interpretation of any imported document."""
+    import logging
+    _logger = logging.getLogger(__name__)
+    user_id = _get_user_id(request)
+
+    try:
+        extraction_result = ExtractionResult.model_validate(body.extraction_result)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid extraction result: {e}")
+
+    # Detect / resolve test type
+    test_type = body.test_type
+    if not test_type:
+        type_id, confidence = registry.detect(extraction_result)
+        if type_id is not None and confidence >= 0.2:
+            test_type = type_id
+        else:
+            test_type = "unknown"
+
+    resolved_id, handler = registry.resolve(test_type)
+    if resolved_id:
+        test_type = resolved_id
+
+    # Re-OCR with handler-specific vision hints (if applicable)
+    if handler:
+        try:
+            extraction_result = await _try_re_ocr(extraction_result, handler, user_id)
+        except Exception:
+            _logger.exception("Re-OCR failed in interpret, continuing with original text")
+
+    # Parse report
+    if handler:
+        parsed_report = handler.parse(extraction_result)
+        prompt_context = handler.get_prompt_context(extraction_result)
+        reference_ranges = handler.get_reference_ranges()
+        glossary = handler.get_glossary()
+        display_name = handler.display_name
+    else:
+        from api.analysis_models import ParsedReport as PR
+        parsed_report = PR(
+            test_type=test_type, test_type_display=test_type,
+            detection_confidence=0.0,
+        )
+        prompt_context = {}
+        reference_ranges = {}
+        glossary = {}
+        display_name = test_type
+
+    # PHI scrub
+    scrub_result = scrub_phi(extraction_result.full_text)
+
+    # Get LLM client
+    settings = await settings_store.get_settings(user_id=user_id)
+    provider_str = settings.llm_provider.value
+    api_key = settings_store.get_api_key_for_provider(provider_str)
+    if not api_key:
+        raise HTTPException(status_code=400, detail=f"No API key configured for provider '{provider_str}'.")
+
+    llm_provider = LLMProvider(provider_str)
+    model_override = (
+        settings.claude_model
+        if provider_str in ("claude", "bedrock")
+        else settings.openai_model
+    )
+    client = LLMClient(provider=llm_provider, api_key=api_key, model=model_override)
+
+    # Build prompts
+    prompt_engine = PromptEngine()
+    system_prompt = prompt_engine.build_interpret_system_prompt(prompt_context)
+    user_prompt = prompt_engine.build_interpret_user_prompt(
+        scrubbed_text=scrub_result.scrubbed_text,
+        parsed_report=parsed_report,
+        reference_ranges=reference_ranges,
+        glossary=glossary,
+    )
+
+    _logger.info(
+        "Interpret prompt sizes -- system: %d chars, user: %d chars, test_type: %s",
+        len(system_prompt), len(user_prompt), test_type,
+    )
+
+    # Call LLM (plain text, no tool use)
+    try:
+        llm_response = await with_retry(
+            client.call,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=4096,
+            max_attempts=2,
+        )
+    except (LLMRetryError, Exception) as e:
+        raise HTTPException(status_code=502, detail=f"Interpret LLM call failed: {e}")
+
+    return InterpretResponse(
+        interpretation=llm_response.text_content.strip(),
+        test_type=test_type,
+        test_type_display=display_name,
+        model_used=llm_response.model,
+        input_tokens=llm_response.input_tokens,
+        output_tokens=llm_response.output_tokens,
+    )
 
 
 @router.post("/analyze/explain-stream")

@@ -336,6 +336,25 @@ class SidecarApi {
     return response.json();
   }
 
+  async interpretReport(request: {
+    extraction_result: ExtractionResult;
+    test_type?: string;
+  }): Promise<{ interpretation: string; test_type: string; test_type_display: string; model_used: string }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/analyze/interpret`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        extraction_result: request.extraction_result,
+        test_type: request.test_type,
+      }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
   async *explainReportStream(
     request: ExplainRequest,
   ): AsyncGenerator<{

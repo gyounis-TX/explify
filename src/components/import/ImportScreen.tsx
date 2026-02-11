@@ -5,6 +5,10 @@ import { useToast } from "../shared/Toast";
 import type { ExtractionResult, Template, SharedTemplate, DetectTypeResponse } from "../../types/sidecar";
 import { groupTypesByCategory } from "../../utils/testTypeCategories";
 import QuickNormalModal from "./QuickNormalModal";
+import InterpretModal from "./InterpretModal";
+import { isAdmin } from "../../services/adminAuth";
+import { getSession } from "../../services/supabase";
+import { isSupabaseConfigured } from "../../services/syncEngine";
 import "./ImportScreen.css";
 import "../shared/TypeModal.css";
 
@@ -134,6 +138,8 @@ export function ImportScreen() {
   const [scrubbedText, setScrubbedText] = useState<string | null>(_cache.scrubbedText);
   const [scrubbedClinicalContext, setScrubbedClinicalContext] = useState<string | null>(_cache.scrubbedClinicalContext);
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const [phiFound, setPhiFound] = useState<string[]>([]);
+  const [redactionCount, setRedactionCount] = useState(0);
 
   // Multi-text paste state
   const [textEntries, setTextEntries] = useState<TextPasteEntry[]>(_cache.textEntries);
@@ -153,6 +159,10 @@ export function ImportScreen() {
 
   // Quick Normal modal state
   const [showQuickNormal, setShowQuickNormal] = useState(false);
+
+  // Interpret modal state (admin-only)
+  const [showInterpret, setShowInterpret] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Single-report preview collapse state
   const [singlePreviewExpanded, setSinglePreviewExpanded] = useState(false);
@@ -178,6 +188,14 @@ export function ImportScreen() {
       window.history.replaceState({}, document.title);
     }
   }, [locationState, appliedLocationState]);
+
+  // Fetch user email for admin check
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    getSession().then((session) => {
+      setUserEmail(session?.user?.email ?? null);
+    });
+  }, []);
 
   // Sync component state → module-level cache so it survives navigation
   useEffect(() => {
@@ -258,12 +276,16 @@ export function ImportScreen() {
         if (!cancelled) {
           setScrubbedText(res.scrubbed_text);
           setScrubbedClinicalContext(res.scrubbed_clinical_context);
+          setPhiFound(res.phi_found ?? []);
+          setRedactionCount(res.redaction_count ?? 0);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setScrubbedText(result.full_text);
           setScrubbedClinicalContext(clinicalContext);
+          setPhiFound([]);
+          setRedactionCount(0);
         }
       })
       .finally(() => {
@@ -1143,44 +1165,27 @@ export function ImportScreen() {
                   )}
                   {detectionStatus === "success" && detectionResult && (
                     <div className="detection-success">
-                      {manualTestType == null ? (
-                        <>
-                          <span className="detection-badge--success">
-                            {detectionResult.available_types.find(
-                              (t) => t.test_type_id === detectionResult.test_type,
-                            )?.display_name ?? detectionResult.test_type}
-                          </span>
-                          <span className="detection-confidence">
-                            {Math.round(detectionResult.confidence * 100)}% confidence
-                            {detectionResult.detection_method === "llm" && " (AI-assisted)"}
-                          </span>
-                          <button
-                            className="redetect-btn"
-                            onClick={() => setManualTestType("")}
-                          >
-                            Change
-                          </button>
-                        </>
-                      ) : (
-                        <div className="detection-override">
-                          <input
-                            type="text"
-                            className="import-field-textarea"
-                            style={{ resize: "none", minHeight: "auto" }}
-                            placeholder='e.g., "calcium score", "stress test"'
-                            value={manualTestType}
-                            onChange={(e) =>
-                              setManualTestType(e.target.value || "")
-                            }
-                          />
-                          <button
-                            className="redetect-btn"
-                            onClick={() => setManualTestType(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                      <span className="detection-badge--success">
+                        {detectionResult.available_types.find(
+                          (t) => t.test_type_id === (manualTestType || detectionResult.test_type),
+                        )?.display_name ?? manualTestType ?? detectionResult.test_type}
+                      </span>
+                      {!manualTestType && (
+                        <span className="detection-confidence">
+                          {Math.round(detectionResult.confidence * 100)}% confidence
+                          {detectionResult.detection_method === "llm" && " (AI-assisted)"}
+                        </span>
                       )}
+                      <button
+                        className="redetect-btn"
+                        onClick={() => {
+                          setModalSelectedType(manualTestType || detectionResult.test_type);
+                          setModalCustomType("");
+                          setShowTypeModal(true);
+                        }}
+                      >
+                        Change
+                      </button>
                     </div>
                   )}
                   {(detectionStatus === "low_confidence" ||
@@ -1235,9 +1240,24 @@ export function ImportScreen() {
                 </div>
               )}
 
-              <p className="phi-notice">
-                No PHI is stored or sent to the AI. All identifiable information is redacted before processing.
-              </p>
+              <div className={`phi-badge ${isScrubbing ? "phi-badge--scanning" : redactionCount > 0 ? "phi-badge--found" : "phi-badge--clean"}`}>
+                {isScrubbing ? (
+                  <>
+                    <span className="phi-badge-icon"><span className="spinner-inline" /></span>
+                    <span>Scanning for PHI...</span>
+                  </>
+                ) : redactionCount > 0 ? (
+                  <>
+                    <span className="phi-badge-icon">{"\uD83D\uDEE1\uFE0F"}</span>
+                    <span>{redactionCount} {redactionCount === 1 ? "item" : "items"} redacted ({phiFound.join(", ")})</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="phi-badge-icon">{"\uD83D\uDEE1\uFE0F"}</span>
+                    <span>No PHI detected &mdash; safe to process</span>
+                  </>
+                )}
+              </div>
 
               {(() => {
                 const successEntries = [...extractionResults.values()].filter(e => e.status === "success");
@@ -1252,6 +1272,15 @@ export function ImportScreen() {
 
                 return (
                   <div className="proceed-actions">
+                    {isAdmin(userEmail) && isSingleReport && (
+                      <button
+                        className="proceed-btn--quick-normal"
+                        onClick={() => setShowInterpret(true)}
+                        disabled={proceedDisabled}
+                      >
+                        Interpret
+                      </button>
+                    )}
                     {isLikelyNormal && (
                       <button
                         className="proceed-btn--quick-normal"
@@ -1510,6 +1539,20 @@ export function ImportScreen() {
             setShowQuickNormal(false);
             handleProceed();
           }}
+        />
+      )}
+
+      {/* Interpret Modal (admin-only) */}
+      {showInterpret && result && resolvedTestType && (
+        <InterpretModal
+          extractionResult={result}
+          testType={resolvedTestType}
+          testTypeDisplay={
+            detectionResult?.available_types?.find(
+              (t) => t.test_type_id === resolvedTestType,
+            )?.display_name ?? resolvedTestType
+          }
+          onClose={() => setShowInterpret(false)}
         />
       )}
 

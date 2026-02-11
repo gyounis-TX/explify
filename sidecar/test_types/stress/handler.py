@@ -46,7 +46,10 @@ _SUBTYPES = {
 # Pharmacologic agents (vasodilators + dobutamine)
 _PHARMA_AGENTS = [
     "lexiscan", "regadenoson", "adenosine", "dipyridamole",
-    "persantine", "dobutamine", "pharmacologic",
+    "persantine", "dobutamine",
+    "pharmacologic stress test", "pharmacological stress test",
+    "pharmacologic stress was", "pharmacological stress was",
+    "pharmacologic stress protocol",
 ]
 
 # Modality keyword sets (checked in priority order: PET > SPECT > Echo > ECG)

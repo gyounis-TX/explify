@@ -58,6 +58,7 @@ class ExtractionResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     emr_source: Optional[str] = None          # "vidistar", "epic", "cerner", etc.
     emr_source_confidence: float = 0.0
+    extraction_id: Optional[str] = None      # for server-side re-OCR image cache
 
 
 class ExtractionError(BaseModel):
