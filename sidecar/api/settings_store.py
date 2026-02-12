@@ -84,14 +84,16 @@ async def get_settings(user_id: str | None = None) -> AppSettings:
         aws_access = keychain.get_aws_access_key()
         aws_secret = keychain.get_aws_secret_key()
 
-    # In web mode, default to Bedrock (available via IAM role);
-    # desktop defaults to Claude (user provides their own API key).
-    default_provider = LLMProviderEnum.BEDROCK if REQUIRE_AUTH else LLMProviderEnum.CLAUDE
+    # In web mode, always use Bedrock (available via IAM role).
+    if REQUIRE_AUTH:
+        resolved_provider = LLMProviderEnum.BEDROCK
+    elif "llm_provider" in all_db:
+        resolved_provider = LLMProviderEnum(all_db["llm_provider"])
+    else:
+        resolved_provider = LLMProviderEnum.CLAUDE
 
     return AppSettings(
-        llm_provider=LLMProviderEnum(all_db["llm_provider"])
-        if "llm_provider" in all_db
-        else default_provider,
+        llm_provider=resolved_provider,
         claude_api_key=claude_key,
         openai_api_key=openai_key,
         aws_access_key_id=aws_access,
