@@ -81,7 +81,10 @@ export async function resetPassword(
 ): Promise<{ error: string | null }> {
   const supabase = getSupabase();
   if (!supabase) return { error: "Supabase not configured." };
-  const redirectTo = `${window.location.origin}${window.location.pathname}#/auth?mode=reset`;
+  const origin = window.location.hostname === "localhost"
+    ? "https://app.explify.app"
+    : window.location.origin;
+  const redirectTo = `${origin}/#/auth?mode=reset`;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
     redirectTo,
   });
