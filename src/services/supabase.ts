@@ -234,7 +234,7 @@ export async function confirmNewPassword(
 
 /** @deprecated — use confirmNewPassword for Cognito. Kept for backwards compat. */
 export async function updatePassword(
-  newPassword: string,
+  _newPassword: string,
 ): Promise<{ error: string | null }> {
   // In Cognito, changing password for a signed-in user requires the current session
   const pool = getUserPool();

@@ -3,8 +3,8 @@
  * TODO: Add sidecar endpoint for shared config deployment after AWS migration.
  */
 export async function deploySharedKey(
-  key: string,
-  value: string,
+  _key: string,
+  _value: string,
 ): Promise<void> {
   // Shared config deployment is not yet available via sidecar API.
   // Will be re-enabled after AWS migration adds a /shared-config endpoint.

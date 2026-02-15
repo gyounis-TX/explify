@@ -26,9 +26,9 @@ export interface RegisteredUser {
 export async function fetchUsageSummary(
   since: Date,
 ): Promise<UserUsageSummary[]> {
-  return sidecarApi.adminUsageSummary(since.toISOString());
+  return sidecarApi.adminUsageSummary(since.toISOString()) as Promise<UserUsageSummary[]>;
 }
 
 export async function fetchAllUsers(): Promise<RegisteredUser[]> {
-  return sidecarApi.adminListUsers();
+  return sidecarApi.adminListUsers() as Promise<RegisteredUser[]>;
 }

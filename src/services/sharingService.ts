@@ -22,18 +22,18 @@ export interface ShareSource {
 }
 
 export async function lookupUserByEmail(
-  email: string,
+  _email: string,
 ): Promise<{ user_id: string; email: string } | null> {
   throw new Error("Sharing is not yet available. Coming soon.");
 }
 
 export async function addShareRecipient(
-  recipientEmail: string,
+  _recipientEmail: string,
 ): Promise<void> {
   throw new Error("Sharing is not yet available. Coming soon.");
 }
 
-export async function removeShareRecipient(shareId: number): Promise<void> {
+export async function removeShareRecipient(_shareId: number): Promise<void> {
   throw new Error("Sharing is not yet available. Coming soon.");
 }
 

@@ -11,7 +11,6 @@
  * API keys are NEVER synced — they remain local only.
  */
 
-import { getSession, isAuthConfigured } from "./supabase";
 import { sidecarApi } from "./sidecarApi";
 import { IS_TAURI, APP_VERSION } from "./platform";
 
