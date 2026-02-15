@@ -6,9 +6,9 @@ import {
   verifyOtp,
   resendSignupOtp,
   resetPassword,
-  updatePassword,
+  confirmNewPassword,
   signInWithGoogle,
-  isSupabaseConfigured,
+  isAuthConfigured,
   type SignUpResult,
 } from "../../services/supabase";
 import { useToast } from "../shared/Toast";
@@ -18,31 +18,21 @@ interface AuthScreenProps {
   onAuthSuccess: () => void;
 }
 
-type AuthMode = "signin" | "signup" | "verify" | "forgot" | "reset";
+type AuthMode = "signin" | "signup" | "verify" | "forgot" | "reset-code";
 
 export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   const { showToast } = useToast();
-  const [mode, setMode] = useState<AuthMode>(() => {
-    // Check URL for ?mode=reset (password reset redirect from Supabase email)
-    const hash = window.location.hash;
-    if (hash.includes("mode=reset")) return "reset";
-    return "signin";
-  });
+  const [mode, setMode] = useState<AuthMode>("signin");
+  const [resetCode, setResetCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [code, setCode] = useState(["", "", "", "", "", "", "", ""]);
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // On mount, consume access_token from hash if present (password reset flow)
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes("access_token=") && hash.includes("type=recovery")) {
-      setMode("reset");
-    }
-  }, []);
+  // No access_token redirect needed with Cognito (code-based reset)
 
   const handleCodeChange = useCallback(
     (index: number, value: string) => {
@@ -50,7 +40,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
       const next = [...code];
       next[index] = value.slice(-1);
       setCode(next);
-      if (value && index < 7) {
+      if (value && index < 5) {
         inputRefs.current[index + 1]?.focus();
       }
     },
@@ -68,14 +58,14 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
   const handleCodePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 8);
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     if (!pasted) return;
-    const next = ["", "", "", "", "", "", "", ""];
+    const next = ["", "", "", "", "", ""];
     for (let i = 0; i < pasted.length; i++) {
       next[i] = pasted[i];
     }
     setCode(next);
-    const focusIdx = Math.min(pasted.length, 7);
+    const focusIdx = Math.min(pasted.length, 5);
     inputRefs.current[focusIdx]?.focus();
   }, []);
 
@@ -102,7 +92,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             showToast("success", "Account created.");
             onAuthSuccess();
           } else {
-            setCode(["", "", "", "", "", "", "", ""]);
+            setCode(["", "", "", "", "", ""]);
             setMode("verify");
             showToast("success", "Code sent to your email.");
           }
@@ -120,7 +110,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
     async (e: React.FormEvent) => {
       e.preventDefault();
       const token = code.join("");
-      if (token.length !== 8) return;
+      if (token.length !== 6) return;
 
       setLoading(true);
       try {
@@ -168,7 +158,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           showToast("error", result.error);
         } else {
           setResetSent(true);
-          showToast("success", "Check your email for a reset link.");
+          showToast("success", "Check your email for a verification code.");
         }
       } catch {
         showToast("error", "Could not send reset email.");
@@ -182,8 +172,12 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   const handleResetPassword = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!password.trim() || password.length < 6) {
-        showToast("error", "Password must be at least 6 characters.");
+      if (!resetCode.trim()) {
+        showToast("error", "Please enter the verification code.");
+        return;
+      }
+      if (!password.trim() || password.length < 8) {
+        showToast("error", "Password must be at least 8 characters.");
         return;
       }
       if (password !== confirmPassword) {
@@ -193,13 +187,14 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
       setLoading(true);
       try {
-        const result = await updatePassword(password);
+        const result = await confirmNewPassword(email, resetCode, password);
         if (result.error) {
           showToast("error", result.error);
         } else {
           showToast("success", "Password updated. You can now sign in.");
           setPassword("");
           setConfirmPassword("");
+          setResetCode("");
           setMode("signin");
         }
       } catch {
@@ -208,7 +203,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         setLoading(false);
       }
     },
-    [password, confirmPassword, showToast],
+    [email, resetCode, password, confirmPassword, showToast],
   );
 
   const handleGoogleSignIn = useCallback(async () => {
@@ -226,15 +221,28 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
     }
   }, [showToast]);
 
-  // Reset password screen
-  if (mode === "reset") {
+  // Reset password screen (Cognito: code + new password)
+  if (mode === "reset-code") {
     return (
       <div className="auth-screen">
         <div className="auth-card">
           <h2 className="auth-title">Set New Password</h2>
-          <p className="auth-subtitle">Enter your new password below.</p>
+          <p className="auth-subtitle">Enter the code from your email and your new password.</p>
 
           <form className="auth-form" onSubmit={handleResetPassword}>
+            <label className="auth-label">
+              Verification Code
+              <input
+                type="text"
+                className="auth-input"
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="6-digit code"
+                required
+                autoFocus
+              />
+            </label>
+
             <label className="auth-label">
               New Password
               <input
@@ -244,8 +252,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="New password"
                 required
-                minLength={6}
-                autoFocus
+                minLength={8}
               />
             </label>
 
@@ -258,14 +265,14 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm new password"
                 required
-                minLength={6}
+                minLength={8}
               />
             </label>
 
             <button
               type="submit"
               className="auth-submit-btn"
-              disabled={loading || !password || !confirmPassword}
+              disabled={loading || !resetCode || !password || !confirmPassword}
             >
               {loading ? "Updating..." : "Update Password"}
             </button>
@@ -291,34 +298,41 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         <div className="auth-card">
           <h2 className="auth-title">Reset Password</h2>
           <p className="auth-subtitle">
-            {resetSent
-              ? "Check your email for a password reset link."
-              : "Enter your email and we'll send you a reset link."}
+            Enter your email and we'll send you a verification code.
           </p>
 
-          {!resetSent && (
-            <form className="auth-form" onSubmit={handleForgotPassword}>
-              <label className="auth-label">
-                Email
-                <input
-                  type="email"
-                  className="auth-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required
-                  autoFocus
-                />
-              </label>
+          <form className="auth-form" onSubmit={handleForgotPassword}>
+            <label className="auth-label">
+              Email
+              <input
+                type="email"
+                className="auth-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoFocus
+              />
+            </label>
 
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={loading || !email.trim()}
+            >
+              {loading ? "Sending..." : "Send Reset Code"}
+            </button>
+          </form>
+
+          {resetSent && (
+            <p className="auth-switch">
               <button
-                type="submit"
-                className="auth-submit-btn"
-                disabled={loading || !email.trim()}
+                className="auth-switch-btn"
+                onClick={() => setMode("reset-code")}
               >
-                {loading ? "Sending..." : "Send Reset Link"}
+                I have the code
               </button>
-            </form>
+            </p>
           )}
 
           <p className="auth-switch">
@@ -344,7 +358,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         <div className="auth-card">
           <h2 className="auth-title">Verify Your Email</h2>
           <p className="auth-subtitle">
-            Enter the 8-digit code sent to <strong>{email}</strong>
+            Enter the 6-digit code sent to <strong>{email}</strong>
           </p>
 
           <form className="auth-form" onSubmit={handleVerify}>
@@ -411,7 +425,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             : "Create an account to enable cloud sync."}
         </p>
 
-        {isSupabaseConfigured() && (
+        {isAuthConfigured() && (
           <>
             <button
               type="button"

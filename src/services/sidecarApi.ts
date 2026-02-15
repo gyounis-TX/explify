@@ -29,6 +29,7 @@ import type {
   SharedTeachingPoint,
   SharedTemplate,
 } from "../types/sidecar";
+import type { BillingStatus, TierLimits } from "../types/billing";
 
 class SidecarApi {
   private baseUrl: string | null = null;
@@ -85,6 +86,22 @@ class SidecarApi {
       const retryAfter = response.headers.get("Retry-After");
       const wait = retryAfter ? ` Try again in ${retryAfter} seconds.` : "";
       throw new Error(`Rate limit exceeded.${wait} Please wait before making more requests.`);
+    }
+
+    // Usage limit — dispatch event for UpgradeModal
+    if (response.status === 402) {
+      try {
+        const body = await response.json();
+        window.dispatchEvent(
+          new CustomEvent("billing:limit-reached", { detail: body }),
+        );
+        throw new Error(
+          `Usage limit reached for ${body.feature}. Upgrade your plan to continue.`,
+        );
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("Usage limit")) throw e;
+        throw new Error("Usage limit reached. Upgrade your plan to continue.");
+      }
     }
 
     let detail = `Request failed: ${response.status}`;
@@ -1095,6 +1112,190 @@ class SidecarApi {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirmation }),
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  // --- Billing ---
+
+  async getBillingStatus(): Promise<BillingStatus> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/billing/status`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async getBillingPrices(): Promise<TierLimits[]> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/billing/prices`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async createCheckoutSession(
+    tier: string,
+    successUrl?: string,
+    cancelUrl?: string,
+  ): Promise<{ url: string }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/create-checkout`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier,
+          success_url: successUrl || window.location.origin + "/#/billing",
+          cancel_url: cancelUrl || window.location.origin + "/#/billing",
+        }),
+      },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async createPortalSession(): Promise<{ url: string }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/create-portal`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async cancelSubscription(
+    reason: string,
+    reasonDetail?: string,
+  ): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/cancel`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, reason_detail: reasonDetail || "" }),
+      },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+  }
+
+  // --- Billing Admin ---
+
+  async getBillingConfig(): Promise<Record<string, string>> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/admin/config`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async updateBillingConfig(
+    key: string,
+    value: string,
+  ): Promise<{ key: string; value: string }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/admin/config`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async getBillingOverrides(): Promise<Record<string, unknown>[]> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/admin/overrides`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async setBillingOverride(
+    userId: string,
+    overrides: Record<string, unknown>,
+  ): Promise<{ updated: boolean }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/billing/admin/overrides/${userId}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(overrides),
+      },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  // --- Usage Tracking ---
+
+  async logUsage(entry: {
+    model_used: string;
+    input_tokens: number;
+    output_tokens: number;
+    request_type: string;
+    deep_analysis?: boolean;
+  }): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    await this.fetchWithAuth(`${baseUrl}/admin/usage/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry),
+    });
+  }
+
+  // --- Admin ---
+
+  async adminUsageSummary(since: string): Promise<Record<string, unknown>[]> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/admin/usage?since=${encodeURIComponent(since)}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
+  }
+
+  async adminListUsers(): Promise<Record<string, unknown>[]> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/admin/users`, {
+      cache: "no-store",
     });
     if (!response.ok) {
       await this.handleErrorResponse(response);

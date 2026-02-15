@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { useSidecar } from "../../hooks/useSidecar";
 import { sidecarApi } from "../../services/sidecarApi";
-import { getSession, onAuthStateChange } from "../../services/supabase";
+import { getSession, onAuthStateChange, isAuthConfigured } from "../../services/supabase";
 import { ConsentDialog } from "../shared/ConsentDialog";
 import { OnboardingWizard } from "../onboarding/OnboardingWizard";
 import { AuthScreen } from "../auth/AuthScreen";
@@ -26,37 +26,19 @@ export function AppShell() {
 
   // Check existing session and listen for auth changes
   useEffect(() => {
+    if (!isAuthConfigured()) {
+      // Auth not configured (desktop mode or missing env vars) — skip login
+      setIsAuthenticated(true);
+      setAuthChecked(true);
+      return;
+    }
     getSession()
-      .then(async (session) => {
-        if (session) {
-          setIsAuthenticated(true);
-          setAuthChecked(true);
-          return;
-        }
-        // No session — check if Supabase is actually reachable before
-        // requiring login. If it's down, skip auth entirely.
-        const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? "").trim();
-        if (!supabaseUrl) {
-          setIsAuthenticated(true);
-          setAuthChecked(true);
-          return;
-        }
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 5000);
-          await fetch(`${supabaseUrl}/auth/v1/health`, { signal: ctrl.signal });
-          clearTimeout(timer);
-          // Supabase reachable but no session — require login
-          setIsAuthenticated(false);
-          setAuthChecked(true);
-        } catch {
-          // Supabase unreachable — allow through gracefully
-          setIsAuthenticated(true);
-          setAuthChecked(true);
-        }
+      .then((session) => {
+        setIsAuthenticated(!!session);
+        setAuthChecked(true);
       })
       .catch(() => {
-        // getSession itself failed — allow through gracefully
+        // getSession failed — allow through gracefully
         setIsAuthenticated(true);
         setAuthChecked(true);
       });

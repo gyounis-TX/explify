@@ -169,11 +169,21 @@ _PHI_PATTERNS: list[tuple[str, re.Pattern, str]] = [
         "[ZIP REDACTED]",
     ),
     # Insurance / Policy / Group numbers (before account pattern to match first)
+    # NOTE: "plan" requires a qualifier (number/#/ID) to avoid matching
+    # clinical "Plan:" section headers common in progress notes.
     (
         "insurance",
         re.compile(
-            r"(?i)(?:insurance|policy|group|member|subscriber|plan)\s*"
+            r"(?i)(?:insurance|policy|group|member|subscriber)\s*"
             r"(?:number|#|no\.?|ID)?\s*[:=]\s*"
+            r"[A-Z0-9\-]{4,20}"
+        ),
+        "[INSURANCE REDACTED]",
+    ),
+    (
+        "insurance",
+        re.compile(
+            r"(?i)plan\s+(?:number|#|no\.?|ID)\s*[:=]\s*"
             r"[A-Z0-9\-]{4,20}"
         ),
         "[INSURANCE REDACTED]",

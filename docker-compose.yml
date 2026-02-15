@@ -7,8 +7,9 @@ services:
     environment:
       - REQUIRE_AUTH=true
       - DATABASE_URL=${DATABASE_URL}
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
       - AWS_REGION=${AWS_REGION:-us-east-1}
-      - ALLOWED_ORIGINS=http://localhost:5173
-    env_file:
-      - .env.docker
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}

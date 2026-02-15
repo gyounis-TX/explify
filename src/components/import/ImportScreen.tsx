@@ -8,7 +8,7 @@ import QuickNormalModal from "./QuickNormalModal";
 import InterpretModal from "./InterpretModal";
 import { isAdmin } from "../../services/adminAuth";
 import { getSession } from "../../services/supabase";
-import { isSupabaseConfigured } from "../../services/syncEngine";
+import { isAuthConfigured } from "../../services/supabase";
 import "./ImportScreen.css";
 import "../shared/TypeModal.css";
 
@@ -191,7 +191,7 @@ export function ImportScreen() {
 
   // Fetch user email for admin check
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!isAuthConfigured()) return;
     getSession().then((session) => {
       setUserEmail(session?.user?.email ?? null);
     });

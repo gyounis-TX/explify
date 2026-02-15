@@ -7,7 +7,7 @@ import {
   type ShareRecipient,
   type ShareSource,
 } from "../../services/sharingService";
-import { getSupabase, getSession } from "../../services/supabase";
+import { isAuthConfigured, getSession } from "../../services/supabase";
 import { useToast } from "../shared/Toast";
 
 export function SharingPanel() {
@@ -20,8 +20,7 @@ export function SharingPanel() {
   const [adding, setAdding] = useState(false);
 
   const checkAuth = useCallback(async () => {
-    const supabase = getSupabase();
-    if (!supabase) {
+    if (!isAuthConfigured()) {
       setIsSignedIn(false);
       setLoading(false);
       return;

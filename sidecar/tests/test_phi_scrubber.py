@@ -1,6 +1,8 @@
 """Tests for the PHI scrubber module."""
 
-from phi.scrubber import scrub_phi
+import re
+
+from phi.scrubber import scrub_phi, _extract_patient_names
 
 
 class TestPHIScrubber:
@@ -79,3 +81,220 @@ class TestPHIScrubber:
         assert "LVEF: 60%" in result.scrubbed_text
         assert result.redaction_count >= 3
         assert len(result.phi_found) >= 3
+
+
+# -----------------------------------------------------------------------
+# Patient name second-pass (bare name scrubbing)
+# -----------------------------------------------------------------------
+
+
+class TestPatientNameExtraction:
+    """Tests for _extract_patient_names and second-pass name scrubbing."""
+
+    def test_extract_from_labeled_last_first(self):
+        text = "Patient Name: Anderson, Joseph N\nLVEF: 55%"
+        names = _extract_patient_names(text)
+        assert any("Anderson" in n for n in names)
+        assert any("Joseph" in n for n in names)
+
+    def test_extract_from_labeled_first_last(self):
+        text = "Patient: John Smith\nLVEF: 55%"
+        names = _extract_patient_names(text)
+        assert any("Smith" in n for n in names)
+        assert any("John" in n for n in names)
+
+    def test_extract_from_ehr_header(self):
+        """EHR header pattern: Name (MRN 12345678)"""
+        text = "Anderson, Joseph N (MRN 030868921)\nHistory"
+        names = _extract_patient_names(text)
+        assert any("Anderson" in n for n in names)
+        assert any("Joseph" in n for n in names)
+
+    def test_extract_generates_reversed_variant(self):
+        text = "Patient: Anderson, Joseph\nLVEF: 55%"
+        names = _extract_patient_names(text)
+        assert any("Joseph Anderson" in n for n in names)
+
+    def test_extract_no_short_fragments(self):
+        """Name parts shorter than 3 chars should be excluded."""
+        text = "Patient: Li, Bo\nLVEF: 55%"
+        names = _extract_patient_names(text)
+        # "Bo" is only 2 chars — should be excluded
+        assert not any(n == "Bo" for n in names)
+
+    def test_extract_returns_empty_for_no_name(self):
+        text = "LVEF: 55%\nNormal function."
+        names = _extract_patient_names(text)
+        assert names == []
+
+
+class TestSecondPassNameScrubbing:
+    """Tests for bare patient name scrubbing throughout document."""
+
+    def test_scrub_bare_name_in_header(self):
+        text = (
+            "Patient: Anderson, Joseph N\n"
+            "Anderson, Joseph N (MRN 030868921)\n"
+            "LVEF: 55%"
+        )
+        result = scrub_phi(text)
+        assert "Anderson" not in result.scrubbed_text
+        assert "Joseph" not in result.scrubbed_text
+        assert "LVEF: 55%" in result.scrubbed_text
+
+    def test_scrub_bare_name_in_footer(self):
+        text = (
+            "Patient Name: Smith, Jane A.\n"
+            "Findings are normal.\n"
+            "Smith, Jane A. ( 12345678) Printed 1/1/2025"
+        )
+        result = scrub_phi(text)
+        assert "Smith" not in result.scrubbed_text
+        assert "Jane" not in result.scrubbed_text
+
+    def test_scrub_mr_prefix(self):
+        """'Mr. Anderson' should be caught by last-name variant."""
+        text = (
+            "Patient: Anderson, Joseph\n"
+            "Mr. Anderson reports feeling well.\n"
+            "Mr. Anderson was seen today."
+        )
+        result = scrub_phi(text)
+        assert "Anderson" not in result.scrubbed_text
+
+    def test_scrub_first_name_alone(self):
+        text = (
+            "Patient: Anderson, Joseph\n"
+            "Joseph is doing well overall."
+        )
+        result = scrub_phi(text)
+        assert "Joseph" not in result.scrubbed_text
+
+    def test_scrub_reversed_format(self):
+        """If labeled as 'Last, First', bare 'First Last' should also be caught."""
+        text = (
+            "Patient: Anderson, Joseph\n"
+            "Follow-up Note for Joseph Anderson"
+        )
+        result = scrub_phi(text)
+        assert "Joseph Anderson" not in result.scrubbed_text
+
+    def test_no_false_positive_without_name(self):
+        """Without a patient name in the text, no second-pass scrubbing occurs."""
+        text = "Normal sinus rhythm. LVEF: 60%. No murmurs."
+        result = scrub_phi(text)
+        assert result.scrubbed_text == text
+        assert result.redaction_count == 0
+
+
+# -----------------------------------------------------------------------
+# Bare MRN pattern
+# -----------------------------------------------------------------------
+
+
+class TestBareMRN:
+    """Tests for parenthesized MRN without label."""
+
+    def test_scrub_bare_parenthesized_mrn(self):
+        text = "Smith, Jane ( 030868921) Printed 1/1/2025"
+        result = scrub_phi(text)
+        assert "030868921" not in result.scrubbed_text
+        assert "mrn" in result.phi_found
+
+    def test_scrub_mrn_with_label_in_parens(self):
+        text = "Smith, Jane (MRN 030868921) Printed 1/1/2025"
+        result = scrub_phi(text)
+        assert "030868921" not in result.scrubbed_text
+
+    def test_no_false_positive_short_numbers(self):
+        """Parenthesized numbers under 6 digits should not be matched."""
+        text = "Grade (1234) stenosis"
+        result = scrub_phi(text)
+        assert "1234" in result.scrubbed_text
+
+
+# -----------------------------------------------------------------------
+# Physician name expansion
+# -----------------------------------------------------------------------
+
+
+class TestPhysicianNameExpansion:
+    """Tests for provider name matching with first names and credentials."""
+
+    def test_single_last_name_catches_first_name(self):
+        """Provider 'Bruce' should also catch 'Matthew Bruce'."""
+        text = "Matthew Bruce reviewed the results."
+        result = scrub_phi(text, provider_names=["Dr. Bruce"])
+        assert "Matthew" not in result.scrubbed_text
+        assert "Bruce" not in result.scrubbed_text
+
+    def test_single_last_name_catches_credentials(self):
+        text = "George A. Bruce, MD, FACC, FSCAI signed the note."
+        result = scrub_phi(text, provider_names=["Bruce"])
+        assert "Bruce" not in result.scrubbed_text
+        assert "George" not in result.scrubbed_text
+
+    def test_single_last_name_catches_dr_prefix(self):
+        text = "Dr. Bruce recommends follow-up."
+        result = scrub_phi(text, provider_names=["Bruce"])
+        assert "Bruce" not in result.scrubbed_text
+
+    def test_full_name_catches_middle_initial(self):
+        """Provider 'George Bruce' should catch 'George A. Bruce'."""
+        text = "George A. Bruce, MD reviewed the labs."
+        result = scrub_phi(text, provider_names=["George Bruce"])
+        assert "George" not in result.scrubbed_text
+        assert "Bruce" not in result.scrubbed_text
+
+    def test_full_name_catches_reversed(self):
+        """Provider 'George Bruce' should catch 'Bruce, George'."""
+        text = "Bruce, George signed the note."
+        result = scrub_phi(text, provider_names=["George Bruce"])
+        assert "George" not in result.scrubbed_text
+        assert "Bruce" not in result.scrubbed_text
+
+    def test_no_false_positive_without_providers(self):
+        text = "Dr. Smith reviewed the results."
+        result = scrub_phi(text, provider_names=None)
+        # Without provider list, bare "Dr. Smith" without a labeled prefix
+        # should not be caught by provider matching
+        assert result.scrubbed_text == text
+
+
+# -----------------------------------------------------------------------
+# Insurance false positive fix
+# -----------------------------------------------------------------------
+
+
+class TestInsuranceFalsePositive:
+    """Tests that clinical 'Plan:' sections are not matched as insurance."""
+
+    def test_clinical_plan_not_matched(self):
+        text = "Plan\nCad sp pci continue statin plavix"
+        result = scrub_phi(text)
+        assert result.scrubbed_text == text
+        assert "insurance" not in result.phi_found
+
+    def test_clinical_plan_colon_not_matched(self):
+        text = "Plan: Continue current medications and follow-up in 6 months."
+        result = scrub_phi(text)
+        assert "Continue current" in result.scrubbed_text
+        assert "insurance" not in result.phi_found
+
+    def test_real_plan_number_still_matched(self):
+        text = "Plan Number: ABC123456"
+        result = scrub_phi(text)
+        assert "ABC123456" not in result.scrubbed_text
+        assert "insurance" in result.phi_found
+
+    def test_plan_id_still_matched(self):
+        text = "Plan ID: XYZ789"
+        result = scrub_phi(text)
+        assert "XYZ789" not in result.scrubbed_text
+        assert "insurance" in result.phi_found
+
+    def test_insurance_policy_still_matched(self):
+        text = "Insurance: BCBS12345\nPolicy: POL98765"
+        result = scrub_phi(text)
+        assert "BCBS12345" not in result.scrubbed_text
+        assert "POL98765" not in result.scrubbed_text

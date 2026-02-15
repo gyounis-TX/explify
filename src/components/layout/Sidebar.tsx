@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
-import { getSession, signOut, onAuthStateChange } from "../../services/supabase";
-import { isSupabaseConfigured, fullSync } from "../../services/syncEngine";
+import { getSession, signOut, onAuthStateChange, isAuthConfigured } from "../../services/supabase";
+import { fullSync } from "../../services/syncEngine";
 import { isAdmin } from "../../services/adminAuth";
 import { IS_TAURI } from "../../services/platform";
 import "./Sidebar.css";
@@ -34,11 +34,16 @@ function getDailyTagline(): string {
   return TAGLINES[dayOfYear % TAGLINES.length];
 }
 
-function getNavItems(userEmail: string | null) {
-  if (isAdmin(userEmail)) {
-    return [...baseNavItems, { path: "/admin", label: "Admin" }];
+function getNavItems(userEmail: string | null, isSignedIn: boolean) {
+  const items = [...baseNavItems];
+  // Show Billing link only in web mode when signed in
+  if (!IS_TAURI && isAuthConfigured() && isSignedIn) {
+    items.push({ path: "/billing", label: "Billing" });
   }
-  return baseNavItems;
+  if (isAdmin(userEmail)) {
+    items.push({ path: "/admin", label: "Admin" });
+  }
+  return items;
 }
 
 interface UpdateInfo {
@@ -55,7 +60,7 @@ export function Sidebar() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!isAuthConfigured()) return;
     getSession().then((session) => {
       setIsSignedIn(!!session);
       setUserEmail(session?.user?.email ?? null);
@@ -131,7 +136,7 @@ export function Sidebar() {
     }
   }, []);
 
-  const navItems = useMemo(() => getNavItems(userEmail), [userEmail]);
+  const navItems = useMemo(() => getNavItems(userEmail, isSignedIn), [userEmail, isSignedIn]);
 
   return (
     <aside className="sidebar">
@@ -178,7 +183,7 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      {isSupabaseConfigured() && (
+      {isAuthConfigured() && (
         <div className="sidebar-auth">
           {isSignedIn ? (
             <>

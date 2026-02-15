@@ -68,9 +68,10 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup
     if _USE_PG:
-        # Initialize PostgreSQL connection pool
-        from storage.pg_database import _get_pool
+        # Initialize PostgreSQL connection pool and run migrations
+        from storage.pg_database import _get_pool, run_migrations
         await _get_pool()
+        await run_migrations()
     else:
         # Desktop mode: initialize SQLite and keychain
         get_db()
@@ -85,14 +86,16 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     _init_sentry()
     app = FastAPI(title="Explify Sidecar", version="0.4.0", lifespan=lifespan)
-    # Middleware order (inner → outer): Auth → Audit → CORS
+    # Middleware order (inner → outer): Auth → Billing → Audit → CORS
     # CORS must be outermost so ALL responses (including 500s) get headers.
     app.add_middleware(AuthMiddleware)
     if REQUIRE_AUTH:
+        from api.billing import BillingMiddleware
         from api.audit import AuditMiddleware
         from api.rate_limit import limiter, rate_limit_exceeded_handler
         from slowapi.errors import RateLimitExceeded
 
+        app.add_middleware(BillingMiddleware)
         app.add_middleware(AuditMiddleware)
         app.state.limiter = limiter
         app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
@@ -108,10 +111,16 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(router)
-    # Account management endpoints (web mode only)
+    # Billing + account + admin management endpoints (web mode only)
     if REQUIRE_AUTH:
+        from api.billing import billing_router, admin_billing_router, webhook_router
         from api.account import router as account_router
+        from api.admin import router as admin_router
+        app.include_router(billing_router)
+        app.include_router(admin_billing_router)
+        app.include_router(webhook_router)
         app.include_router(account_router)
+        app.include_router(admin_router)
     return app
 
 

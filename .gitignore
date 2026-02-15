@@ -35,5 +35,6 @@ sidecar/dist/
 
 # Environment variables
 .env
+.env.*
 .env.local
 .env.*.local

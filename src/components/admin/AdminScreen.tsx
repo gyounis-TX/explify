@@ -73,6 +73,16 @@ export function AdminScreen() {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
+  // Billing admin state
+  const [billingConfig, setBillingConfig] = useState<Record<string, string>>({});
+  const [billingOverrides, setBillingOverrides] = useState<Record<string, unknown>[]>([]);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [overrideUserId, setOverrideUserId] = useState("");
+  const [overrideExempt, setOverrideExempt] = useState(false);
+  const [overrideTier, setOverrideTier] = useState("");
+  const [overrideTrialDays, setOverrideTrialDays] = useState("");
+  const [overrideNotes, setOverrideNotes] = useState("");
+
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -119,6 +129,70 @@ export function AdminScreen() {
     loadDashboard();
     return () => { cancelled = true; };
   }, [timeRange, refreshKey]);
+
+  // Load billing config
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBilling() {
+      setBillingLoading(true);
+      try {
+        const [config, overrides] = await Promise.all([
+          sidecarApi.getBillingConfig(),
+          sidecarApi.getBillingOverrides(),
+        ]);
+        if (cancelled) return;
+        setBillingConfig(config);
+        setBillingOverrides(overrides);
+      } catch {
+        // Billing not available — silently ignore
+      } finally {
+        if (!cancelled) setBillingLoading(false);
+      }
+    }
+    loadBilling();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleUpdateBillingConfig = useCallback(
+    async (key: string, value: string) => {
+      try {
+        await sidecarApi.updateBillingConfig(key, value);
+        setBillingConfig((prev) => ({ ...prev, [key]: value }));
+        showToast("success", `Updated ${key}.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to update config";
+        showToast("error", msg);
+      }
+    },
+    [showToast],
+  );
+
+  const handleSetOverride = useCallback(async () => {
+    if (!overrideUserId.trim()) {
+      showToast("error", "Enter a user ID.");
+      return;
+    }
+    try {
+      await sidecarApi.setBillingOverride(overrideUserId.trim(), {
+        payments_exempt: overrideExempt,
+        custom_tier: overrideTier.trim() || null,
+        custom_trial_days: overrideTrialDays ? parseInt(overrideTrialDays, 10) : null,
+        notes: overrideNotes.trim() || null,
+      });
+      showToast("success", "Override saved.");
+      setOverrideUserId("");
+      setOverrideExempt(false);
+      setOverrideTier("");
+      setOverrideTrialDays("");
+      setOverrideNotes("");
+      // Refresh overrides
+      const overrides = await sidecarApi.getBillingOverrides();
+      setBillingOverrides(overrides);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to set override";
+      showToast("error", msg);
+    }
+  }, [overrideUserId, overrideExempt, overrideTier, overrideTrialDays, overrideNotes, showToast]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -570,6 +644,176 @@ export function AdminScreen() {
                 </tbody>
               </table>
             </div>
+          </>
+        )}
+      </section>
+
+      {/* Billing Configuration */}
+      <section className="settings-section admin-dashboard-section">
+        <h3 className="settings-section-title">Billing</h3>
+
+        {billingLoading ? (
+          <p className="settings-description">Loading billing config...</p>
+        ) : (
+          <>
+            {/* Payments Enabled Toggle */}
+            <div className="form-group">
+              <label className="form-label">Payments Enabled</label>
+              <div className="provider-toggle">
+                <button
+                  className={`provider-btn ${billingConfig.payments_enabled === "true" ? "provider-btn--active" : ""}`}
+                  onClick={() => handleUpdateBillingConfig("payments_enabled", "true")}
+                >
+                  On
+                </button>
+                <button
+                  className={`provider-btn ${billingConfig.payments_enabled !== "true" ? "provider-btn--active" : ""}`}
+                  onClick={() => handleUpdateBillingConfig("payments_enabled", "false")}
+                >
+                  Off
+                </button>
+              </div>
+              <p className="settings-description" style={{ marginTop: "var(--space-xs)" }}>
+                When off, all features are available without billing enforcement.
+              </p>
+            </div>
+
+            {/* Trial Settings */}
+            <div className="form-group" style={{ marginTop: "var(--space-lg)" }}>
+              <label className="form-label">Trial Period (days)</label>
+              <input
+                type="number"
+                className="form-input"
+                style={{ maxWidth: 120 }}
+                value={billingConfig.trial_period_days ?? "14"}
+                onChange={(e) =>
+                  handleUpdateBillingConfig("trial_period_days", e.target.value)
+                }
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Grace Period (hours)</label>
+              <input
+                type="number"
+                className="form-input"
+                style={{ maxWidth: 120 }}
+                value={billingConfig.grace_period_hours ?? "72"}
+                onChange={(e) =>
+                  handleUpdateBillingConfig("grace_period_hours", e.target.value)
+                }
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Trial Tier</label>
+              <select
+                className="form-input"
+                style={{ maxWidth: 200 }}
+                value={billingConfig.trial_tier ?? "professional"}
+                onChange={(e) =>
+                  handleUpdateBillingConfig("trial_tier", e.target.value)
+                }
+              >
+                <option value="starter">Starter</option>
+                <option value="professional">Professional</option>
+                <option value="unlimited">Unlimited</option>
+              </select>
+            </div>
+
+            {/* User Overrides */}
+            <h4 className="settings-section-title" style={{ marginTop: "var(--space-xl)" }}>
+              User Overrides
+            </h4>
+
+            <div className="form-group">
+              <label className="form-label">User ID</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="UUID of user"
+                value={overrideUserId}
+                onChange={(e) => setOverrideUserId(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                <input
+                  type="checkbox"
+                  checked={overrideExempt}
+                  onChange={(e) => setOverrideExempt(e.target.checked)}
+                />
+                Payments Exempt
+              </label>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Custom Tier</label>
+              <select
+                className="form-input"
+                style={{ maxWidth: 200 }}
+                value={overrideTier}
+                onChange={(e) => setOverrideTier(e.target.value)}
+              >
+                <option value="">None</option>
+                <option value="starter">Starter</option>
+                <option value="professional">Professional</option>
+                <option value="unlimited">Unlimited</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Custom Trial Days</label>
+              <input
+                type="number"
+                className="form-input"
+                style={{ maxWidth: 120 }}
+                placeholder="e.g. 30"
+                value={overrideTrialDays}
+                onChange={(e) => setOverrideTrialDays(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Notes</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Internal note"
+                value={overrideNotes}
+                onChange={(e) => setOverrideNotes(e.target.value)}
+              />
+            </div>
+            <button className="save-btn" onClick={handleSetOverride} style={{ marginTop: "var(--space-sm)" }}>
+              Save Override
+            </button>
+
+            {/* Existing Overrides */}
+            {billingOverrides.length > 0 && (
+              <div className="usage-table-wrapper" style={{ marginTop: "var(--space-lg)" }}>
+                <table className="usage-table">
+                  <thead>
+                    <tr>
+                      <th>User ID</th>
+                      <th>Exempt</th>
+                      <th>Custom Tier</th>
+                      <th>Trial Days</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {billingOverrides.map((o) => (
+                      <tr key={String(o.user_id)}>
+                        <td style={{ fontSize: "var(--font-size-xs)", fontFamily: "monospace" }}>
+                          {String(o.user_id).slice(0, 8)}...
+                        </td>
+                        <td>{o.payments_exempt ? "Yes" : "No"}</td>
+                        <td>{String(o.custom_tier || "—")}</td>
+                        <td>{o.custom_trial_days != null ? String(o.custom_trial_days) : "—"}</td>
+                        <td>{String(o.notes || "—")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         )}
       </section>

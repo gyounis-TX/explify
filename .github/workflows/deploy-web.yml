@@ -6,6 +6,7 @@ on:
     paths:
       - 'sidecar/**'
       - 'src/**'
+      - 'sql/**'
       - 'package.json'
       - '.github/workflows/deploy-web.yml'
 
@@ -45,8 +46,9 @@ jobs:
         run: npm run build:web
         env:
           VITE_API_URL: https://api.explify.app
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_COGNITO_USER_POOL_ID: ${{ secrets.VITE_COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ secrets.VITE_COGNITO_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ secrets.VITE_COGNITO_DOMAIN }}
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:

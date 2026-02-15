@@ -1,18 +1,80 @@
-import { createClient, type SupabaseClient, type Session } from "@supabase/supabase-js";
+/**
+ * Auth service — Cognito-backed (replaces Supabase auth).
+ *
+ * Exports the same API surface as the old Supabase module so existing
+ * consumers (AuthScreen, Sidebar, AppShell, sidecarApi, etc.) keep working.
+ */
 
-// These should be replaced with actual values from a Supabase project
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "").trim();
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
+import {
+  CognitoUserPool,
+  CognitoUser,
+  AuthenticationDetails,
+  CognitoUserSession,
+  CognitoUserAttribute,
+} from "amazon-cognito-identity-js";
 
-let supabaseInstance: SupabaseClient | null = null;
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
 
-export function getSupabase(): SupabaseClient | null {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  if (!supabaseInstance) {
-    supabaseInstance = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const COGNITO_USER_POOL_ID = (import.meta.env.VITE_COGNITO_USER_POOL_ID ?? "").trim();
+const COGNITO_CLIENT_ID = (import.meta.env.VITE_COGNITO_CLIENT_ID ?? "").trim();
+const COGNITO_DOMAIN = (import.meta.env.VITE_COGNITO_DOMAIN ?? "").trim();
+
+let userPool: CognitoUserPool | null = null;
+
+function getUserPool(): CognitoUserPool | null {
+  if (!COGNITO_USER_POOL_ID || !COGNITO_CLIENT_ID) return null;
+  if (!userPool) {
+    userPool = new CognitoUserPool({
+      UserPoolId: COGNITO_USER_POOL_ID,
+      ClientId: COGNITO_CLIENT_ID,
+    });
   }
-  return supabaseInstance;
+  return userPool;
 }
+
+// ---------------------------------------------------------------------------
+// Session type (compatible with old Supabase Session shape)
+// ---------------------------------------------------------------------------
+
+export interface Session {
+  access_token: string;
+  user: { id: string; email: string };
+}
+
+function sessionFromCognito(cognitoSession: CognitoUserSession, email: string): Session {
+  const idToken = cognitoSession.getIdToken();
+  return {
+    access_token: idToken.getJwtToken(),
+    user: {
+      id: idToken.payload.sub as string,
+      email,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Auth state change listeners
+// ---------------------------------------------------------------------------
+
+type AuthCallback = (session: Session | null) => void;
+const _listeners = new Set<AuthCallback>();
+
+function _notifyListeners(session: Session | null) {
+  for (const cb of _listeners) {
+    try { cb(session); } catch { /* ignore */ }
+  }
+}
+
+export function onAuthStateChange(callback: AuthCallback): () => void {
+  _listeners.add(callback);
+  return () => { _listeners.delete(callback); };
+}
+
+// ---------------------------------------------------------------------------
+// Public API — same signatures as old supabase.ts
+// ---------------------------------------------------------------------------
 
 export type SignUpResult =
   | { error: string }
@@ -23,120 +85,224 @@ export async function signUp(
   email: string,
   password: string,
 ): Promise<SignUpResult> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
-  if (error) return { error: error.message };
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
 
-  // Fake signup — Supabase returns a user with no identities to prevent
-  // email enumeration when the address is already registered.
-  if (data.user && data.user.identities?.length === 0) {
-    return { error: "An account with this email already exists." };
-  }
+  const attributes = [
+    new CognitoUserAttribute({ Name: "email", Value: email.trim() }),
+  ];
 
-  // Auto-confirmed (email confirm disabled in Supabase dashboard) —
-  // a session is returned immediately, no OTP needed.
-  if (data.session) {
-    return { error: null, confirmed: true };
-  }
-
-  return { error: null, confirmed: false };
+  return new Promise((resolve) => {
+    pool.signUp(email.trim(), password, attributes, [], (err, result) => {
+      if (err) {
+        const msg = err.message || "Sign-up failed.";
+        // Cognito returns "UsernameExistsException" for duplicate email
+        if (err.name === "UsernameExistsException") {
+          resolve({ error: "An account with this email already exists." });
+        } else {
+          resolve({ error: msg });
+        }
+        return;
+      }
+      if (result?.userConfirmed) {
+        // Auto-confirmed (admin setting)
+        resolve({ error: null, confirmed: true });
+      } else {
+        // Verification code sent
+        resolve({ error: null, confirmed: false });
+      }
+    });
+  });
 }
 
 export async function signIn(
   email: string,
   password: string,
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  return { error: error?.message ?? null };
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
+
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool });
+  const authDetails = new AuthenticationDetails({
+    Username: email.trim(),
+    Password: password,
+  });
+
+  return new Promise((resolve) => {
+    user.authenticateUser(authDetails, {
+      onSuccess(session) {
+        const s = sessionFromCognito(session, email.trim());
+        _notifyListeners(s);
+        resolve({ error: null });
+      },
+      onFailure(err) {
+        resolve({ error: err.message || "Sign-in failed." });
+      },
+      newPasswordRequired() {
+        resolve({ error: "Password change required. Please reset your password." });
+      },
+    });
+  });
 }
 
 export async function verifyOtp(
   email: string,
   token: string,
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const { error } = await supabase.auth.verifyOtp({
-    email: email.trim(),
-    token,
-    type: "signup",
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
+
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool });
+
+  return new Promise((resolve) => {
+    user.confirmRegistration(token, true, (err) => {
+      if (err) {
+        resolve({ error: err.message || "Verification failed." });
+      } else {
+        resolve({ error: null });
+      }
+    });
   });
-  return { error: error?.message ?? null };
 }
 
 export async function resendSignupOtp(
   email: string,
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const { error } = await supabase.auth.resend({ type: "signup", email: email.trim() });
-  return { error: error?.message ?? null };
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
+
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool });
+
+  return new Promise((resolve) => {
+    user.resendConfirmationCode((err) => {
+      if (err) {
+        resolve({ error: err.message || "Could not resend code." });
+      } else {
+        resolve({ error: null });
+      }
+    });
+  });
 }
 
 export async function resetPassword(
   email: string,
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const origin = window.location.hostname === "localhost"
-    ? "https://app.explify.app"
-    : window.location.origin;
-  const redirectTo = `${origin}/#/auth?mode=reset`;
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo,
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
+
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool });
+
+  return new Promise((resolve) => {
+    user.forgotPassword({
+      onSuccess() {
+        resolve({ error: null });
+      },
+      onFailure(err) {
+        resolve({ error: err.message || "Could not send reset code." });
+      },
+    });
   });
-  return { error: error?.message ?? null };
 }
 
+/**
+ * Confirm a new password with the verification code from the reset email.
+ * In the old Supabase flow, `updatePassword` worked differently (via a
+ * recovery link that set a session). With Cognito, we need both the code
+ * and the new password. The AuthScreen handles this two-step flow.
+ */
+export async function confirmNewPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<{ error: string | null }> {
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
+
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool });
+
+  return new Promise((resolve) => {
+    user.confirmPassword(code, newPassword, {
+      onSuccess() {
+        resolve({ error: null });
+      },
+      onFailure(err) {
+        resolve({ error: err.message || "Could not update password." });
+      },
+    });
+  });
+}
+
+/** @deprecated — use confirmNewPassword for Cognito. Kept for backwards compat. */
 export async function updatePassword(
   newPassword: string,
 ): Promise<{ error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
-  return { error: error?.message ?? null };
+  // In Cognito, changing password for a signed-in user requires the current session
+  const pool = getUserPool();
+  if (!pool) return { error: "Auth not configured." };
+  const user = pool.getCurrentUser();
+  if (!user) return { error: "No active session." };
+
+  return new Promise((resolve) => {
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session) {
+        resolve({ error: "Session expired." });
+        return;
+      }
+      // changePassword requires old password — this path is limited.
+      // For password reset, use confirmNewPassword instead.
+      resolve({ error: "Use the verification code flow to reset your password." });
+    });
+  });
 }
 
 export async function signInWithGoogle(): Promise<{ error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { error: "Supabase not configured." };
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${window.location.origin}${window.location.pathname}`,
-    },
-  });
-  return { error: error?.message ?? null };
+  if (!COGNITO_DOMAIN || !COGNITO_CLIENT_ID) {
+    return { error: "Google sign-in not configured." };
+  }
+  const redirectUri = encodeURIComponent(
+    `${window.location.origin}${window.location.pathname}`,
+  );
+  const url =
+    `${COGNITO_DOMAIN}/oauth2/authorize?` +
+    `response_type=code&client_id=${COGNITO_CLIENT_ID}` +
+    `&redirect_uri=${redirectUri}` +
+    `&identity_provider=Google&scope=openid+email+profile`;
+  window.location.href = url;
+  return { error: null };
 }
 
-export function isSupabaseConfigured(): boolean {
-  return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+/** Returns true when Cognito env vars are configured. */
+export function isAuthConfigured(): boolean {
+  return !!(COGNITO_USER_POOL_ID && COGNITO_CLIENT_ID);
 }
+
+
 
 export async function signOut(): Promise<void> {
-  const supabase = getSupabase();
-  if (supabase) {
-    await supabase.auth.signOut();
+  const pool = getUserPool();
+  if (!pool) return;
+  const user = pool.getCurrentUser();
+  if (user) {
+    user.signOut();
+    _notifyListeners(null);
   }
 }
 
 export async function getSession(): Promise<Session | null> {
-  const supabase = getSupabase();
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session;
+  const pool = getUserPool();
+  if (!pool) return null;
+  const user = pool.getCurrentUser();
+  if (!user) return null;
+
+  return new Promise((resolve) => {
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session || !session.isValid()) {
+        resolve(null);
+        return;
+      }
+      const email = session.getIdToken().payload.email as string ?? "";
+      resolve(sessionFromCognito(session, email));
+    });
+  });
 }
 
-export function onAuthStateChange(
-  callback: (session: Session | null) => void,
-): (() => void) | undefined {
-  const supabase = getSupabase();
-  if (!supabase) return undefined;
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session);
-  });
-  return () => data.subscription.unsubscribe();
-}

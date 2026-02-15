@@ -1,4 +1,4 @@
-"""PostgreSQL database for web mode (multi-tenant, Supabase-backed).
+"""PostgreSQL database for web mode (multi-tenant, RDS-backed).
 
 Drop-in replacement for the SQLite Database class. Every query is scoped by user_id.
 Uses asyncpg connection pool via DATABASE_URL env var.
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     """Convert native PostgreSQL types (datetime, UUID) to JSON-compatible primitives.
 
-    Also ensures an 'id' field exists — Supabase rows synced from desktop may
+    Also ensures an 'id' field exists — rows synced from desktop may
     only have 'sync_id', while Pydantic models require 'id'.
     """
     out: dict[str, Any] = {}
@@ -79,30 +79,47 @@ async def _get_pool():
     global _pool
     if _pool is None:
         import asyncpg
-        import ssl as _ssl
 
         params = _parse_database_url(DATABASE_URL)
-        # Supabase requires SSL for direct connections
-        ssl_ctx = _ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = _ssl.CERT_NONE
 
-        # Resolve hostname to IPv4 explicitly to avoid IPv6 unreachable errors
-        import socket as _socket
-        host = params.pop("host")
-        ipv4 = _socket.getaddrinfo(host, None, _socket.AF_INET)[0][4][0]
-        logger.info("Resolved %s -> %s", host, ipv4)
+        # For RDS in-VPC connections, SSL is optional.
+        # Set DATABASE_SSL=true to enable SSL (e.g. for cross-network connections).
+        use_ssl = os.getenv("DATABASE_SSL", "").lower() == "true"
+        ssl_arg: object = False
+        if use_ssl:
+            import ssl as _ssl
+            ssl_ctx = _ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = _ssl.CERT_NONE
+            ssl_arg = ssl_ctx
 
         _pool = await asyncpg.create_pool(
             min_size=2,
             max_size=10,
-            ssl=ssl_ctx,
-            host=ipv4,
+            ssl=ssl_arg,
             server_settings={"search_path": "public"},
             **params,
         )
         logger.info("PostgreSQL connection pool initialized")
     return _pool
+
+
+async def run_migrations():
+    """Run the idempotent schema migration on startup.
+
+    All statements use IF NOT EXISTS / ON CONFLICT DO NOTHING,
+    so this is safe to execute on every boot.
+    """
+    pool = await _get_pool()
+    sql_path = os.path.join(os.path.dirname(__file__), "migrations", "schema.sql")
+    if not os.path.exists(sql_path):
+        logger.warning("Migration file not found at %s — skipping", sql_path)
+        return
+    with open(sql_path) as f:
+        sql = f.read()
+    async with pool.acquire() as conn:
+        await conn.execute(sql)
+    logger.info("Database migrations applied successfully")
 
 
 async def close_pool():

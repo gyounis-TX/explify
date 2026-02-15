@@ -1,50 +1,21 @@
-import { getSupabase, getSession } from "./supabase";
-
 /**
- * Deploy a shared config value (e.g. API key) to all users via Supabase.
- * Upserts into the `shared_config` table.
+ * Deploy a shared config value (e.g. API key) to all users.
+ * TODO: Add sidecar endpoint for shared config deployment after AWS migration.
  */
 export async function deploySharedKey(
   key: string,
   value: string,
 ): Promise<void> {
-  const supabase = getSupabase();
-  if (!supabase) throw new Error("Supabase not configured.");
-
-  const session = await getSession();
-  if (!session?.user?.id) throw new Error("Not signed in.");
-
-  const { error } = await supabase.from("shared_config").upsert(
-    {
-      key,
-      value,
-      updated_at: new Date().toISOString(),
-      updated_by: session.user.id,
-    },
-    { onConflict: "key" },
-  );
-
-  if (error) throw new Error(error.message);
+  // Shared config deployment is not yet available via sidecar API.
+  // Will be re-enabled after AWS migration adds a /shared-config endpoint.
+  throw new Error("Shared config deployment not yet available.");
 }
 
 /**
- * Pull all shared config values from Supabase.
+ * Pull all shared config values.
  * Returns a key-value record.
  */
 export async function pullSharedConfig(): Promise<Record<string, string>> {
-  const supabase = getSupabase();
-  if (!supabase) return {};
-
-  const { data, error } = await supabase.from("shared_config").select("*");
-
-  if (error) {
-    console.error("Failed to pull shared config:", error.message);
-    return {};
-  }
-
-  const result: Record<string, string> = {};
-  for (const row of data ?? []) {
-    result[row.key] = row.value;
-  }
-  return result;
+  // TODO: Re-enable via sidecar API after AWS migration
+  return {};
 }

@@ -1,4 +1,4 @@
-import { getSupabase } from "./supabase";
+import { sidecarApi } from "./sidecarApi";
 
 export interface UserUsageSummary {
   user_id: string;
@@ -26,19 +26,9 @@ export interface RegisteredUser {
 export async function fetchUsageSummary(
   since: Date,
 ): Promise<UserUsageSummary[]> {
-  const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase.rpc("admin_usage_summary", {
-    since: since.toISOString(),
-  });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as UserUsageSummary[];
+  return sidecarApi.adminUsageSummary(since.toISOString());
 }
 
 export async function fetchAllUsers(): Promise<RegisteredUser[]> {
-  const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase.rpc("admin_list_users");
-  if (error) throw new Error(error.message);
-  return (data ?? []) as RegisteredUser[];
+  return sidecarApi.adminListUsers();
 }

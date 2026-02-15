@@ -1,8 +1,7 @@
 """JWT authentication middleware for web mode.
 
 In desktop mode (REQUIRE_AUTH not set), all requests pass through with user_id=None.
-In web mode, validates Supabase JWT tokens and extracts user_id from the 'sub' claim.
-Supports both HS256 (legacy) and RS256 (modern Supabase) signing algorithms.
+In web mode, validates Cognito JWT tokens and extracts user_id from the 'sub' claim.
 """
 
 import logging
@@ -17,46 +16,41 @@ from starlette.responses import JSONResponse
 _logger = logging.getLogger(__name__)
 
 REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "").lower() == "true"
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID", "")
+COGNITO_REGION = os.getenv("AWS_REGION", "us-east-1")
+COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "")
 
-# Cache for JWKS clients keyed by issuer URL
-_jwks_clients: dict[str, PyJWKClient] = {}
+# Computed from pool ID
+_COGNITO_ISSUER = (
+    f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}"
+    if COGNITO_USER_POOL_ID
+    else ""
+)
+
+# Cache for JWKS client
+_jwks_client: PyJWKClient | None = None
 
 
-def _get_jwks_client(issuer: str) -> PyJWKClient:
-    """Get or create a cached PyJWKClient for the given issuer."""
-    if issuer not in _jwks_clients:
-        jwks_url = f"{issuer}/.well-known/jwks.json"
-        _jwks_clients[issuer] = PyJWKClient(jwks_url)
-    return _jwks_clients[issuer]
+def _get_jwks_client() -> PyJWKClient:
+    """Get or create the cached JWKS client for Cognito."""
+    global _jwks_client
+    if _jwks_client is None:
+        jwks_url = f"{_COGNITO_ISSUER}/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url)
+    return _jwks_client
 
 
 def _decode_token(token: str) -> dict:
-    """Decode a Supabase JWT, supporting both HS256 and RS256."""
-    header = jwt.get_unverified_header(token)
-    alg = header.get("alg", "HS256")
-
-    if alg == "HS256":
-        return jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-
-    # RS256 or other asymmetric algorithm — fetch public key from JWKS
-    unverified = jwt.decode(token, options={"verify_signature": False})
-    issuer = unverified.get("iss", "")
-    if not issuer:
-        raise jwt.InvalidTokenError("Token missing iss claim for JWKS lookup")
-
-    jwks_client = _get_jwks_client(issuer)
+    """Decode a Cognito JWT using RS256 + JWKS."""
+    jwks_client = _get_jwks_client()
     signing_key = jwks_client.get_signing_key_from_jwt(token)
     return jwt.decode(
         token,
         signing_key.key,
-        algorithms=[alg],
-        audience="authenticated",
+        algorithms=["RS256"],
+        issuer=_COGNITO_ISSUER,
+        # Cognito id_tokens use 'aud', access_tokens use 'client_id'
+        options={"verify_aud": False},
     )
 
 
@@ -74,8 +68,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     status_code=500,
                 )
 
-        # Skip auth for health check and CORS preflight
-        if request.url.path == "/health" or request.method == "OPTIONS":
+        # Skip auth for health check, CORS preflight, and Stripe webhook
+        if request.url.path in ("/health", "/billing/webhook") or request.method == "OPTIONS":
             request.state.user_id = None
             return await call_next(request)
 

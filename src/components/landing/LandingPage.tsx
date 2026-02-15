@@ -115,7 +115,7 @@ export function LandingPage() {
               <li>All test types</li>
               <li>30-day history</li>
             </ul>
-            <button className="landing-btn-primary" onClick={() => navigate("/auth")}>
+            <button className="landing-btn-primary" onClick={() => navigate("/auth?plan=starter")}>
               Start Free Trial
             </button>
           </div>
@@ -135,7 +135,7 @@ export function LandingPage() {
               <li>Batch processing (up to 3)</li>
               <li>Unlimited history</li>
             </ul>
-            <button className="landing-btn-primary" onClick={() => navigate("/auth")}>
+            <button className="landing-btn-primary" onClick={() => navigate("/auth?plan=professional")}>
               Start Free Trial
             </button>
           </div>
@@ -152,7 +152,7 @@ export function LandingPage() {
               <li>Batch processing (up to 10)</li>
               <li>Priority support</li>
             </ul>
-            <button className="landing-btn-primary" onClick={() => navigate("/auth")}>
+            <button className="landing-btn-primary" onClick={() => navigate("/auth?plan=unlimited")}>
               Start Free Trial
             </button>
           </div>

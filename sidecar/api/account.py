@@ -114,12 +114,12 @@ async def delete_account(request: Request):
             logger.warning("Failed to delete from %s for user %s: %s", table, user_id, e)
             deleted_counts[table] = f"error: {e}"
 
-    # Delete auth user via Supabase Admin API
+    # Delete auth user via Cognito Admin API
     auth_deleted = False
     try:
-        auth_deleted = await _delete_supabase_user(user_id)
+        auth_deleted = await _delete_cognito_user(user_id)
     except Exception as e:
-        logger.error("Failed to delete Supabase auth user %s: %s", user_id, e)
+        logger.error("Failed to delete Cognito auth user %s: %s", user_id, e)
 
     logger.info("Account deleted for user %s: tables=%s, auth=%s", user_id, deleted_counts, auth_deleted)
 
@@ -152,28 +152,39 @@ async def _delete_all_user_rows(table: str, user_id: str) -> int:
         return int(count_str)
 
 
-async def _delete_supabase_user(user_id: str) -> bool:
-    """Delete a Supabase auth user using the service role key."""
-    import httpx
+async def _delete_cognito_user(user_id: str) -> bool:
+    """Delete a Cognito user using the AWS SDK (boto3)."""
+    user_pool_id = os.getenv("COGNITO_USER_POOL_ID", "")
+    region = os.getenv("AWS_REGION", "us-east-1")
 
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-
-    if not supabase_url or not service_role_key:
-        logger.warning("Cannot delete auth user: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+    if not user_pool_id:
+        logger.warning("Cannot delete auth user: missing COGNITO_USER_POOL_ID")
         return False
 
-    url = f"{supabase_url}/auth/v1/admin/users/{user_id}"
-    headers = {
-        "Authorization": f"Bearer {service_role_key}",
-        "apikey": service_role_key,
-    }
+    try:
+        import boto3
+        client = boto3.client("cognito-idp", region_name=region)
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.delete(url, headers=headers, timeout=10.0)
+        # Cognito admin API requires username, not sub. Look up the user first.
+        # The user_id (sub) is what we have from the JWT.
+        # Use admin_get_user by filtering users by sub attribute.
+        resp = client.list_users(
+            UserPoolId=user_pool_id,
+            Filter=f'sub = "{user_id}"',
+            Limit=1,
+        )
 
-    if resp.status_code in (200, 204):
+        users = resp.get("Users", [])
+        if not users:
+            logger.warning("No Cognito user found for sub %s", user_id)
+            return False
+
+        username = users[0]["Username"]
+        client.admin_delete_user(
+            UserPoolId=user_pool_id,
+            Username=username,
+        )
         return True
-
-    logger.error("Supabase user deletion failed: %s %s", resp.status_code, resp.text)
-    return False
+    except Exception as e:
+        logger.error("Cognito user deletion failed for %s: %s", user_id, e)
+        return False

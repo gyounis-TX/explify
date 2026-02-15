@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { Routes, Route, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ImportScreen } from "./components/import/ImportScreen";
 import { TemplatesScreen } from "./components/templates/TemplatesScreen";
@@ -12,6 +12,8 @@ import { LettersScreen } from "./components/letters/LettersScreen";
 import { TeachingPointsScreen } from "./components/teaching-points/TeachingPointsScreen";
 import { ComparisonScreen } from "./components/comparison/ComparisonScreen";
 import { AuthScreen } from "./components/auth/AuthScreen";
+import { BillingScreen } from "./components/billing/BillingScreen";
+import { UpgradeModal } from "./components/billing/UpgradeModal";
 import { LegalPage } from "./components/legal/LegalPage";
 import { LandingPage } from "./components/landing/LandingPage";
 import { IS_TAURI } from "./services/platform";
@@ -19,7 +21,25 @@ import { getSession } from "./services/supabase";
 
 function AuthRoute() {
   const navigate = useNavigate();
-  return <AuthScreen onAuthSuccess={() => navigate(IS_TAURI ? "/" : "/import")} />;
+  const [searchParams] = useSearchParams();
+  const plan = searchParams.get("plan");
+
+  const handleAuthSuccess = useCallback(async () => {
+    if (!IS_TAURI && plan) {
+      // User picked a plan from the landing page — start checkout
+      try {
+        const { sidecarApi } = await import("./services/sidecarApi");
+        const { url } = await sidecarApi.createCheckoutSession(plan);
+        window.location.href = url;
+        return;
+      } catch {
+        // Checkout failed — fall through to normal redirect
+      }
+    }
+    navigate(IS_TAURI ? "/" : "/import");
+  }, [navigate, plan]);
+
+  return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
 }
 
 /** Web mode root: show landing page for unauthenticated, redirect to /import for authenticated. */
@@ -62,10 +82,12 @@ function App() {
         <Route path="/templates" element={<TemplatesScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
         <Route path="/admin" element={<AdminScreen />} />
+        <Route path="/billing" element={<BillingScreen />} />
         <Route path="/processing" element={<ProcessingScreen />} />
         <Route path="/results" element={<ResultsScreen />} />
         <Route path="/comparison" element={<ComparisonScreen />} />
         <Route path="/auth" element={<AuthRoute />} />
+        {!IS_TAURI && <UpgradeModal />}
       </Route>
     </Routes>
   );

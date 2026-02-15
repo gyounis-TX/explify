@@ -1,0 +1,96 @@
+.upgrade-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+
+.upgrade-modal {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-xl);
+  max-width: 440px;
+  width: 100%;
+}
+
+.upgrade-modal-close {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-md);
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.upgrade-modal-close:hover {
+  color: var(--color-text);
+}
+
+.upgrade-modal-title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-sm);
+}
+
+.upgrade-modal-message {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-lg);
+}
+
+.upgrade-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.upgrade-modal-upgrade-btn {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-primary-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.upgrade-modal-upgrade-btn:hover:not(:disabled) {
+  background: var(--color-primary-700);
+}
+
+.upgrade-modal-upgrade-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upgrade-modal-usage-btn {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: none;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.upgrade-modal-usage-btn:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-primary-300);
+}

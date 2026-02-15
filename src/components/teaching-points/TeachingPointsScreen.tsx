@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { sidecarApi } from "../../services/sidecarApi";
 import { queueUpsertAfterMutation, deleteFromSupabase } from "../../services/syncEngine";
 import { getMyShareRecipients, type ShareRecipient } from "../../services/sharingService";
-import { getSupabase, getSession } from "../../services/supabase";
+import { isAuthConfigured, getSession } from "../../services/supabase";
 import { useToast } from "../shared/Toast";
 import type { TeachingPoint, SharedTeachingPoint } from "../../types/sidecar";
 import "./TeachingPointsScreen.css";
@@ -52,8 +52,7 @@ export function TeachingPointsScreen() {
 
   useEffect(() => {
     async function loadRecipients() {
-      const supabase = getSupabase();
-      if (!supabase) return;
+      if (!isAuthConfigured()) return;
       const session = await getSession();
       if (!session?.user) return;
       try {
