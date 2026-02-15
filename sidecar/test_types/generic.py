@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from api.models import ExtractionResult
 from api.analysis_models import ParsedMeasurement, ParsedReport, ReportSection
-from test_types.base import BaseTestType
+from test_types.base import BaseTestType, split_text_zones, keyword_zone_weight
 
 # Type alias for measurement extractor functions
 MeasurementExtractor = Callable[[str, Optional[str]], list[ParsedMeasurement]]
@@ -154,25 +154,33 @@ class GenericTestType(BaseTestType):
         return self._measurement_extractor is not None
 
     def detect(self, extraction_result: ExtractionResult) -> float:
-        """Keyword matching against full_text (case-insensitive).
+        """Keyword matching with positional weighting.
 
-        Weighted by keyword length: longer keywords are more specific.
+        Keywords in the title/header are boosted (×2) because they describe
+        *this* report.  Keywords found only in comparison sections are
+        heavily discounted (×0.1) since comparisons may reference a
+        different modality.
+
         Capped at 0.55 so generics never beat specialized handlers (0.7+ base).
-        Negative keywords reduce score to penalize false-positive confusion.
+        Negative keywords in title/body reduce score; negative keywords
+        only in comparison are discounted.
         """
-        text = extraction_result.full_text.lower()
+        title, comparison, body = split_text_zones(extraction_result.full_text)
 
-        # Weighted hits: longer keywords are more specific
+        # Weighted hits: position × keyword-length factor
         weighted_hits = 0.0
         for kw in self._keywords:
-            if kw.lower() in text:
-                length = len(kw)
-                if length >= 25:
-                    weighted_hits += 2.0
-                elif length >= 15:
-                    weighted_hits += 1.5
-                else:
-                    weighted_hits += 1.0
+            zone_w = keyword_zone_weight(kw.lower(), title, comparison, body)
+            if zone_w == 0:
+                continue
+            length = len(kw)
+            if length >= 25:
+                length_w = 2.0
+            elif length >= 15:
+                length_w = 1.5
+            else:
+                length_w = 1.0
+            weighted_hits += length_w * zone_w
 
         if weighted_hits == 0:
             return 0.0
@@ -180,9 +188,10 @@ class GenericTestType(BaseTestType):
         # Cap at 0.55 so generics never beat specialized handlers (0.7+ base)
         score = min(0.55, 0.15 + weighted_hits * 0.08)
 
-        # Negative keyword penalty
+        # Negative keyword penalty — only penalise for title/body hits
         if self._negative_keywords:
-            neg_hits = sum(1 for nk in self._negative_keywords if nk.lower() in text)
+            neg_hits = sum(1 for nk in self._negative_keywords
+                          if keyword_zone_weight(nk.lower(), title, comparison, body) >= 1.0)
             if neg_hits > 0:
                 score *= max(0.0, 1.0 - neg_hits * 0.3)
 

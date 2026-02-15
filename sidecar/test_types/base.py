@@ -1,9 +1,72 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 
 from api.models import ExtractionResult
 from api.analysis_models import ParsedReport
+
+# ---------------------------------------------------------------------------
+# Text-zone utilities for positional keyword weighting
+# ---------------------------------------------------------------------------
+# Reports follow a rough structure: title/header at the top, an optional
+# comparison section referencing prior studies (which may be a *different*
+# modality), and the main body.  Keywords found in the title carry more
+# weight because they describe *this* report.  Keywords found only in the
+# comparison section should be heavily discounted.
+
+_COMPARISON_RE = re.compile(
+    r"(?:^|\n)\s*(?:comparison|compared?\s+(?:to|with)|prior\s+(?:study|exam|studies))"
+    r"\s*[:\-]?\s*(.*?)(?=\n\s*\n|\n\s*[A-Z]{2,}|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def split_text_zones(full_text: str) -> tuple[str, str, str]:
+    """Split report text into (title, comparison, body) zones (all lower-case).
+
+    - **title**: first 500 characters — covers header, procedure name, exam type.
+    - **comparison**: text matched by comparison-section patterns.
+    - **body**: everything else (full text minus comparison spans).
+    """
+    lower = full_text.lower()
+    title = lower[:500]
+
+    comparison_parts: list[str] = []
+    body_chars = list(lower)
+    for m in _COMPARISON_RE.finditer(lower):
+        comparison_parts.append(m.group(0))
+        # Blank out comparison span so body excludes it
+        for i in range(m.start(), m.end()):
+            if i < len(body_chars):
+                body_chars[i] = " "
+
+    comparison = " ".join(comparison_parts)
+    body = "".join(body_chars)
+    return title, comparison, body
+
+
+def keyword_zone_weight(keyword: str, title: str, comparison: str, body: str) -> float:
+    """Return a positional weight for *keyword* based on where it appears.
+
+    - In title → 2.0  (this keyword describes the report itself)
+    - In body only → 1.0
+    - In comparison only → 0.1  (likely referencing a *different* modality)
+    - Not found → 0.0
+    """
+    kw = keyword.lower()
+    in_title = kw in title
+    in_body = kw in body
+    in_comp = kw in comparison
+    if in_title:
+        return 2.0
+    if in_body and not in_comp:
+        return 1.0
+    if in_body:
+        return 1.0
+    if in_comp:
+        return 0.1
+    return 0.0
 
 
 class BaseTestType(ABC):

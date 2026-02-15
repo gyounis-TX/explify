@@ -4,7 +4,7 @@ import re
 
 from api.models import ExtractionResult
 from api.analysis_models import ParsedMeasurement, ParsedReport, ReportSection
-from test_types.base import BaseTestType
+from test_types.base import BaseTestType, split_text_zones, keyword_zone_weight
 from .glossary import ECHO_GLOSSARY
 from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
@@ -49,8 +49,12 @@ class EchocardiogramHandler(BaseTestType):
         return "cardiac"
 
     def detect(self, extraction_result: ExtractionResult) -> float:
-        """Keyword-based detection with tiered scoring."""
-        text = extraction_result.full_text.lower()
+        """Keyword-based detection with tiered scoring and positional weighting.
+
+        Keywords in the report title/header count more than keywords in the
+        comparison section (which may reference a different modality).
+        """
+        title, comparison, body = split_text_zones(extraction_result.full_text)
 
         strong_keywords = [
             "echocardiogram",
@@ -84,10 +88,8 @@ class EchocardiogramHandler(BaseTestType):
             "stenosis",
         ]
 
-        # Cardiac MRI reports share many moderate keywords with echo —
-        # penalise heavily when CMR-specific terms are present.
-        # "echocardiogram" often appears in CMR comparison lines, so the
-        # penalty must apply even when strong echo keywords are found.
+        # CMR-specific terms — if these appear in title/body, this is likely
+        # a cardiac MRI, not an echo.
         cmr_negatives = [
             "cardiac mri", "cardiac magnetic", "cmr", "mr cardiac",
             "mri cardiac", "mri heart", "late gadolinium", "t1 mapping",
@@ -96,24 +98,41 @@ class EchocardiogramHandler(BaseTestType):
             "t2 stir",
         ]
 
-        strong_count = sum(1 for k in strong_keywords if k in text)
-        moderate_count = sum(1 for k in moderate_keywords if k in text)
-        weak_count = sum(1 for k in weak_keywords if k in text)
-        cmr_count = sum(1 for k in cmr_negatives if k in text)
+        # Positional weighting: strong keywords in comparison-only don't
+        # count as strong (e.g. "Comparison: Echocardiogram on ...").
+        strong_title_or_body = 0
+        strong_comparison_only = 0
+        for k in strong_keywords:
+            w = keyword_zone_weight(k, title, comparison, body)
+            if w >= 1.0:
+                strong_title_or_body += 1
+            elif w > 0:
+                strong_comparison_only += 1
 
-        if strong_count > 0:
+        moderate_count = sum(1 for k in moderate_keywords
+                            if keyword_zone_weight(k, title, comparison, body) >= 1.0)
+        weak_count = sum(1 for k in weak_keywords
+                         if keyword_zone_weight(k, title, comparison, body) >= 1.0)
+
+        # Only title/body strong keywords earn the 0.7 base
+        if strong_title_or_body > 0:
             base = 0.7
         elif moderate_count >= 3:
             base = 0.4
         elif moderate_count >= 1:
             base = 0.2
+        elif strong_comparison_only > 0:
+            # "echocardiogram" only in comparison — very weak signal
+            base = 0.15
         else:
             base = 0.0
 
         bonus = min(0.3, moderate_count * 0.05 + weak_count * 0.02)
         score = min(1.0, base + bonus)
 
-        # Suppress echo score when cardiac MRI terms are present
+        # CMR negative penalty — only count CMR terms in title/body
+        cmr_count = sum(1 for k in cmr_negatives
+                        if keyword_zone_weight(k, title, comparison, body) >= 1.0)
         if cmr_count > 0:
             score *= max(0.0, 1.0 - cmr_count * 0.3)
 
