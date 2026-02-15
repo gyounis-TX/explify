@@ -120,15 +120,9 @@ async def _db_call(method_name: str, *args, user_id=None, **kwargs):
 
 @router.get("/health")
 async def health_check():
-    import os
     try:
         get_db() if not _USE_PG else get_active_db()
-        return {
-            "status": "ok",
-            "auth_configured": bool(os.getenv("COGNITO_USER_POOL_ID")),
-            "client_id_set": bool(os.getenv("COGNITO_CLIENT_ID")),
-            "client_id_prefix": (os.getenv("COGNITO_CLIENT_ID", ""))[:8],
-        }
+        return {"status": "ok"}
     except Exception:
         return {"status": "starting"}
 
