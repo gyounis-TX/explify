@@ -134,8 +134,14 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         if (result.error) {
           showToast("error", result.error);
         } else {
-          showToast("success", "Email verified. Signed in.");
-          onAuthSuccess();
+          // Confirmation succeeded — now sign in to create a session
+          const signInResult = await signIn(email, password);
+          if (signInResult.error) {
+            showToast("error", signInResult.error);
+          } else {
+            showToast("success", "Email verified. Signed in.");
+            onAuthSuccess();
+          }
         }
       } catch {
         showToast("error", "Verification failed.");
