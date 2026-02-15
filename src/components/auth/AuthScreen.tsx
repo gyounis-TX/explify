@@ -463,7 +463,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             <button
               type="submit"
               className="auth-submit-btn"
-              disabled={loading || code.join("").length !== 8}
+              disabled={loading || code.join("").length !== 6}
             >
               {loading ? "Verifying..." : "Verify"}
             </button>

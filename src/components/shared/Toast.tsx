@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((type: "success" | "error" | "info", message: string) => {
     const id = nextId++;
-    const duration = 4000;
+    const duration = type === "error" ? 8000 : 4000;
     setToasts((prev) => [...prev, { id, type, message, duration, createdAt: Date.now() }]);
     const timer = setTimeout(() => {
       timersRef.current.delete(id);

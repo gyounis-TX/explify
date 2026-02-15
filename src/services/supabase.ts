@@ -95,12 +95,13 @@ export async function signUp(
   return new Promise((resolve) => {
     pool.signUp(email.trim(), password, attributes, [], (err, result) => {
       if (err) {
-        const msg = err.message || "Sign-up failed.";
         // Cognito returns "UsernameExistsException" for duplicate email
         if (err.name === "UsernameExistsException") {
           resolve({ error: "An account with this email already exists." });
+        } else if (err.name === "InvalidPasswordException") {
+          resolve({ error: "Password must be at least 8 characters and include uppercase, lowercase, numbers, and special characters (e.g. !@#$%^&*)." });
         } else {
-          resolve({ error: msg });
+          resolve({ error: err.message || "Sign-up failed." });
         }
         return;
       }
