@@ -61,35 +61,37 @@ function WebRoot() {
 
 function App() {
   return (
-    <Routes>
-      {/* Public pages — no auth or sidebar */}
-      <Route path="/terms" element={<LegalPage title="Terms of Service" markdownPath="/legal/terms.md" />} />
-      <Route path="/privacy" element={<LegalPage title="Privacy Policy" markdownPath="/legal/privacy.md" />} />
+    <>
+      <Routes>
+        {/* Public pages — no auth or sidebar */}
+        <Route path="/terms" element={<LegalPage title="Terms of Service" markdownPath="/legal/terms.md" />} />
+        <Route path="/privacy" element={<LegalPage title="Privacy Policy" markdownPath="/legal/privacy.md" />} />
 
-      {/* Web mode: landing page at / for unauthenticated users */}
-      {!IS_TAURI && <Route path="/" element={<WebRoot />} />}
+        {/* Web mode: landing page at / for unauthenticated users */}
+        {!IS_TAURI && <Route path="/" element={<WebRoot />} />}
 
-      <Route element={<AppShell />}>
-        {/* Tauri: / is Import. Web: /import is Import. */}
-        {IS_TAURI ? (
-          <Route path="/" element={<ImportScreen />} />
-        ) : (
-          <Route path="/import" element={<ImportScreen />} />
-        )}
-        <Route path="/history" element={<HistoryScreen />} />
-        <Route path="/letters" element={<LettersScreen />} />
-        <Route path="/teaching-points" element={<TeachingPointsScreen />} />
-        <Route path="/templates" element={<TemplatesScreen />} />
-        <Route path="/settings" element={<SettingsScreen />} />
-        <Route path="/admin" element={<AdminScreen />} />
-        <Route path="/billing" element={<BillingScreen />} />
-        <Route path="/processing" element={<ProcessingScreen />} />
-        <Route path="/results" element={<ResultsScreen />} />
-        <Route path="/comparison" element={<ComparisonScreen />} />
-        <Route path="/auth" element={<AuthRoute />} />
-        {!IS_TAURI && <UpgradeModal />}
-      </Route>
-    </Routes>
+        <Route element={<AppShell />}>
+          {/* Tauri: / is Import. Web: /import is Import. */}
+          {IS_TAURI ? (
+            <Route path="/" element={<ImportScreen />} />
+          ) : (
+            <Route path="/import" element={<ImportScreen />} />
+          )}
+          <Route path="/history" element={<HistoryScreen />} />
+          <Route path="/letters" element={<LettersScreen />} />
+          <Route path="/teaching-points" element={<TeachingPointsScreen />} />
+          <Route path="/templates" element={<TemplatesScreen />} />
+          <Route path="/settings" element={<SettingsScreen />} />
+          <Route path="/admin" element={<AdminScreen />} />
+          <Route path="/billing" element={<BillingScreen />} />
+          <Route path="/processing" element={<ProcessingScreen />} />
+          <Route path="/results" element={<ResultsScreen />} />
+          <Route path="/comparison" element={<ComparisonScreen />} />
+          <Route path="/auth" element={<AuthRoute />} />
+        </Route>
+      </Routes>
+      {!IS_TAURI && <UpgradeModal />}
+    </>
   );
 }
 
