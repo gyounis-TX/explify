@@ -163,7 +163,7 @@ export interface ExplainRequest {
   provider?: LLMProvider;
   api_key?: string;
   clinical_context?: string;
-  template_id?: number;
+  template_id?: string | number;
   shared_template_sync_id?: string;
   refinement_instruction?: string;
   tone_preference?: number;

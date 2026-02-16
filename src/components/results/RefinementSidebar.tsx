@@ -37,8 +37,8 @@ interface SectionSettings {
 interface RefinementSidebarProps {
   refinementInstruction: string;
   setRefinementInstruction: (value: string) => void;
-  selectedTemplateId: number | undefined;
-  setSelectedTemplateId: (value: number | undefined) => void;
+  selectedTemplateId: string | number | undefined;
+  setSelectedTemplateId: (value: string | number | undefined) => void;
   templates: Template[];
   sharedTemplates: SharedTemplate[];
   selectedLiteracy: LiteracyLevel;

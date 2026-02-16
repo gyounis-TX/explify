@@ -29,10 +29,10 @@ export function TemplatesScreen() {
   const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
   const [recipients, setRecipients] = useState<ShareRecipient[]>([]);
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export function TemplatesScreen() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string | number) => {
     try {
       const tpl = templates.find((t) => t.id === id);
       await sidecarApi.deleteTemplate(id);
