@@ -427,7 +427,9 @@ async def practice_usage(request: Request):
     """Aggregated usage across all practice members. Admin only."""
     practice_id, _ = await _require_practice_admin(request)
 
-    since = request.query_params.get("since", "2000-01-01T00:00:00Z")
+    from datetime import datetime, timezone
+    since_str = request.query_params.get("since", "2000-01-01T00:00:00Z")
+    since = datetime.fromisoformat(since_str.replace("Z", "+00:00"))
     pool = await _get_pool()
 
     row = await pool.fetchrow(
