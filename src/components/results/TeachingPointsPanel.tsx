@@ -29,7 +29,7 @@ export function TeachingPointsPanel({
   letterMode,
 }: TeachingPointsPanelProps) {
   const [typeFilter, setTypeFilter] = useState<string>("");
-  const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+  const [editingTypeId, setEditingTypeId] = useState<string | number | null>(null);
   const [historyTypes, setHistoryTypes] = useState<{ test_type: string; test_type_display: string }[]>([]);
   const [saveType, setSaveType] = useState<string>("__current__");
 
@@ -90,7 +90,7 @@ export function TeachingPointsPanel({
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string | number) => {
     const point = teachingPoints.find((p) => p.id === id);
     if (!point) return;
 
@@ -114,7 +114,7 @@ export function TeachingPointsPanel({
     });
   };
 
-  const handleTypeChange = async (id: number, newType: string) => {
+  const handleTypeChange = async (id: string | number, newType: string) => {
     setEditingTypeId(null);
     const prev = teachingPoints.find((tp) => tp.id === id);
     if (!prev) return;

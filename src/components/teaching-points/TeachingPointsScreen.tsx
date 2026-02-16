@@ -20,12 +20,12 @@ export function TeachingPointsScreen() {
   const [recipients, setRecipients] = useState<ShareRecipient[]>([]);
 
   // Edit state
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editText, setEditText] = useState("");
   const [editScope, setEditScope] = useState<string>("__all__");
 
   // Inline type-edit state (click badge to change type without full edit mode)
-  const [inlineTypeEditId, setInlineTypeEditId] = useState<number | null>(null);
+  const [inlineTypeEditId, setInlineTypeEditId] = useState<string | number | null>(null);
 
   // History test types for dropdown
   const [historyTypes, setHistoryTypes] = useState<{ test_type: string; test_type_display: string }[]>([]);
@@ -87,7 +87,7 @@ export function TeachingPointsScreen() {
   }, [newText, saving, showToast, addType]);
 
   const handleDelete = useCallback(
-    async (id: number) => {
+    async (id: string | number) => {
       try {
         const tp = teachingPoints.find((p) => p.id === id);
         await sidecarApi.deleteTeachingPoint(id);
@@ -116,7 +116,7 @@ export function TeachingPointsScreen() {
   }, []);
 
   const handleInlineTypeChange = useCallback(
-    async (id: number, newType: string) => {
+    async (id: string | number, newType: string) => {
       setInlineTypeEditId(null);
       const prev = teachingPoints.find((tp) => tp.id === id);
       if (!prev) return;

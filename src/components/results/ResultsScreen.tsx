@@ -219,7 +219,7 @@ export function ResultsScreen() {
   // Template selection
   const [templates, setTemplates] = useState<Template[]>([]);
   const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>(templateId);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | number | undefined>(templateId);
 
   // Combined synthesis state (batch "All Together" tab)
   const [combinedSummary, setCombinedSummary] = useState<string | null>(null);
