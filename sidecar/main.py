@@ -17,13 +17,17 @@ _logger = logging.getLogger(__name__)
 _USE_PG = bool(os.getenv("DATABASE_URL", ""))
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 
-# PHI patterns to scrub from error reports
+# PHI patterns to scrub from error reports (covers HIPAA Safe Harbor identifiers)
 _PHI_PATTERNS = [
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),                    # SSN
     re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),        # dates
     re.compile(r"\b[A-Z]{1,2}\d{6,10}\b"),                    # MRN
     re.compile(r"\b\d{10}\b"),                                 # phone
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
+    re.compile(r"https?://[^\s<>\"']+|www\.[^\s<>\"']+"),     # URLs
+    re.compile(r"(?i)(?:patient|name)\s*[:=]\s*[^\n,;]{2,40}"),  # labeled patient name
+    re.compile(r"(?i)(?:age[d:]?\s*)?(?:9[0-9]|1[0-4][0-9])\s*(?:-?\s*)?(?:year|yr|y/?o|y\.o\.)"),  # age>89
+    re.compile(r"(?i)(?:date of (?:study|exam|service|procedure|admission|discharge|report|visit|birth))\s*[:=]?\s*[^\n]{1,30}"),  # labeled dates
 ]
 
 

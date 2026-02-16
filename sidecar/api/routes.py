@@ -63,6 +63,23 @@ _USE_PG = bool(os.getenv("DATABASE_URL", ""))
 
 _logger = logging.getLogger(__name__)
 
+
+def _secure_delete(path: str) -> None:
+    """Overwrite file contents before unlinking to prevent forensic recovery of PHI."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "wb") as f:
+            f.write(b"\x00" * size)
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        pass
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
 router = APIRouter()
 
 pipeline = ExtractionPipeline()
@@ -114,7 +131,7 @@ async def _db_call(method_name: str, *args, user_id=None, **kwargs):
         _db_logger.exception("Database error in %s: %s", method_name, exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Database error in {method_name}: {type(exc).__name__}",
+            detail="A database error occurred. Please try again.",
         )
 
 
@@ -168,7 +185,7 @@ async def extract_pdf(request: Request, file: UploadFile = File(...)):
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            _secure_delete(tmp_path)
 
 
 @router.post("/extract/file", response_model=ExtractionResult)
@@ -229,7 +246,7 @@ async def extract_file(request: Request, file: UploadFile = File(...)):
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            _secure_delete(tmp_path)
 
 
 @router.post("/extract/text", response_model=ExtractionResult)
@@ -273,7 +290,7 @@ async def detect_pdf_type(file: UploadFile = File(...)):
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            _secure_delete(tmp_path)
 
 
 @router.post("/extraction/scrub-preview")
@@ -508,8 +525,12 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
                 for t in (extraction_result.tables or [])
             ]
 
+            # Scrub PHI before sending text to LLM for type detection
+            _det_providers = list(settings.practice_providers) if settings.practice_providers else None
+            _det_scrubbed = scrub_phi(extraction_result.full_text, provider_names=_det_providers).scrubbed_text
+
             llm_type_id, llm_confidence, llm_display = await llm_detect_test_type(
-                client, extraction_result.full_text, body.user_hint,
+                client, _det_scrubbed, body.user_hint,
                 registry_types=available,
                 tables=tables_for_llm,
                 keyword_candidates=keyword_candidates,
@@ -552,7 +573,7 @@ async def log_detection_correction(request: Request, body: dict = Body(...)):
     """
     detected = body.get("detected_type", "")
     corrected = body.get("corrected_type", "")
-    report_title = body.get("report_title", "")[:200]
+    report_title = scrub_phi(body.get("report_title", "")[:200]).scrubbed_text
 
     if not detected or not corrected or detected == corrected:
         return {"ok": True}
@@ -641,9 +662,10 @@ async def classify_input(request: Request, body: dict = Body(...)):
                 provider=LLMProvider(settings.llm_provider.value),
                 api_key=api_key,
             )
+            _classify_scrubbed = scrub_phi(text[:1000]).scrubbed_text
             resp = await client.call(
                 system_prompt="Classify the following text as either 'report' (a medical test report) or 'question' (a question or request for help). Reply with exactly one word: report or question.",
-                user_prompt=text[:1000],
+                user_prompt=_classify_scrubbed,
             )
             word = resp.text_content.strip().lower()
             if word in ("report", "question"):
@@ -912,7 +934,11 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
             ),
         )
 
-    # 4b. LLM measurement extraction for generic types without extractors
+    # 5. PHI scrub (before any LLM calls)
+    providers = list(settings.practice_providers) if settings.practice_providers else None
+    scrub_result = scrub_phi(extraction_result.full_text, provider_names=providers)
+
+    # 5a. LLM measurement extraction for generic types without extractors
     inc_measurements_check = body.include_measurements if body.include_measurements is not None else True
     if (
         not parsed_report.measurements
@@ -929,7 +955,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
             llm_client = LLMClient(provider=provider_enum, api_key=api_key)
             llm_measurements = await llm_extract_measurements(
                 llm_client,
-                extraction_result.full_text,
+                scrub_result.scrubbed_text,
                 sections_text,
                 parsed_report.test_type_display,
                 handler.get_prompt_context(extraction_result).get("specialty", "general"),
@@ -937,11 +963,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
             if llm_measurements:
                 parsed_report.measurements = llm_measurements
 
-    # 5. PHI scrub
-    providers = list(settings.practice_providers) if settings.practice_providers else None
-    scrub_result = scrub_phi(extraction_result.full_text, provider_names=providers)
-
-    # 5a. PHI scrub clinical context if provided
+    # 5b. PHI scrub clinical context if provided
     scrubbed_clinical_context = (
         scrub_phi(body.clinical_context, provider_names=providers).scrubbed_text
         if body.clinical_context
@@ -1195,7 +1217,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         len(system_prompt), len(user_prompt), bool(body.short_comment), is_sms,
         parsed_report.test_type,
     )
-    _logger.warning("User prompt tail (last 600 chars): %s", user_prompt[-600:])
+    _logger.info("User prompt length: %d chars", len(user_prompt))
 
     # 7. Call LLM with retry
     llm_provider = LLMProvider(provider_str)
@@ -1439,6 +1461,10 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             yield _sse_event({"stage": "error", "message": f"No API key configured for provider '{provider_str}'. Set it in Settings."})
             return
 
+        # PHI scrub before any LLM calls
+        providers = list(settings.practice_providers) if settings.practice_providers else None
+        scrub_result = scrub_phi(extraction_result.full_text, provider_names=providers)
+
         # LLM measurement extraction for generic types without extractors
         inc_measurements_check = explain_request.include_measurements if explain_request.include_measurements is not None else True
         if (
@@ -1456,7 +1482,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
                 llm_client = LLMClient(provider=provider_enum, api_key=api_key)
                 llm_measurements = await llm_extract_measurements(
                     llm_client,
-                    extraction_result.full_text,
+                    scrub_result.scrubbed_text,
                     sections_text,
                     parsed_report.test_type_display,
                     handler.get_prompt_context(extraction_result).get("specialty", "general"),
@@ -1466,9 +1492,6 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
                     # Update the parse message
                     m_count = len(parsed_report.measurements)
                     yield _sse_event({"stage": "parsing", "message": f"LLM extracted {m_count} measurement{'s' if m_count != 1 else ''}"})
-
-        providers = list(settings.practice_providers) if settings.practice_providers else None
-        scrub_result = scrub_phi(extraction_result.full_text, provider_names=providers)
         scrubbed_clinical_context = (
             scrub_phi(explain_request.clinical_context, provider_names=providers).scrubbed_text
             if explain_request.clinical_context
@@ -2729,6 +2752,7 @@ async def update_teaching_point(request: Request, point_id: str, body: dict = Bo
 
 
 @router.post("/letters/generate", response_model=LetterResponse, status_code=201)
+@limiter.limit(ANALYZE_RATE_LIMIT)
 async def generate_letter(request: Request, body: LetterGenerateRequest = Body(...)):
     """Generate a patient-facing letter/explanation from free-text input."""
     user_id = _get_user_id(request)

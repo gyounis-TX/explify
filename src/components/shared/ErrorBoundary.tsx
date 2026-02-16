@@ -22,7 +22,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, info);
+    // Avoid logging full error details in production — may contain PHI
+    if (import.meta.env.DEV) {
+      console.error("ErrorBoundary caught:", error, info);
+    }
     captureException(error, { componentStack: info.componentStack ?? undefined });
   }
 

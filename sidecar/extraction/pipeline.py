@@ -37,10 +37,13 @@ _CACHE_TTL = 60  # 1 minute — minimise PHI exposure window
 
 
 def _cache_page_images(extraction_id: str, images: dict[int, Image.Image]) -> None:
-    """Store page images for later re-OCR."""
+    """Store page images for later re-OCR (header/footer redacted)."""
+    from phi.image_redactor import redact_image_phi
+
     _evict_expired()
+    redacted = {page: redact_image_phi(img) for page, img in images.items()}
     _page_image_cache[extraction_id] = {
-        "images": images,
+        "images": redacted,
         "created": time.time(),
     }
     logger.info(

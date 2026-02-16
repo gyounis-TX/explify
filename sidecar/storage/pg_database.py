@@ -68,7 +68,7 @@ def _parse_database_url(url: str) -> dict:
         r"^postgres(?:ql)?://([^:]+):(.+)@([^:/@]+):(\d+)/(.+)$", url
     )
     if not m:
-        raise ValueError(f"Cannot parse DATABASE_URL: {url[:30]}...")
+        raise ValueError("Cannot parse DATABASE_URL — check format: postgresql://user:pass@host:port/db")
     return {
         "user": m.group(1),
         "password": m.group(2),

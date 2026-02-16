@@ -2,13 +2,17 @@ import * as Sentry from "@sentry/react";
 
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN ?? "";
 
-/** PHI patterns to scrub from error reports. */
+/** PHI patterns to scrub from error reports (HIPAA Safe Harbor identifiers). */
 const PHI_PATTERNS = [
   /\b\d{3}-\d{2}-\d{4}\b/g,                    // SSN
   /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g,        // dates (DOB, etc.)
   /\b[A-Z]{1,2}\d{6,10}\b/g,                    // MRN patterns
   /\b\d{10}\b/g,                                 // phone numbers
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, // email
+  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi, // email
+  /https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/g,     // URLs
+  /(?:patient|name)\s*[:=]\s*[^\n,;]{2,40}/gi,  // labeled patient name
+  /(?:age[d:]?\s*)?(?:9[0-9]|1[0-4][0-9])\s*(?:-?\s*)?(?:year|yr|y\/?o|y\.o\.)/gi, // age>89
+  /(?:date of (?:study|exam|service|procedure|admission|discharge|report|visit|birth))\s*[:=]?\s*[^\n]{1,30}/gi, // labeled dates
 ];
 
 function scrubPhi(str: string): string {

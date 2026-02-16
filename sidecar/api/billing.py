@@ -315,7 +315,11 @@ async def _get_or_create_stripe_customer(user_id: str) -> str:
 # Admin check
 # ---------------------------------------------------------------------------
 
-_ADMIN_EMAILS: set[str] = {"gyounis@youniscardiology.com"}
+_ADMIN_EMAILS: set[str] = set(
+    e.strip()
+    for e in os.getenv("ADMIN_EMAILS", "gyounis@youniscardiology.com").split(",")
+    if e.strip()
+)
 
 
 async def _is_admin_user(user_id: str) -> bool:

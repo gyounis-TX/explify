@@ -105,19 +105,26 @@ class SidecarApi {
       }
     }
 
-    let detail = `Request failed: ${response.status}`;
+    // Map status codes to safe user-facing messages. Avoid exposing internal details.
+    const STATUS_MESSAGES: Record<number, string> = {
+      400: "Invalid request. Please check your input and try again.",
+      401: "Your session has expired. Please sign in again.",
+      403: "You do not have permission to perform this action.",
+      404: "The requested resource was not found.",
+      409: "A conflict occurred. Please refresh and try again.",
+      413: "The uploaded file is too large.",
+      422: "The request could not be processed. Please check your input.",
+      500: "An unexpected error occurred. Please try again.",
+      502: "The service is temporarily unavailable. Please try again.",
+      503: "The service is temporarily unavailable. Please try again later.",
+    };
+
+    let detail = STATUS_MESSAGES[response.status] ?? `Request failed (${response.status}). Please try again.`;
     try {
       const body = await response.json();
-      if (body.detail) {
-        if (typeof body.detail === "string") {
-          detail = body.detail;
-        } else if (Array.isArray(body.detail)) {
-          detail = body.detail
-            .map((d: { msg?: string }) => d.msg || JSON.stringify(d))
-            .join("; ");
-        } else {
-          detail = JSON.stringify(body.detail);
-        }
+      // Only use body.detail if it's a short, safe user-facing string (no stack traces)
+      if (body.detail && typeof body.detail === "string" && body.detail.length < 200) {
+        detail = body.detail;
       }
     } catch {
       // Response body wasn't JSON

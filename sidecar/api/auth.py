@@ -33,8 +33,12 @@ _jwks_client: PyJWKClient | None = None
 # Track which user IDs have been provisioned this process lifetime
 _provisioned_users: set[str] = set()
 
-# Cache practice context per user_id to avoid DB query per request
-_practice_cache: dict[str, dict | None] = {}
+# Cache practice context per user_id to avoid DB query per request.
+# Entries expire after _PRACTICE_CACHE_TTL seconds to prevent stale authorization.
+import time as _time
+
+_PRACTICE_CACHE_TTL = 300  # 5 minutes
+_practice_cache: dict[str, tuple[float, dict | None]] = {}
 
 
 async def _attach_practice_context(request) -> None:
@@ -51,16 +55,19 @@ async def _attach_practice_context(request) -> None:
         return
 
     if user_id in _practice_cache:
-        cached = _practice_cache[user_id]
-        if cached is None:
+        ts, cached = _practice_cache[user_id]
+        if _time.time() - ts > _PRACTICE_CACHE_TTL:
+            del _practice_cache[user_id]
+        elif cached is None:
             request.state.practice_id = None
             request.state.practice_role = None
             request.state.practice_sharing = None
+            return
         else:
             request.state.practice_id = cached["practice_id"]
             request.state.practice_role = cached["practice_role"]
             request.state.practice_sharing = cached["practice_sharing"]
-        return
+            return
 
     try:
         from storage.pg_database import _get_pool
@@ -76,12 +83,12 @@ async def _attach_practice_context(request) -> None:
                 "practice_role": row["role"],
                 "practice_sharing": row["sharing_enabled"],
             }
-            _practice_cache[user_id] = ctx
+            _practice_cache[user_id] = (_time.time(), ctx)
             request.state.practice_id = ctx["practice_id"]
             request.state.practice_role = ctx["practice_role"]
             request.state.practice_sharing = ctx["practice_sharing"]
         else:
-            _practice_cache[user_id] = None
+            _practice_cache[user_id] = (_time.time(), None)
             request.state.practice_id = None
             request.state.practice_role = None
             request.state.practice_sharing = None

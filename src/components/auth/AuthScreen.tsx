@@ -289,6 +289,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 required
                 minLength={8}
                 autoFocus
+                autoComplete="new-password"
               />
             </label>
 
@@ -302,6 +303,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 placeholder="Confirm new password"
                 required
                 minLength={8}
+                autoComplete="new-password"
               />
             </label>
 
@@ -350,6 +352,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 placeholder="New password"
                 required
                 minLength={8}
+                autoComplete="new-password"
               />
             </label>
 
@@ -363,6 +366,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 placeholder="Confirm new password"
                 required
                 minLength={8}
+                autoComplete="new-password"
               />
             </label>
 
@@ -567,6 +571,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
               placeholder="Password"
               required
               minLength={6}
+              autoComplete="current-password"
             />
           </label>
 

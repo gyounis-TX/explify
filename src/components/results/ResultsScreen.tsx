@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type {
   ExplainResponse,
@@ -77,11 +77,20 @@ function buildCopyText(
   return parts.join("\n");
 }
 
-const SESSION_KEY = "explify_results_state";
+const SESSION_KEY = "explify_results_nav";
 
+/**
+ * Save ONLY non-PHI navigation metadata to sessionStorage.
+ * Never persist medical report content, explanations, or clinical context.
+ */
 function saveSessionState(data: Record<string, unknown>) {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    const safe: Record<string, unknown> = {};
+    // Only keep non-PHI navigation keys
+    for (const key of ["fromHistory", "historyId", "historyLiked", "templateId", "letterMode", "letterId"]) {
+      if (data[key] !== undefined) safe[key] = data[key];
+    }
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(safe));
   } catch { /* quota exceeded — ignore */ }
 }
 
@@ -237,10 +246,6 @@ export function ResultsScreen() {
   const effectiveTestType = currentResponse?.parsed_report.test_type || "";
   const effectiveTestTypeDisplay = currentResponse?.parsed_report.test_type_display || "this type";
 
-  // Draft auto-save
-  const draftKey = historyId ? `draft:${historyId}` : null;
-  const draftSaveRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   // ---------------------------------------------------------------------------
   // Effects
   // ---------------------------------------------------------------------------
@@ -250,49 +255,14 @@ export function ResultsScreen() {
     if (!currentResponse) return;
     const expl = currentResponse.explanation;
 
-    if (draftKey) {
-      const savedDraft = localStorage.getItem(draftKey);
-      if (savedDraft) {
-        try {
-          const draft = JSON.parse(savedDraft);
-          if (draft.summary && draft.summary !== expl.overall_summary) {
-            setEditedSummary(draft.summary);
-            setIsDirty(true);
-            setIsEditing(true);
-            if (draft.findings) {
-              setEditedFindings(draft.findings);
-            } else {
-              setEditedFindings(expl.key_findings.map((f) => ({ finding: f.finding, explanation: f.explanation })));
-            }
-            return;
-          }
-        } catch { /* Invalid draft, ignore */ }
-      }
-    }
-
     setEditedSummary(expl.overall_summary);
     setEditedFindings(expl.key_findings.map((f) => ({ finding: f.finding, explanation: f.explanation })));
     setIsDirty(false);
     setIsEditing(false);
-  }, [currentResponse, draftKey]);
+  }, [currentResponse]);
 
-  // Auto-save draft when editing
-  useEffect(() => {
-    if (!draftKey || !isDirty) return;
-    if (draftSaveRef.current) clearTimeout(draftSaveRef.current);
-    draftSaveRef.current = setTimeout(() => {
-      localStorage.setItem(draftKey, JSON.stringify({
-        summary: editedSummary,
-        findings: editedFindings,
-        savedAt: new Date().toISOString(),
-      }));
-    }, 2000);
-    return () => { if (draftSaveRef.current) clearTimeout(draftSaveRef.current); };
-  }, [draftKey, editedSummary, editedFindings, isDirty]);
-
-  const clearDraft = useCallback(() => {
-    if (draftKey) localStorage.removeItem(draftKey);
-  }, [draftKey]);
+  // Draft clear is a no-op — drafts are in-memory only (HIPAA: no PHI in localStorage)
+  const clearDraft = useCallback(() => {}, []);
 
   // Load glossary
   useEffect(() => {
@@ -405,16 +375,12 @@ export function ResultsScreen() {
   useEffect(() => {
     if (!currentResponse) return;
     saveSessionState({
-      explainResponse: currentResponse,
       fromHistory,
-      extractionResult,
       templateId,
       historyId,
       historyLiked: isLiked,
-      clinicalContext,
-      quickReasons,
     });
-  }, [currentResponse, fromHistory, extractionResult, selectedTemplateId, historyId, isLiked, clinicalContext, quickReasons]);
+  }, [currentResponse, fromHistory, selectedTemplateId, historyId, isLiked]);
 
   // Batch tab switching
   useEffect(() => {
