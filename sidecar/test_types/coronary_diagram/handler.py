@@ -4,7 +4,7 @@ import re
 
 from api.models import ExtractionResult
 from api.analysis_models import ParsedMeasurement, ParsedReport, ReportSection
-from test_types.base import BaseTestType
+from test_types.base import BaseTestType, split_text_zones, keyword_zone_weight
 from .glossary import CORONARY_GLOSSARY
 from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
@@ -50,8 +50,13 @@ class CoronaryDiagramHandler(BaseTestType):
         return "cardiac"
 
     def detect(self, extraction_result: ExtractionResult) -> float:
-        """Keyword-based detection with tiered scoring."""
-        text = extraction_result.full_text.lower()
+        """Keyword-based detection with positional weighting.
+
+        Keywords in the title/header count more; keywords in comparison
+        sections are discounted.  CMR-specific terms suppress the score
+        since cardiac MRI reports share some keywords (e.g. hemodynamics).
+        """
+        title, comparison, body = split_text_zones(extraction_result.full_text)
 
         strong_keywords = [
             "coronary diagram",
@@ -98,11 +103,26 @@ class CoronaryDiagramHandler(BaseTestType):
             "diagnosis",
         ]
 
-        strong_count = sum(1 for k in strong_keywords if k in text)
-        moderate_count = sum(1 for k in moderate_keywords if k in text)
-        weak_count = sum(1 for k in weak_keywords if k in text)
+        # CMR-specific terms — if present, this is likely a cardiac MRI.
+        cmr_negatives = [
+            "cardiac mri", "cardiac magnetic", "cmr", "mr cardiac",
+            "mri cardiac", "mri heart", "late gadolinium", "t1 mapping",
+            "t2 mapping", "delayed enhancement", "gadolinium",
+            "cine imaging", "t2 stir",
+        ]
 
-        if strong_count > 0:
+        strong_title_or_body = 0
+        for k in strong_keywords:
+            w = keyword_zone_weight(k, title, comparison, body)
+            if w >= 1.0:
+                strong_title_or_body += 1
+
+        moderate_count = sum(1 for k in moderate_keywords
+                            if keyword_zone_weight(k, title, comparison, body) >= 1.0)
+        weak_count = sum(1 for k in weak_keywords
+                         if keyword_zone_weight(k, title, comparison, body) >= 1.0)
+
+        if strong_title_or_body > 0:
             base = 0.7
         elif moderate_count >= 3:
             base = 0.4
@@ -112,7 +132,15 @@ class CoronaryDiagramHandler(BaseTestType):
             base = 0.0
 
         bonus = min(0.3, moderate_count * 0.05 + weak_count * 0.02)
-        return min(1.0, base + bonus)
+        score = min(1.0, base + bonus)
+
+        # Suppress when CMR terms are present in title/body
+        cmr_count = sum(1 for k in cmr_negatives
+                        if keyword_zone_weight(k, title, comparison, body) >= 1.0)
+        if cmr_count > 0:
+            score *= max(0.0, 1.0 - cmr_count * 0.3)
+
+        return score
 
     def parse(
         self,
