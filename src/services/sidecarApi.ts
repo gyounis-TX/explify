@@ -200,6 +200,23 @@ class SidecarApi {
     return response.json();
   }
 
+  async logDetectionCorrection(
+    detectedType: string,
+    correctedType: string,
+    reportTitle: string,
+  ): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    this.fetchWithAuth(`${baseUrl}/analyze/detection-correction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        detected_type: detectedType,
+        corrected_type: correctedType,
+        report_title: reportTitle,
+      }),
+    }).catch(() => {}); // fire-and-forget
+  }
+
   async classifyInput(
     text: string,
   ): Promise<{ classification: "report" | "question"; confidence: number }> {

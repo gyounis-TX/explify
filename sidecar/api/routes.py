@@ -540,6 +540,38 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
     )
 
 
+@router.post("/analyze/detection-correction")
+async def log_detection_correction(request: Request, body: dict = Body(...)):
+    """Log when a user corrects the auto-detected test type.
+
+    Used to learn from detection mistakes over time.
+    """
+    detected = body.get("detected_type", "")
+    corrected = body.get("corrected_type", "")
+    report_title = body.get("report_title", "")[:200]
+
+    if not detected or not corrected or detected == corrected:
+        return {"ok": True}
+
+    user_id = getattr(request.state, "user_id", None)
+
+    try:
+        if _USE_PG:
+            from storage.pg_database import _get_pool
+            pool = await _get_pool()
+            await pool.execute(
+                """INSERT INTO detection_corrections
+                   (user_id, detected_type, corrected_type, report_title)
+                   VALUES ($1, $2, $3, $4)""",
+                user_id, detected, corrected, report_title,
+            )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Failed to log detection correction")
+
+    return {"ok": True}
+
+
 @router.post("/analyze/classify-input")
 @limiter.limit(ANALYZE_RATE_LIMIT)
 async def classify_input(request: Request, body: dict = Body(...)):

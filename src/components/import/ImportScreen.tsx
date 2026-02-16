@@ -151,6 +151,9 @@ export function ImportScreen() {
   const [detectionResult, setDetectionResult] = useState<DetectTypeResponse | null>(_cache.detectionResult);
   const [manualTestType, setManualTestType] = useState<string | null>(_cache.manualTestType);
 
+  // Track whether user already proceeded (gray out button until new result added)
+  const [hasProceeded, setHasProceeded] = useState(false);
+
   // Type selection modal state
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [modalSelectedType, setModalSelectedType] = useState<string | null>(null);
@@ -262,6 +265,7 @@ export function ImportScreen() {
     setDetectionStatus("idle");
     setDetectionResult(null);
     setManualTestType(null);
+    setHasProceeded(false);
     _cache = freshCache();
   }, []);
 
@@ -342,6 +346,12 @@ export function ImportScreen() {
         setDetectionStatus("error");
       });
   }, [result, testTypeHint]);
+
+  // Reset hasProceeded when new successful extractions arrive
+  const successCount = [...extractionResults.values()].filter(e => e.status === "success").length;
+  useEffect(() => {
+    setHasProceeded(false);
+  }, [successCount]);
 
   // Auto-open type selection modal when detection is uncertain (single report only)
   useEffect(() => {
@@ -652,6 +662,7 @@ export function ImportScreen() {
       : result;
 
     if (effectiveResult && effectiveTestType) {
+      setHasProceeded(true);
       const state: Record<string, unknown> = {
         extractionResult: effectiveResult,
         clinicalContext: clinicalContext.trim() || undefined,
@@ -1262,6 +1273,7 @@ export function ImportScreen() {
                 const isSingleReport = successEntries.length <= 1;
                 const isLikelyNormal = isSingleReport && detectionStatus === "success" && detectionResult?.is_likely_normal === true;
                 const proceedDisabled = (() => {
+                  if (hasProceeded) return true;
                   if (successEntries.length > 1) {
                     return successEntries.some(e => e.detectionStatus === "detecting");
                   }
@@ -1293,7 +1305,7 @@ export function ImportScreen() {
                       onClick={handleProceed}
                       disabled={proceedDisabled}
                     >
-                      {isLikelyNormal ? "Full Analysis" : "Continue to Processing"}
+                      {isLikelyNormal ? "Full Analysis" : "Continue to Explanation"}
                     </button>
                   </div>
                 );
@@ -1498,15 +1510,30 @@ export function ImportScreen() {
                   const chosen = modalCustomType.trim() || modalSelectedType;
                   if (modalEditingKey) {
                     // Per-card modal: write to the specific entry
+                    const entry = extractionResults.get(modalEditingKey);
+                    if (entry?.detectionResult?.test_type && chosen && entry.detectionResult.test_type !== chosen) {
+                      sidecarApi.logDetectionCorrection(
+                        entry.detectionResult.test_type,
+                        chosen,
+                        (entry.result?.full_text ?? "").slice(0, 200),
+                      );
+                    }
                     setExtractionResults((prev) => {
                       const next = new Map(prev);
-                      const entry = next.get(modalEditingKey);
-                      if (entry) next.set(modalEditingKey, { ...entry, manualTestType: chosen });
+                      const e = next.get(modalEditingKey);
+                      if (e) next.set(modalEditingKey, { ...e, manualTestType: chosen });
                       return next;
                     });
                     setModalEditingKey(null);
                   } else {
-                    // Global modal: existing single-report behavior
+                    // Global modal: log correction if user overrides detection
+                    if (detectionResult?.test_type && chosen && detectionResult.test_type !== chosen) {
+                      sidecarApi.logDetectionCorrection(
+                        detectionResult.test_type,
+                        chosen,
+                        (result?.full_text ?? "").slice(0, 200),
+                      );
+                    }
                     setManualTestType(chosen);
                   }
                   setShowTypeModal(false);

@@ -813,3 +813,18 @@ RETURNS TABLE(
     WHERE pm.practice_id = p_practice_id
       AND ul.created_at >= p_since;
 $$;
+
+-- =============================================================================
+-- Detection corrections — learn from user overrides of auto-detected test type
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS detection_corrections (
+    id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    detected_type TEXT NOT NULL,        -- what the system detected
+    corrected_type TEXT NOT NULL,       -- what the user changed it to
+    report_title TEXT,                  -- first ~200 chars of report for pattern matching
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_detection_corrections_types
+    ON detection_corrections(detected_type, corrected_type);
