@@ -224,6 +224,19 @@
   font-variant-numeric: tabular-nums;
 }
 
+.processing-reassurance {
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-600);
+  font-style: italic;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .processing-complete {
   margin-top: var(--space-xl);
   text-align: center;

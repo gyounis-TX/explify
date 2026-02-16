@@ -8,6 +8,19 @@ import "./ProcessingScreen.css";
 
 type ProcessingStep = "detecting" | "parsing" | "explaining" | "validating" | "done" | "error";
 
+const REASSURING_MESSAGES = [
+  "Still working — redacting protected health information...",
+  "Interpreting report findings and measurements...",
+  "Cross-referencing with clinical guidelines...",
+  "Building your personalized explanation...",
+  "Almost there — finalizing the analysis...",
+  "Reviewing for accuracy and completeness...",
+  "Putting the finishing touches on your report...",
+  "Complex report — taking a bit longer than usual...",
+  "Hang tight — the AI is carefully reading every detail...",
+  "Still processing — thank you for your patience...",
+];
+
 interface StepInfo {
   id: ProcessingStep;
   label: string;
@@ -594,9 +607,21 @@ export function ProcessingScreen() {
       </div>
 
       {currentStep !== "done" && currentStep !== "error" && (
-        <div className="processing-elapsed">
-          Elapsed: {elapsed.toFixed(1)}s
-        </div>
+        <>
+          <div className="processing-elapsed">
+            Elapsed: {elapsed.toFixed(1)}s
+          </div>
+          {elapsed >= 10 && (
+            <div className="processing-reassurance">
+              {REASSURING_MESSAGES[
+                Math.min(
+                  Math.floor(elapsed / 10) - 1,
+                  REASSURING_MESSAGES.length - 1,
+                )
+              ]}
+            </div>
+          )}
+        </>
       )}
 
       {currentStep === "error" && error && (
