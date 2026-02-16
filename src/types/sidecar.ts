@@ -290,7 +290,7 @@ export interface SettingsUpdate {
 // --- Template Types ---
 
 export interface Template {
-  id: number;
+  id: string | number;
   name: string;
   test_type: string | null;
   tone: string | null;
@@ -329,7 +329,7 @@ export interface TemplateListResponse {
 // --- Phase 6: History Types ---
 
 export interface HistoryListItem {
-  id: number;
+  id: string | number;
   created_at: string;
   test_type: string;
   test_type_display: string;
@@ -364,7 +364,7 @@ export interface HistoryCreateRequest {
 
 export interface HistoryDeleteResponse {
   deleted: boolean;
-  id: number;
+  id: string | number;
 }
 
 export interface HistoryLikeRequest {
@@ -372,7 +372,7 @@ export interface HistoryLikeRequest {
 }
 
 export interface HistoryLikeResponse {
-  id: number;
+  id: string | number;
   liked: boolean;
 }
 
@@ -388,7 +388,7 @@ export interface LetterGenerateRequest {
 }
 
 export interface LetterResponse {
-  id: number;
+  id: string | number;
   created_at: string;
   prompt: string;
   content: string;
@@ -408,13 +408,13 @@ export interface LetterListResponse {
 
 export interface LetterDeleteResponse {
   deleted: boolean;
-  id: number;
+  id: string | number;
 }
 
 // --- Teaching Points Types ---
 
 export interface TeachingPoint {
-  id: number;
+  id: string | number;
   text: string;
   test_type: string | null;
   created_at: string;
@@ -425,7 +425,7 @@ export interface TeachingPoint {
 // --- Shared Content Types ---
 
 export interface SharedTeachingPoint {
-  id: number;
+  id: string | number;
   sync_id: string;
   text: string;
   test_type: string | null;
@@ -436,7 +436,7 @@ export interface SharedTeachingPoint {
 }
 
 export interface SharedTemplate {
-  id: number;
+  id: string | number;
   sync_id: string;
   name: string;
   test_type: string | null;

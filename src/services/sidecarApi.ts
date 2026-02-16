@@ -559,7 +559,7 @@ class SidecarApi {
   }
 
   async updateTemplate(
-    id: number,
+    id: string | number,
     request: TemplateUpdateRequest,
   ): Promise<Template> {
     const baseUrl = await this.ensureInitialized();
@@ -574,7 +574,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async deleteTemplate(id: number): Promise<{ deleted: boolean; id: number }> {
+  async deleteTemplate(id: string | number): Promise<{ deleted: boolean; id: string | number }> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/templates/${id}`, {
       method: "DELETE",
@@ -641,7 +641,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async getHistoryDetail(id: number): Promise<HistoryDetailResponse> {
+  async getHistoryDetail(id: string | number): Promise<HistoryDetailResponse> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/history/${id}`, {
       cache: "no-store",
@@ -667,7 +667,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async deleteHistory(id: number): Promise<HistoryDeleteResponse> {
+  async deleteHistory(id: string | number): Promise<HistoryDeleteResponse> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/history/${id}`, {
       method: "DELETE",
@@ -679,7 +679,7 @@ class SidecarApi {
   }
 
   async toggleHistoryLiked(
-    id: number,
+    id: string | number,
     liked: boolean,
   ): Promise<HistoryLikeResponse> {
     const baseUrl = await this.ensureInitialized();
@@ -694,7 +694,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async markHistoryCopied(id: number): Promise<void> {
+  async markHistoryCopied(id: string | number): Promise<void> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/history/${id}/copied`, {
       method: "PUT",
@@ -704,7 +704,7 @@ class SidecarApi {
     }
   }
 
-  async saveEditedText(id: number, editedText: string): Promise<void> {
+  async saveEditedText(id: string | number, editedText: string): Promise<void> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/history/${id}/edited_text`, {
       method: "PATCH",
@@ -716,7 +716,7 @@ class SidecarApi {
     }
   }
 
-  async rateHistory(id: number, rating: number, note?: string): Promise<void> {
+  async rateHistory(id: string | number, rating: number, note?: string): Promise<void> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/history/${id}/rate`, {
       method: "POST",
@@ -839,7 +839,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async getLetter(id: number): Promise<LetterResponse> {
+  async getLetter(id: string | number): Promise<LetterResponse> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/letters/${id}`, {
       cache: "no-store",
@@ -850,7 +850,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async updateLetter(id: number, content: string): Promise<LetterResponse> {
+  async updateLetter(id: string | number, content: string): Promise<LetterResponse> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/letters/${id}`, {
       method: "PUT",
@@ -864,9 +864,9 @@ class SidecarApi {
   }
 
   async toggleLetterLiked(
-    id: number,
+    id: string | number,
     liked: boolean,
-  ): Promise<{ id: number; liked: boolean }> {
+  ): Promise<{ id: string | number; liked: boolean }> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/letters/${id}/like`, {
       method: "PUT",
@@ -879,7 +879,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async deleteLetter(id: number): Promise<LetterDeleteResponse> {
+  async deleteLetter(id: string | number): Promise<LetterDeleteResponse> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/letters/${id}`, {
       method: "DELETE",
@@ -925,7 +925,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async updateTeachingPoint(id: number, request: {
+  async updateTeachingPoint(id: string | number, request: {
     text?: string;
     test_type?: string | null;
   }): Promise<TeachingPoint> {
@@ -941,7 +941,7 @@ class SidecarApi {
     return response.json();
   }
 
-  async deleteTeachingPoint(id: number): Promise<void> {
+  async deleteTeachingPoint(id: string | number): Promise<void> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(`${baseUrl}/teaching-points/${id}`, {
       method: "DELETE",
@@ -1028,7 +1028,7 @@ class SidecarApi {
 
   async syncExportRecord(
     table: string,
-    recordId: number,
+    recordId: string | number,
   ): Promise<Record<string, unknown>> {
     const baseUrl = await this.ensureInitialized();
     const response = await this.fetchWithAuth(

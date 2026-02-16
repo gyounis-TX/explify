@@ -217,7 +217,7 @@ export function ComparisonScreen() {
   const { showToast } = useToast();
 
   const locationState = location.state as {
-    historyIds?: [number, number];
+    historyIds?: [string | number, string | number];
   } | null;
 
   const historyIds = locationState?.historyIds ?? null;

@@ -61,7 +61,7 @@ export async function pushAllLocal(): Promise<void> {
  */
 export async function queueUpsertAfterMutation(
   table: SyncTable,
-  recordId: number,
+  recordId: string | number,
 ): Promise<void> {
   if (!IS_TAURI) return; // Web mode: backend writes directly to RDS
   if (!isCloudSyncAvailable()) return;

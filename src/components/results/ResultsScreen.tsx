@@ -102,12 +102,12 @@ export function ResultsScreen() {
     fromHistory?: boolean;
     extractionResult?: ExtractionResult;
     templateId?: number;
-    historyId?: number;
+    historyId?: string | number;
     historyLiked?: boolean;
     clinicalContext?: string;
     quickReasons?: string[];
     letterMode?: boolean;
-    letterId?: number;
+    letterId?: string | number;
     letterContent?: string;
     letterPrompt?: string;
     batchResponses?: ExplainResponse[];
@@ -146,8 +146,8 @@ export function ResultsScreen() {
   const [isLiked, setIsLiked] = useState(
     locationState?.historyLiked ?? (session?.historyLiked as boolean | undefined) ?? false,
   );
-  const [historyId, setHistoryId] = useState<number | null>(
-    locationState?.historyId ?? (session?.historyId as number | undefined) ?? null,
+  const [historyId, setHistoryId] = useState<string | number | null>(
+    locationState?.historyId ?? (session?.historyId as string | number | undefined) ?? null,
   );
   const [qualityRating, setQualityRating] = useState<number | null>(null);
   const [sectionSettings, setSectionSettings] = useState({

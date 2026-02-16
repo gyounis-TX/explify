@@ -31,9 +31,13 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
             out[k] = str(v)
         else:
             out[k] = v
-    # Ensure 'id' exists — fall back to sync_id for rows synced from desktop
-    if out.get("id") is None and out.get("sync_id"):
+    # Always use sync_id as the public-facing 'id' when available, because all
+    # query methods (get_history, rate_history, get_letter, etc.) look up rows
+    # by sync_id.  The integer 'id' column is an internal auto-increment key.
+    if out.get("sync_id"):
         out["id"] = out["sync_id"]
+    elif out.get("id") is None:
+        pass  # no id available at all — leave as-is
     return out
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
