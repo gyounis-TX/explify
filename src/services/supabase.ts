@@ -321,13 +321,24 @@ export async function signOut(): Promise<void> {
 
 export async function getSession(): Promise<Session | null> {
   const pool = getUserPool();
-  if (!pool) return null;
+  if (!pool) { console.warn("[auth] no pool"); return null; }
   const user = pool.getCurrentUser();
-  if (!user) return null;
+  if (!user) { console.warn("[auth] no current user"); return null; }
 
   return new Promise((resolve) => {
     user.getSession((err: Error | null, session: CognitoUserSession | null) => {
-      if (err || !session || !session.isValid()) {
+      if (err) {
+        console.error("[auth] getSession error:", err.message || err);
+        resolve(null);
+        return;
+      }
+      if (!session) {
+        console.warn("[auth] no session returned");
+        resolve(null);
+        return;
+      }
+      if (!session.isValid()) {
+        console.warn("[auth] session invalid, tokens expired");
         resolve(null);
         return;
       }
