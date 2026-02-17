@@ -108,7 +108,7 @@ export default function QuickNormalModal({
           <div className="quick-normal-error">
             <p>Failed to generate message.</p>
             <button className="quick-normal-btn quick-normal-btn--secondary" onClick={handleFullAnalysis}>
-              Try Full Analysis
+              Try Full Explanation
             </button>
           </div>
         )}
@@ -120,7 +120,7 @@ export default function QuickNormalModal({
             </div>
             <div className="type-modal-actions">
               <button className="quick-normal-btn quick-normal-btn--secondary" onClick={handleFullAnalysis}>
-                Full Analysis
+                Full Explanation
               </button>
               <button className="quick-normal-btn quick-normal-btn--primary" onClick={handleCopy}>
                 {copied ? "Copied!" : "Copy to Clipboard"}

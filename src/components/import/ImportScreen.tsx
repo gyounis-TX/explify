@@ -1308,7 +1308,7 @@ export function ImportScreen() {
                       onClick={handleProceed}
                       disabled={proceedDisabled}
                     >
-                      {isLikelyNormal ? "Full Analysis" : "Continue to Explanation"}
+                      {isLikelyNormal ? "Full Explanation" : "Continue to Explanation"}
                     </button>
                   </div>
                 );

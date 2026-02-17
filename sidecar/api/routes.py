@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import tempfile
 
 from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
@@ -324,11 +325,25 @@ _QUICK_NORMAL_EXCLUDED_TYPES = frozenset({
 })
 
 
-def _assess_normalcy(type_id: str | None, extraction_result: "ExtractionResult") -> bool:
-    """Check if all parsed measurements are NORMAL or UNDETERMINED.
+_ABNORMAL_TEXT_PATTERNS = re.compile(
+    r"(?i)"
+    r"(?:dilated\s+(?:ascending\s+aorta|aortic\s+root|aorta|atri|ventricl))"
+    r"|(?:compared\s+(?:with|to)\s+(?:the\s+)?(?:prior|previous)\s+(?:study|exam|report|echocardiogram|echo|test))"
+    r"|(?:(?:has|have)\s+(?:increased|worsened|deteriorated|decreased|declined|progressed))"
+    r"|(?:(?:interval|since\s+prior)\s+(?:increase|decrease|worsening|progression|deterioration|change))"
+    r"|(?:since\s+prior\s+(?:study|exam|echo|test|report)\b)"
+    r"|(?:(?:worse|worsened|increased|new)\s+(?:compared\s+(?:to|with)|since|from)\s+(?:the\s+)?(?:prior|previous))"
+    r"|(?:new\s+(?:finding|abnormality|wall\s+motion\s+abnormality|pericardial\s+effusion|pleural\s+effusion))"
+)
 
-    Returns True only when measurements exist and none are abnormal.
-    Returns False on any failure, no handler, no measurements, or any abnormal status.
+
+def _assess_normalcy(type_id: str | None, extraction_result: "ExtractionResult") -> bool:
+    """Check if all parsed measurements are NORMAL or UNDETERMINED and the
+    report text contains no abnormal findings or comparison language.
+
+    Returns True only when measurements exist, none are abnormal, and the
+    text does not reference prior studies or worsening findings.
+    Returns False on any failure, no handler, no measurements, or any abnormal indicator.
     """
     if not type_id:
         return False
@@ -336,6 +351,12 @@ def _assess_normalcy(type_id: str | None, extraction_result: "ExtractionResult")
         return False
     try:
         from api.analysis_models import SeverityStatus
+
+        # Text-based checks: reject if comparison or abnormal language found
+        text = extraction_result.full_text or ""
+        if _ABNORMAL_TEXT_PATTERNS.search(text):
+            return False
+
         _resolved_id, handler = registry.resolve(type_id)
         if handler is None:
             return False

@@ -298,3 +298,80 @@ class TestInsuranceFalsePositive:
         result = scrub_phi(text)
         assert "BCBS12345" not in result.scrubbed_text
         assert "POL98765" not in result.scrubbed_text
+
+
+# -----------------------------------------------------------------------
+# New Safe Harbor patterns: bare SSN, certificate, device serial, IP
+# -----------------------------------------------------------------------
+
+
+class TestBareSSN:
+    """Tests for 9-digit SSN without hyphens."""
+
+    def test_scrub_bare_nine_digit_ssn(self):
+        text = "SSN: 123456789 is on file."
+        result = scrub_phi(text)
+        assert "123456789" not in result.scrubbed_text
+
+    def test_no_false_positive_longer_number(self):
+        """10-digit numbers are caught by phone pattern (correct behavior)."""
+        text = "Accession 1234567890 received."
+        result = scrub_phi(text)
+        # 10-digit number matches phone pattern — that's expected PHI scrubbing
+        assert "1234567890" not in result.scrubbed_text
+
+    def test_no_false_positive_shorter_number(self):
+        """8 digit numbers should not match."""
+        text = "Code 12345678 entered."
+        result = scrub_phi(text)
+        assert "12345678" in result.scrubbed_text
+
+
+class TestCertificateLicense:
+    """Tests for certificate/license number scrubbing."""
+
+    def test_scrub_license_number(self):
+        text = "License #: MD123456"
+        result = scrub_phi(text)
+        assert "MD123456" not in result.scrubbed_text
+        assert "certificate" in result.phi_found
+
+    def test_scrub_cert_no(self):
+        text = "Cert No: CA-LIC-12345"
+        result = scrub_phi(text)
+        assert "CA-LIC-12345" not in result.scrubbed_text
+
+    def test_scrub_registration(self):
+        text = "Registration ID: REG-98765"
+        result = scrub_phi(text)
+        assert "REG-98765" not in result.scrubbed_text
+
+
+class TestDeviceSerial:
+    """Tests for device serial number scrubbing."""
+
+    def test_scrub_serial_number(self):
+        text = "Serial: ABC-123456-XYZ"
+        result = scrub_phi(text)
+        assert "ABC-123456-XYZ" not in result.scrubbed_text
+        assert "device_serial" in result.phi_found
+
+    def test_scrub_sn_prefix(self):
+        text = "SN: 12345-ABCDE"
+        result = scrub_phi(text)
+        assert "12345-ABCDE" not in result.scrubbed_text
+
+
+class TestIPAddress:
+    """Tests for IP address scrubbing."""
+
+    def test_scrub_ipv4(self):
+        text = "Source: 192.168.1.100 accessed the record."
+        result = scrub_phi(text)
+        assert "192.168.1.100" not in result.scrubbed_text
+        assert "ip_address" in result.phi_found
+
+    def test_scrub_public_ip(self):
+        text = "Login from 203.0.113.45"
+        result = scrub_phi(text)
+        assert "203.0.113.45" not in result.scrubbed_text
