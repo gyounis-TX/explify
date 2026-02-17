@@ -433,8 +433,10 @@ class BillingMiddleware(BaseHTTPMiddleware):
 
         except Exception:
             logger.exception("Billing middleware error for user %s", user_id)
-            # On error, allow the request through rather than blocking
-            return await call_next(request)
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Billing system temporarily unavailable. Please try again shortly."},
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,19 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react')) return 'react-vendor';
+            if (id.includes('@tauri-apps')) return 'tauri-vendor';
+            return 'vendor';
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 5180,
     strictPort: true,

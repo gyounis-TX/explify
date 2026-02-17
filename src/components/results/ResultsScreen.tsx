@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type {
   ExplainResponse,
@@ -25,6 +25,9 @@ import { KeyFindingsPanel } from "./KeyFindingsPanel";
 import { MeasurementsTable } from "./MeasurementsTable";
 import { RefinementSidebar } from "./RefinementSidebar";
 import { TeachingPointsPanel } from "./TeachingPointsPanel";
+import { CombinedSummaryPanel } from "./CombinedSummaryPanel";
+import { BatchComparisonTable } from "./BatchComparisonTable";
+import { useModalAccessibility } from "../../hooks/useModalAccessibility";
 import "./ResultsScreen.css";
 import "../shared/TypeModal.css";
 
@@ -238,6 +241,7 @@ export function ResultsScreen() {
   const [editedCombinedSummary, setEditedCombinedSummary] = useState("");
 
   // Type change modal state
+  const typeModalRef = useRef<HTMLDivElement>(null);
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [modalSelectedType, setModalSelectedType] = useState<string | null>(null);
   const [modalCustomType, setModalCustomType] = useState("");
@@ -245,6 +249,8 @@ export function ResultsScreen() {
 
   const effectiveTestType = currentResponse?.parsed_report.test_type || "";
   const effectiveTestTypeDisplay = currentResponse?.parsed_report.test_type_display || "this type";
+
+  useModalAccessibility(typeModalRef, () => setShowTypeModal(false));
 
   // ---------------------------------------------------------------------------
   // Effects
@@ -1010,8 +1016,14 @@ export function ResultsScreen() {
             ))}
             <button
               className={`results-batch-tab results-batch-tab--combined${activeResultTab === batchResponses.length ? " results-batch-tab--active" : ""}`}
+              onClick={() => setActiveResultTab(batchResponses.length)}
+            >
+              Compare
+            </button>
+            <button
+              className={`results-batch-tab results-batch-tab--combined${activeResultTab === batchResponses.length + 1 ? " results-batch-tab--active" : ""}`}
               onClick={() => {
-                setActiveResultTab(batchResponses.length);
+                setActiveResultTab(batchResponses.length + 1);
                 if (!combinedSummary && !isGeneratingCombined) {
                   generateCombinedSummary();
                 }
@@ -1023,74 +1035,28 @@ export function ResultsScreen() {
         )}
 
         {isBatchMode && batchResponses && activeResultTab === batchResponses.length ? (
+          /* Compare tab view */
+          <BatchComparisonTable batchResponses={batchResponses} batchLabels={batchLabels} />
+        ) : isBatchMode && batchResponses && activeResultTab === batchResponses.length + 1 ? (
           /* Combined "All Together" tab view */
-          <div className="combined-summary-panel">
-            {isGeneratingCombined && (
-              <div className="combined-summary-loading">
-                <div className="spinner" />
-                <span>Generating combined summary...</span>
-              </div>
-            )}
-            {combinedError && (
-              <div className="import-error">
-                <p>{combinedError}</p>
-                <button className="refine-btn" onClick={generateCombinedSummary}>
-                  Retry
-                </button>
-              </div>
-            )}
-            {combinedSummary && !isGeneratingCombined && (
-              <>
-                <div className="combined-summary-header">
-                  <h3>Combined Summary</h3>
-                </div>
-                {isEditingCombined ? (
-                  <textarea
-                    className="summary-textarea"
-                    autoComplete="off"
-                    value={editedCombinedSummary}
-                    onChange={(e) => setEditedCombinedSummary(e.target.value)}
-                    rows={12}
-                  />
-                ) : (
-                  <div className="comment-preview">
-                    {editedCombinedSummary}
-                  </div>
-                )}
-                <span className="comment-char-count">
-                  {editedCombinedSummary.length} chars
-                </span>
-                <div className="combined-summary-actions">
-                  <button
-                    className="comment-copy-btn"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(editedCombinedSummary);
-                        showToast("success", "Combined summary copied.");
-                      } catch {
-                        showToast("error", "Failed to copy.");
-                      }
-                    }}
-                  >
-                    Copy to Clipboard
-                  </button>
-                  <button
-                    className={`edit-toggle-btn${isEditingCombined ? " edit-toggle-btn--active" : ""}`}
-                    onClick={() => setIsEditingCombined(!isEditingCombined)}
-                  >
-                    {isEditingCombined ? "Done Editing" : "Edit"}
-                  </button>
-                  <button
-                    className="refine-btn"
-                    onClick={generateCombinedSummary}
-                    disabled={isGeneratingCombined}
-                  >
-                    Regenerate
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <CombinedSummaryPanel
+            isGenerating={isGeneratingCombined}
+            error={combinedError}
+            summary={combinedSummary}
+            editedSummary={editedCombinedSummary}
+            isEditing={isEditingCombined}
+            onEditedSummaryChange={setEditedCombinedSummary}
+            onToggleEditing={() => setIsEditingCombined(!isEditingCombined)}
+            onRegenerate={generateCombinedSummary}
+            onCopy={async () => {
+              try {
+                await navigator.clipboard.writeText(editedCombinedSummary);
+                showToast("success", "Combined summary copied.");
+              } catch {
+                showToast("error", "Failed to copy.");
+              }
+            }}
+          />
         ) : (
           /* Individual report tab view */
           <>
@@ -1226,8 +1192,15 @@ export function ResultsScreen() {
       {/* Type Change Modal */}
       {showTypeModal && (
         <div className="type-modal-backdrop" onClick={() => setShowTypeModal(false)}>
-          <div className="type-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="type-modal-title">Change Report Type</h3>
+          <div
+            className="type-modal"
+            ref={typeModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="type-change-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="type-modal-title" id="type-change-modal-title">Change Report Type</h3>
             <p className="type-modal-subtitle">
               Currently identified as <strong>{effectiveTestTypeDisplay}</strong>.
               Select a different type to regenerate the explanation.

@@ -3,9 +3,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { sidecarApi } from "../../services/sidecarApi";
 import { useToast } from "../shared/Toast";
 import type { ExtractionResult, Template, SharedTemplate, DetectTypeResponse } from "../../types/sidecar";
-import { groupTypesByCategory } from "../../utils/testTypeCategories";
 import QuickNormalModal from "./QuickNormalModal";
 import InterpretModal from "./InterpretModal";
+import { TypeSelectionModal } from "./TypeSelectionModal";
 import { isAdmin } from "../../services/adminAuth";
 import { getSession } from "../../services/supabase";
 import { isAuthConfigured } from "../../services/supabase";
@@ -1455,110 +1455,52 @@ export function ImportScreen() {
           ? extractionResults.get(modalEditingKey)?.detectionStatus ?? detectionStatus
           : detectionStatus;
         return (
-        <div className="type-modal-backdrop" onClick={() => { setShowTypeModal(false); setModalEditingKey(null); }}>
-          <div className="type-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="type-modal-title">Select Report Type</h3>
-            <p className="type-modal-subtitle">
-              {modalDetStatus === "low_confidence" && modalDetection
-                ? `We detected this might be a ${
-                    modalDetection.available_types?.find(
-                      (t) => t.test_type_id === modalDetection.test_type,
-                    )?.display_name ?? modalDetection.test_type
-                  } (${Math.round(modalDetection.confidence * 100)}% confidence). Please confirm or select the correct type.`
-                : "Could not automatically identify the report type. Please select the correct type below."}
-            </p>
-
-            {modalDetection?.available_types && modalDetection.available_types.length > 0 && (
-              <div className="type-modal-categories">
-                {groupTypesByCategory(modalDetection.available_types).map(([label, types]) => (
-                  <div key={label} className="type-modal-category">
-                    <span className="type-modal-category-label">{label}</span>
-                    <div className="type-modal-category-buttons">
-                      {types.map((t) => (
-                        <button
-                          key={t.test_type_id}
-                          className={`detection-type-btn${
-                            modalSelectedType === t.test_type_id && !modalCustomType
-                              ? " detection-type-btn--active"
-                              : ""
-                          }`}
-                          onClick={() => {
-                            setModalSelectedType(t.test_type_id);
-                            setModalCustomType("");
-                          }}
-                        >
-                          {t.display_name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="type-modal-other">
-              <label className="type-modal-other-label">Other:</label>
-              <input
-                type="text"
-                className="type-modal-other-input"
-                autoComplete="off"
-                placeholder='e.g. "calcium score", "renal ultrasound"'
-                value={modalCustomType}
-                onChange={(e) => {
-                  setModalCustomType(e.target.value);
-                  if (e.target.value) setModalSelectedType(null);
-                }}
-              />
-            </div>
-
-            <div className="type-modal-actions">
-              <button
-                className="type-modal-cancel"
-                onClick={() => { setShowTypeModal(false); setModalEditingKey(null); }}
-              >
-                Cancel
-              </button>
-              <button
-                className="type-modal-confirm"
-                disabled={!modalSelectedType && !modalCustomType.trim()}
-                onClick={() => {
-                  const chosen = modalCustomType.trim() || modalSelectedType;
-                  if (modalEditingKey) {
-                    // Per-card modal: write to the specific entry
-                    const entry = extractionResults.get(modalEditingKey);
-                    if (entry?.detectionResult?.test_type && chosen && entry.detectionResult.test_type !== chosen) {
-                      sidecarApi.logDetectionCorrection(
-                        entry.detectionResult.test_type,
-                        chosen,
-                        (entry.result?.full_text ?? "").slice(0, 200),
-                      );
-                    }
-                    setExtractionResults((prev) => {
-                      const next = new Map(prev);
-                      const e = next.get(modalEditingKey);
-                      if (e) next.set(modalEditingKey, { ...e, manualTestType: chosen });
-                      return next;
-                    });
-                    setModalEditingKey(null);
-                  } else {
-                    // Global modal: log correction if user overrides detection
-                    if (detectionResult?.test_type && chosen && detectionResult.test_type !== chosen) {
-                      sidecarApi.logDetectionCorrection(
-                        detectionResult.test_type,
-                        chosen,
-                        (result?.full_text ?? "").slice(0, 200),
-                      );
-                    }
-                    setManualTestType(chosen);
-                  }
-                  setShowTypeModal(false);
-                }}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+          <TypeSelectionModal
+            detectionResult={modalDetection}
+            detectionStatus={
+              modalDetStatus === "low_confidence"
+                ? "low_confidence"
+                : modalDetStatus === "success"
+                  ? "detected"
+                  : "unknown"
+            }
+            selectedType={modalSelectedType}
+            customType={modalCustomType}
+            onSelectedTypeChange={setModalSelectedType}
+            onCustomTypeChange={setModalCustomType}
+            onConfirm={(chosen) => {
+              if (modalEditingKey) {
+                // Per-card modal: write to the specific entry
+                const entry = extractionResults.get(modalEditingKey);
+                if (entry?.detectionResult?.test_type && chosen && entry.detectionResult.test_type !== chosen) {
+                  sidecarApi.logDetectionCorrection(
+                    entry.detectionResult.test_type,
+                    chosen,
+                    (entry.result?.full_text ?? "").slice(0, 200),
+                  );
+                }
+                setExtractionResults((prev) => {
+                  const next = new Map(prev);
+                  const e = next.get(modalEditingKey);
+                  if (e) next.set(modalEditingKey, { ...e, manualTestType: chosen });
+                  return next;
+                });
+                setModalEditingKey(null);
+              } else {
+                // Global modal: log correction if user overrides detection
+                if (detectionResult?.test_type && chosen && detectionResult.test_type !== chosen) {
+                  sidecarApi.logDetectionCorrection(
+                    detectionResult.test_type,
+                    chosen,
+                    (result?.full_text ?? "").slice(0, 200),
+                  );
+                }
+                setManualTestType(chosen);
+              }
+              setShowTypeModal(false);
+            }}
+            onClose={() => { setShowTypeModal(false); setModalEditingKey(null); }}
+          />
         );
       })()}
 

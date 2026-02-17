@@ -180,6 +180,7 @@ async def extract_pdf(request: Request, file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("PDF extraction failed: %s", e)
         raise HTTPException(
             status_code=422,
             detail="Failed to extract text from PDF.",
@@ -241,6 +242,7 @@ async def extract_file(request: Request, file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("File extraction failed: %s", e)
         raise HTTPException(
             status_code=422,
             detail="Failed to extract text from file.",
@@ -285,6 +287,7 @@ async def detect_pdf_type(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("PDF type detection failed: %s", e)
         raise HTTPException(
             status_code=422,
             detail="Failed to detect PDF type.",
@@ -696,9 +699,11 @@ async def classify_input(request: Request, body: dict = Body(...)):
                 api_key=api_key,
             )
             _classify_scrubbed = scrub_phi(text[:1000]).scrubbed_text
-            resp = await client.call(
+            resp = await with_retry(
+                client.call,
                 system_prompt="Classify the following text as either 'report' (a medical test report) or 'question' (a question or request for help). Reply with exactly one word: report or question.",
                 user_prompt=_classify_scrubbed,
+                timeout_seconds=30,
             )
             word = resp.text_content.strip().lower()
             if word in ("report", "question"):
@@ -721,6 +726,7 @@ async def parse_report(http_request: Request, request: ParseRequest = Body(...))
     try:
         extraction_result = ExtractionResult.model_validate(request.extraction_result)
     except Exception as e:
+        logger.exception("parse_report validation failed: %s", e)
         raise HTTPException(
             status_code=400,
             detail="Invalid extraction result.",
@@ -747,6 +753,7 @@ async def parse_report(http_request: Request, request: ParseRequest = Body(...))
     try:
         return handler.parse(extraction_result)
     except Exception as e:
+        logger.exception("parse_report parsing failed: %s", e)
         raise HTTPException(
             status_code=422,
             detail="Failed to parse report.",
@@ -790,6 +797,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
     try:
         extraction_result = ExtractionResult.model_validate(body.extraction_result)
     except Exception as e:
+        logger.exception("explain validation failed: %s", e)
         raise HTTPException(
             status_code=400,
             detail="Invalid extraction result.",
@@ -823,6 +831,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         try:
             parsed_report = handler.parse(extraction_result, gender=patient_gender, age=patient_age)
         except Exception as e:
+            logger.exception("explain parsing failed: %s", e)
             raise HTTPException(
                 status_code=422,
                 detail="Failed to parse report.",
@@ -1331,11 +1340,13 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
             max_attempts=2,
         )
     except LLMRetryError as e:
+        logger.exception("explain LLM call failed after retries: %s", e)
         raise HTTPException(
             status_code=502,
             detail="LLM API call failed after retries.",
         )
     except Exception as e:
+        logger.exception("explain LLM call failed: %s", e)
         raise HTTPException(
             status_code=502,
             detail="LLM API call failed.",
@@ -2143,12 +2154,21 @@ async def compare_reports(request: Request, body: dict = Body(...)):
     )
 
     try:
-        llm_response = await client.call(
+        llm_response = await with_retry(
+            client.call,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=1024,
+            timeout_seconds=90,
         )
+    except LLMRetryError as e:
+        if isinstance(e.last_error, TimeoutError):
+            logger.exception("compare LLM call timed out: %s", e)
+            raise HTTPException(status_code=504, detail="LLM request timed out.")
+        logger.exception("compare LLM call failed: %s", e)
+        raise HTTPException(status_code=502, detail="LLM API call failed.")
     except Exception as e:
+        logger.exception("compare LLM call failed: %s", e)
         raise HTTPException(status_code=502, detail="LLM API call failed.")
 
     return {
@@ -2282,12 +2302,21 @@ async def synthesize_reports(request: Request, body: dict = Body(...)):
     )
 
     try:
-        llm_response = await client.call(
+        llm_response = await with_retry(
+            client.call,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=2048,
+            timeout_seconds=90,
         )
+    except LLMRetryError as e:
+        if isinstance(e.last_error, TimeoutError):
+            logger.exception("synthesize LLM call timed out: %s", e)
+            raise HTTPException(status_code=504, detail="LLM request timed out.")
+        logger.exception("synthesize LLM call failed: %s", e)
+        raise HTTPException(status_code=502, detail="LLM API call failed.")
     except Exception as e:
+        logger.exception("synthesize LLM call failed: %s", e)
         raise HTTPException(status_code=502, detail="LLM API call failed.")
 
     return {
@@ -3034,11 +3063,20 @@ async def generate_letter(request: Request, body: LetterGenerateRequest = Body(.
     scrubbed_prompt = scrub_phi(body.prompt, provider_names=providers).scrubbed_text
 
     try:
-        llm_response = await client.call(
+        llm_response = await with_retry(
+            client.call,
             system_prompt=system_prompt,
             user_prompt=scrubbed_prompt,
+            timeout_seconds=90,
         )
+    except LLMRetryError as e:
+        if isinstance(e.last_error, TimeoutError):
+            logger.exception("generate_letter LLM call timed out: %s", e)
+            raise HTTPException(status_code=504, detail="LLM request timed out.")
+        logger.exception("generate_letter LLM call failed: %s", e)
+        raise HTTPException(status_code=502, detail="LLM API call failed.")
     except Exception as e:
+        logger.exception("generate_letter LLM call failed: %s", e)
         raise HTTPException(
             status_code=502,
             detail="LLM API call failed.",

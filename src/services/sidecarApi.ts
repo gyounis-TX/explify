@@ -34,6 +34,28 @@ import type { PracticeInfo, PracticeMember, Practice, PracticeUsageSummary } fro
 
 class SidecarApi {
   private baseUrl: string | null = null;
+  private _cache = new Map<string, { data: unknown; expiry: number }>();
+
+  private _cachedGet<T>(key: string, ttlMs: number, fetchFn: () => Promise<T>): Promise<T> {
+    const cached = this._cache.get(key);
+    if (cached && cached.expiry > Date.now()) {
+      return Promise.resolve(cached.data as T);
+    }
+    return fetchFn().then((data) => {
+      this._cache.set(key, { data, expiry: Date.now() + ttlMs });
+      return data;
+    });
+  }
+
+  invalidateCache(prefix?: string): void {
+    if (!prefix) {
+      this._cache.clear();
+      return;
+    }
+    for (const key of this._cache.keys()) {
+      if (key.startsWith(prefix)) this._cache.delete(key);
+    }
+  }
 
   async initialize(): Promise<void> {
     if (IS_TAURI) {
@@ -496,14 +518,16 @@ class SidecarApi {
   }
 
   async getGlossary(testType: string): Promise<GlossaryResponse> {
-    const baseUrl = await this.ensureInitialized();
-    const response = await this.fetchWithAuth(`${baseUrl}/glossary/${testType}`, {
-      cache: "no-store",
+    return this._cachedGet(`glossary:${testType}`, 1800000, async () => {
+      const baseUrl = await this.ensureInitialized();
+      const response = await this.fetchWithAuth(`${baseUrl}/glossary/${testType}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        await this.handleErrorResponse(response);
+      }
+      return response.json();
     });
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-    return response.json();
   }
 
   async exportPdf(explainResponse: ExplainResponse): Promise<Blob> {
@@ -520,12 +544,14 @@ class SidecarApi {
   }
 
   async getSettings(): Promise<AppSettings> {
-    const baseUrl = await this.ensureInitialized();
-    const response = await this.fetchWithAuth(`${baseUrl}/settings`, { cache: "no-store" });
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-    return response.json();
+    return this._cachedGet("settings", 300000, async () => {
+      const baseUrl = await this.ensureInitialized();
+      const response = await this.fetchWithAuth(`${baseUrl}/settings`, { cache: "no-store" });
+      if (!response.ok) {
+        await this.handleErrorResponse(response);
+      }
+      return response.json();
+    });
   }
 
   async updateSettings(update: SettingsUpdate): Promise<AppSettings> {
@@ -538,18 +564,21 @@ class SidecarApi {
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
+    this.invalidateCache("settings");
     return response.json();
   }
 
   // --- Templates ---
 
   async listTemplates(): Promise<TemplateListResponse> {
-    const baseUrl = await this.ensureInitialized();
-    const response = await this.fetchWithAuth(`${baseUrl}/templates`, { cache: "no-store" });
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-    return response.json();
+    return this._cachedGet("templates:list", 300000, async () => {
+      const baseUrl = await this.ensureInitialized();
+      const response = await this.fetchWithAuth(`${baseUrl}/templates`, { cache: "no-store" });
+      if (!response.ok) {
+        await this.handleErrorResponse(response);
+      }
+      return response.json();
+    });
   }
 
   async createTemplate(request: TemplateCreateRequest): Promise<Template> {
@@ -562,6 +591,7 @@ class SidecarApi {
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
+    this.invalidateCache("templates");
     return response.json();
   }
 
@@ -578,6 +608,7 @@ class SidecarApi {
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
+    this.invalidateCache("templates");
     return response.json();
   }
 
@@ -589,14 +620,17 @@ class SidecarApi {
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
+    this.invalidateCache("templates");
     return response.json();
   }
 
   async listTestTypes(): Promise<{ id: string; name: string; category?: string }[]> {
-    const baseUrl = await this.ensureInitialized();
-    const response = await this.fetchWithAuth(`${baseUrl}/test-types`);
-    if (!response.ok) return [];
-    return response.json();
+    return this._cachedGet("testTypes", 1800000, async () => {
+      const baseUrl = await this.ensureInitialized();
+      const response = await this.fetchWithAuth(`${baseUrl}/test-types`);
+      if (!response.ok) return [];
+      return response.json();
+    });
   }
 
   async listHistoryTestTypes(): Promise<
@@ -1019,14 +1053,16 @@ class SidecarApi {
   }
 
   async listSharedTemplates(): Promise<SharedTemplate[]> {
-    const baseUrl = await this.ensureInitialized();
-    const response = await this.fetchWithAuth(`${baseUrl}/templates/shared`, {
-      cache: "no-store",
+    return this._cachedGet("templates:shared", 300000, async () => {
+      const baseUrl = await this.ensureInitialized();
+      const response = await this.fetchWithAuth(`${baseUrl}/templates/shared`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        await this.handleErrorResponse(response);
+      }
+      return response.json();
     });
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-    return response.json();
   }
 
   async syncSharedTemplates(

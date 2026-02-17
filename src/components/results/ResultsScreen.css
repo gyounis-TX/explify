@@ -1877,6 +1877,36 @@
   gap: var(--space-sm);
 }
 
+/* Batch Comparison Table */
+.batch-comparison-table {
+  margin-bottom: var(--space-xl);
+}
+
+.batch-comparison-change {
+  font-size: 1.2rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.measurement-cell--normal {
+  color: var(--color-accent-600);
+}
+
+.measurement-cell--mildly_abnormal {
+  color: #d97706;
+  background-color: #fffbeb;
+}
+
+.measurement-cell--moderately_abnormal {
+  color: #ea580c;
+  background-color: #fff7ed;
+}
+
+.measurement-cell--severely_abnormal {
+  color: #dc2626;
+  background-color: #fef2f2;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .results-screen {
