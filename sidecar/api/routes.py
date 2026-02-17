@@ -499,6 +499,11 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
             detail="Invalid extraction result.",
         )
 
+    # Extract report date from demographics
+    from extraction.demographics import extract_demographics
+    _demographics = extract_demographics(extraction_result.full_text)
+    _report_date = _demographics.report_date
+
     available = registry.list_types()
 
     # Compound report detection
@@ -532,6 +537,7 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
             is_compound=compound_result.is_compound,
             compound_segments=compound_segments,
             is_likely_normal=is_normal,
+            report_date=_report_date,
         )
 
     # Tier 2: LLM fallback
@@ -579,6 +585,7 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
                     is_compound=compound_result.is_compound,
                     compound_segments=compound_segments,
                     is_likely_normal=is_normal,
+                    report_date=_report_date,
                 )
     except Exception:
         _logger.exception("LLM fallback failed during detect-type")
@@ -594,6 +601,7 @@ async def detect_test_type(request: Request, body: DetectTypeRequest = Body(...)
         is_compound=compound_result.is_compound,
         compound_segments=compound_segments,
         is_likely_normal=is_normal,
+        report_date=_report_date,
     )
 
 
@@ -2960,8 +2968,11 @@ async def generate_letter(request: Request, body: LetterGenerateRequest = Body(.
         physician_section = (
             "\n## Physician Voice -- First Person\n"
             "You ARE the physician. Write in first person. "
-            'Use first-person language: "I have reviewed your results", '
+            'Use first-person language: "I wanted to explain", '
             '"In my assessment". '
+            "Do NOT open with \"I have reviewed your results\" or similar "
+            "result-review phrasing — the patient may be asking a general "
+            "question, not receiving a test interpretation. "
             'NEVER use third-person references like "your doctor" or '
             '"your physician".\n'
         )
@@ -2970,7 +2981,7 @@ async def generate_letter(request: Request, body: LetterGenerateRequest = Body(.
         if name_drop:
             attribution = (
                 f" Include at least one explicit attribution such as "
-                f'"{physician_name} has reviewed your results".'
+                f'"{physician_name} wanted to share this explanation".'
             )
         physician_section = (
             f"\n## Physician Voice -- Third Person (Care Team)\n"
@@ -3028,13 +3039,21 @@ async def generate_letter(request: Request, body: LetterGenerateRequest = Body(.
         f"{specialty} practice, composing a message to a patient. The message "
         f"must sound exactly like the clinician wrote it themselves and require "
         f"no editing before sending.\n\n"
+        f"The patient's request may be about a specific test result, OR it may "
+        f"be a general question about a medical condition, diagnosis, or "
+        f"situation. Tailor your response accordingly:\n"
+        f"- If the request references specific test results or values, explain "
+        f"what those results mean.\n"
+        f"- If the request is a general question or asks you to explain a "
+        f"condition/diagnosis, provide a clear, patient-friendly explanation "
+        f"without assuming any specific test was performed.\n\n"
         f"## Rules\n"
         f"1. Write in plain, compassionate language appropriate for patients.\n"
         f"2. Do NOT include any patient-identifying information.\n"
-        f"3. Interpret findings -- explain WHAT results mean for the patient. "
-        f"The patient already has their results; do NOT simply recite values "
-        f"they can already read. Synthesize findings into meaningful clinical "
-        f"statements that help the patient understand their health.\n"
+        f"3. Focus on explaining and educating. If test results are provided, "
+        f"synthesize findings into meaningful clinical statements — do NOT "
+        f"simply recite values. If no results are provided, explain the "
+        f"condition or topic in layman's terms.\n"
         f"4. NEVER suggest treatments, future testing, or hypothetical actions. "
         f"Do NOT write phrases like 'your doctor may recommend' or 'we may need to'. "
         f"The physician will add their own specific recommendations separately.\n"

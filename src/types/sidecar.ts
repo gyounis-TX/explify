@@ -119,6 +119,7 @@ export interface DetectTypeResponse {
   is_compound: boolean;
   compound_segments: CompoundSegmentInfo[];
   is_likely_normal: boolean;
+  report_date: string | null;
 }
 
 export interface ParseRequest {

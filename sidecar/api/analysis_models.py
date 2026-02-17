@@ -75,6 +75,7 @@ class DetectTypeResponse(BaseModel):
     is_compound: bool = False
     compound_segments: list[CompoundSegmentInfo] = Field(default_factory=list)
     is_likely_normal: bool = False
+    report_date: Optional[str] = None
 
 
 class DetectTypeRequest(BaseModel):

@@ -8,6 +8,7 @@ import { TypeSelectionModal } from "./TypeSelectionModal";
 import { isAdmin } from "../../services/adminAuth";
 import { getSession } from "../../services/supabase";
 import { isAuthConfigured } from "../../services/supabase";
+import { parseReportDate, formatReportDateShort } from "../../utils/parseReportDate";
 import "./ImportScreen.css";
 import "../shared/TypeModal.css";
 
@@ -47,6 +48,94 @@ function fileKey(file: File): string {
 
 function textEntryKey(entry: TextPasteEntry): string {
   return `text::${entry.id}`;
+}
+
+/**
+ * Reorder batch entries by report date within same-type groups.
+ * Oldest comes first (prior), newest last (current).
+ * Returns a new Map with entries in sorted order and leaves different-type entries in place.
+ */
+function reorderByDate(
+  results: Map<string, FileExtractionEntry>,
+  resolveType: (entry: FileExtractionEntry) => string | undefined,
+): Map<string, FileExtractionEntry> {
+  const entries = [...results.entries()];
+
+  // Group by resolved test type
+  const groups = new Map<string, Array<[string, FileExtractionEntry]>>();
+  for (const [key, entry] of entries) {
+    const type = resolveType(entry);
+    if (!type) continue;
+    if (!groups.has(type)) groups.set(type, []);
+    groups.get(type)!.push([key, entry]);
+  }
+
+  // Sort each group that has 2+ entries by report_date ascending (oldest first)
+  for (const [, group] of groups) {
+    if (group.length < 2) continue;
+    // Only sort if at least one entry has a parseable date
+    const hasAnyDate = group.some(([, e]) => parseReportDate(e.detectionResult?.report_date) !== null);
+    if (!hasAnyDate) continue;
+
+    group.sort(([, a], [, b]) => {
+      const da = parseReportDate(a.detectionResult?.report_date);
+      const db = parseReportDate(b.detectionResult?.report_date);
+      if (!da && !db) return 0;
+      if (!da) return 1; // no date goes after dated entries
+      if (!db) return -1;
+      return da.getTime() - db.getTime();
+    });
+  }
+
+  // Rebuild the map in sorted order: replace each type-group block with its sorted version
+  const sorted = new Map<string, FileExtractionEntry>();
+  const used = new Set<string>();
+
+  for (const [key, entry] of entries) {
+    if (used.has(key)) continue;
+    const type = resolveType(entry);
+    if (type && groups.has(type)) {
+      const group = groups.get(type)!;
+      for (const [gKey, gEntry] of group) {
+        sorted.set(gKey, gEntry);
+        used.add(gKey);
+      }
+      groups.delete(type); // only insert once
+    } else {
+      sorted.set(key, entry);
+      used.add(key);
+    }
+  }
+
+  return sorted;
+}
+
+/**
+ * Compute the display role label for a batch entry within its same-type group.
+ * Returns "Prior", "Current", or a numbered label for middle entries,
+ * or null if the entry's type has only one entry in the batch.
+ */
+function computeEntryRole(
+  key: string,
+  results: Map<string, FileExtractionEntry>,
+  resolveType: (entry: FileExtractionEntry) => string | undefined,
+): string | null {
+  const entry = results.get(key);
+  if (!entry) return null;
+  const type = resolveType(entry);
+  if (!type) return null;
+
+  // Collect same-type entries in map order
+  const sameType: string[] = [];
+  for (const [k, e] of results) {
+    if (resolveType(e) === type) sameType.push(k);
+  }
+  if (sameType.length < 2) return null;
+
+  const idx = sameType.indexOf(key);
+  if (idx === 0) return "Prior";
+  if (idx === sameType.length - 1) return "Current";
+  return `Report ${idx + 1}`;
 }
 
 // Module-level cache — survives component unmount during navigation.
@@ -115,7 +204,9 @@ export function ImportScreen() {
   const locationState = location.state as {
     preservedClinicalContext?: string;
     preservedQuickReasons?: string[];
+    priorExplainResponse?: import("../../types/sidecar").ExplainResponse;
   } | null;
+  const priorExplainResponse = locationState?.priorExplainResponse ?? null;
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>(_cache.selectedFiles);
   const mode: ImportMode = selectedFiles.length > 0 ? "pdf" : "text";
@@ -595,6 +686,13 @@ export function ImportScreen() {
           setExtractionResults(new Map(results));
         }
 
+        // Reorder by date within same-type groups (oldest first)
+        const reordered = reorderByDate(results, resolveEntryTestType);
+        // Replace results reference with reordered version
+        results.clear();
+        for (const [k, v] of reordered) results.set(k, v);
+        setExtractionResults(new Map(results));
+
         // Count successes
         const successes = [...results.values()].filter(
           (e) => e.status === "success",
@@ -696,6 +794,9 @@ export function ImportScreen() {
         state.templateId = Number(selectedTemplateValue.slice(4));
       } else if (selectedTemplateValue.startsWith("shared:")) {
         state.sharedTemplateSyncId = selectedTemplateValue.slice(7);
+      }
+      if (priorExplainResponse) {
+        state.priorExplainResponse = priorExplainResponse;
       }
       if (isBatch) {
         state.batchExtractionResults = successfulResults;
@@ -990,6 +1091,15 @@ export function ImportScreen() {
             <div className="extraction-preview">
               <h3 className="preview-title">Extraction Complete</h3>
 
+              {priorExplainResponse && (
+                <div className="phi-badge phi-badge--found" style={{ marginBottom: "var(--space-sm)" }}>
+                  <span className="phi-badge-icon">{"\u2139\uFE0F"}</span>
+                  <span>
+                    Prior report loaded ({priorExplainResponse.parsed_report.test_type_display}) — will be used for comparison
+                  </span>
+                </div>
+              )}
+
               {/* Multi-result: collapsible cards for each extraction */}
               {(() => {
                 const successEntries = [...extractionResults.entries()].filter(
@@ -1021,6 +1131,22 @@ export function ImportScreen() {
                               }}
                             >
                               <span className="preview-card-label">{label}</span>
+                              {(() => {
+                                const role = computeEntryRole(key, extractionResults, resolveEntryTestType);
+                                const dateDisplay = formatReportDateShort(entry.detectionResult?.report_date);
+                                return (
+                                  <>
+                                    {role && (
+                                      <span className={`preview-card-role preview-card-role--${role === "Prior" ? "prior" : "current"}`}>
+                                        {role}
+                                      </span>
+                                    )}
+                                    {dateDisplay && (
+                                      <span className="preview-card-date">{dateDisplay}</span>
+                                    )}
+                                  </>
+                                );
+                              })()}
                               <span className="preview-card-stats">
                                 {r.total_pages} pg &middot; {r.total_chars.toLocaleString()} chars
                               </span>

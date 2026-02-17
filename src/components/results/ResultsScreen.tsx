@@ -884,7 +884,7 @@ export function ResultsScreen() {
       <div className="results-screen">
         <div className="results-main-panel">
           <header className="results-header">
-            <h2 className="results-title">Generated Letter</h2>
+            <h2 className="results-title">Patient Explanation</h2>
           </header>
 
           <div className="refine-toolbar">
@@ -899,7 +899,7 @@ export function ResultsScreen() {
 
           <div className="results-comment-panel">
             <div className="comment-panel-header">
-              <h3>Result Comment</h3>
+              <h3>Patient Explanation</h3>
               <button
                 className={`like-btn${isLiked ? " like-btn--active" : ""}`}
                 onClick={handleLikeLetter}
@@ -930,7 +930,11 @@ export function ResultsScreen() {
             <button
               className="results-back-btn results-back-btn--secondary"
               onClick={() => {
-                navigate("/", { state: { preservedClinicalContext: clinicalContext, preservedQuickReasons: quickReasons } });
+                navigate("/", { state: {
+                  preservedClinicalContext: clinicalContext,
+                  preservedQuickReasons: quickReasons,
+                  priorExplainResponse: currentResponse,
+                } });
               }}
             >
               New Report, Same Patient
@@ -1168,7 +1172,11 @@ export function ResultsScreen() {
             className="results-back-btn results-back-btn--secondary"
             onClick={() => {
               if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
-              navigate("/", { state: { preservedClinicalContext: clinicalContext, preservedQuickReasons: quickReasons } });
+              navigate("/", { state: {
+                preservedClinicalContext: clinicalContext,
+                preservedQuickReasons: quickReasons,
+                priorExplainResponse: currentResponse,
+              } });
             }}
           >
             New Report, Same Patient

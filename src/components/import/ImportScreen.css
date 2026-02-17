@@ -1270,4 +1270,33 @@
   }
 }
 
+/* Prior / Current Role Labels */
+.preview-card-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.preview-card-role--prior {
+  background-color: var(--color-gray-100);
+  color: var(--color-text-secondary);
+}
+
+.preview-card-role--current {
+  background-color: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.preview-card-date {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Type Selection Modal — shared styles imported from TypeModal.css */

@@ -91,6 +91,8 @@ export function AdminScreen() {
   const [hipaaError, setHipaaError] = useState<string | null>(null);
   const [exportingBaa, setExportingBaa] = useState(false);
   const [exportingAudit, setExportingAudit] = useState(false);
+  const [baaExpanded, setBaaExpanded] = useState(false);
+  const [auditExpanded, setAuditExpanded] = useState(false);
 
   // Billing admin state
   const [billingConfig, setBillingConfig] = useState<Record<string, string>>({});
@@ -910,87 +912,104 @@ export function AdminScreen() {
         ) : (
           <>
             {/* BAA Acceptances */}
-            <h4 className="settings-section-title" style={{ marginTop: "var(--space-md)" }}>
+            <h4
+              className="settings-section-title settings-collapsible-header"
+              style={{ marginTop: "var(--space-md)", cursor: "pointer", userSelect: "none" }}
+              onClick={() => setBaaExpanded(!baaExpanded)}
+            >
+              <span className={`settings-collapse-arrow${baaExpanded ? " settings-collapse-arrow--open" : ""}`}>&#9656;</span>
               BAA Acceptances
+              <span className="settings-collapse-count">({baaAcceptances.length})</span>
             </h4>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-              <p className="settings-description" style={{ margin: 0 }}>
-                {baaAcceptances.length} acceptance{baaAcceptances.length !== 1 ? "s" : ""} on record.
-              </p>
-              <button
-                className="dashboard-refresh-btn"
-                onClick={handleExportBaaCsv}
-                disabled={exportingBaa}
-              >
-                {exportingBaa ? "Exporting..." : "Export CSV"}
-              </button>
-            </div>
-            {baaAcceptances.length > 0 && (
-              <div className="usage-table-wrapper">
-                <table className="usage-table">
-                  <thead>
-                    <tr>
-                      <th>Email</th>
-                      <th>Version</th>
-                      <th>Accepted At</th>
-                      <th>IP Address</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {baaAcceptances.map((row, i) => (
-                      <tr key={i}>
-                        <td>{String(row.email ?? "")}</td>
-                        <td>{String(row.baa_version ?? "")}</td>
-                        <td>{row.accepted_at ? new Date(String(row.accepted_at)).toLocaleString() : ""}</td>
-                        <td>{String(row.ip_address ?? "")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {baaExpanded && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                  <button
+                    className="dashboard-refresh-btn"
+                    onClick={handleExportBaaCsv}
+                    disabled={exportingBaa}
+                  >
+                    {exportingBaa ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
+                {baaAcceptances.length > 0 && (
+                  <div className="usage-table-wrapper">
+                    <table className="usage-table">
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Version</th>
+                          <th>Accepted At</th>
+                          <th>IP Address</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {baaAcceptances.map((row, i) => (
+                          <tr key={i}>
+                            <td>{String(row.email ?? "")}</td>
+                            <td>{String(row.baa_version ?? "")}</td>
+                            <td>{row.accepted_at ? new Date(String(row.accepted_at)).toLocaleString() : ""}</td>
+                            <td>{String(row.ip_address ?? "")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
 
             {/* PHI Access Log */}
-            <h4 className="settings-section-title" style={{ marginTop: "var(--space-xl)" }}>
+            <h4
+              className="settings-section-title settings-collapsible-header"
+              style={{ marginTop: "var(--space-xl)", cursor: "pointer", userSelect: "none" }}
+              onClick={() => setAuditExpanded(!auditExpanded)}
+            >
+              <span className={`settings-collapse-arrow${auditExpanded ? " settings-collapse-arrow--open" : ""}`}>&#9656;</span>
               PHI Access Log
+              <span className="settings-collapse-count">({auditLogTotal.toLocaleString()})</span>
             </h4>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-              <p className="settings-description" style={{ margin: 0 }}>
-                Showing {auditLogItems.length} of {auditLogTotal.toLocaleString()} entries.
-              </p>
-              <button
-                className="dashboard-refresh-btn"
-                onClick={handleExportAuditCsv}
-                disabled={exportingAudit}
-              >
-                {exportingAudit ? "Exporting..." : "Export CSV"}
-              </button>
-            </div>
-            {auditLogItems.length > 0 && (
-              <div className="usage-table-wrapper">
-                <table className="usage-table">
-                  <thead>
-                    <tr>
-                      <th>Email</th>
-                      <th>Action</th>
-                      <th>Resource</th>
-                      <th>Timestamp</th>
-                      <th>IP Address</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLogItems.map((row, i) => (
-                      <tr key={i}>
-                        <td>{String(row.email ?? "")}</td>
-                        <td>{String(row.action ?? "")}</td>
-                        <td>{row.resource_type ? `${row.resource_type}/${row.resource_id ?? ""}` : ""}</td>
-                        <td>{row.created_at ? new Date(String(row.created_at)).toLocaleString() : ""}</td>
-                        <td>{String(row.ip_address ?? "")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {auditExpanded && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                  <p className="settings-description" style={{ margin: 0 }}>
+                    Showing {auditLogItems.length} of {auditLogTotal.toLocaleString()} entries.
+                  </p>
+                  <button
+                    className="dashboard-refresh-btn"
+                    onClick={handleExportAuditCsv}
+                    disabled={exportingAudit}
+                  >
+                    {exportingAudit ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
+                {auditLogItems.length > 0 && (
+                  <div className="usage-table-wrapper">
+                    <table className="usage-table">
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Action</th>
+                          <th>Resource</th>
+                          <th>Timestamp</th>
+                          <th>IP Address</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditLogItems.map((row, i) => (
+                          <tr key={i}>
+                            <td>{String(row.email ?? "")}</td>
+                            <td>{String(row.action ?? "")}</td>
+                            <td>{row.resource_type ? `${row.resource_type}/${row.resource_id ?? ""}` : ""}</td>
+                            <td>{row.created_at ? new Date(String(row.created_at)).toLocaleString() : ""}</td>
+                            <td>{String(row.ip_address ?? "")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

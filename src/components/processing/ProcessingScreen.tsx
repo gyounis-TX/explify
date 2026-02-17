@@ -158,6 +158,7 @@ export function ProcessingScreen() {
     quickReasons?: string[];
     batchExtractionResults?: Array<{ key: string; result: ExtractionResult }>;
     testTypes?: Record<string, string>;
+    priorExplainResponse?: ExplainResponse;
   } | null;
   const extractionResult = locationState?.extractionResult;
   const templateId = locationState?.templateId;
@@ -167,6 +168,7 @@ export function ProcessingScreen() {
   const quickReasons = locationState?.quickReasons;
   const batchExtractionResults = locationState?.batchExtractionResults;
   const testTypes = locationState?.testTypes;
+  const priorExplainResponse = locationState?.priorExplainResponse;
   const isBatchMode = batchExtractionResults != null && batchExtractionResults.length > 1;
 
   const { showToast } = useToast();
@@ -218,6 +220,22 @@ export function ProcessingScreen() {
     }
 
     try {
+      // Build prior summaries from Same Patient flow
+      const priorSummaries: Array<{ label: string; test_type_display: string; measurements_summary: string }> | undefined =
+        priorExplainResponse ? (() => {
+          const m = priorExplainResponse.explanation.measurements || [];
+          const mSummary = m
+            .slice(0, 5)
+            .map((mx) => `${mx.abbreviation}: ${mx.value} ${mx.unit} [${mx.status}]`)
+            .join("; ");
+          if (!mSummary) return undefined;
+          return [{
+            label: "Prior report",
+            test_type_display: priorExplainResponse.parsed_report.test_type_display || "Unknown",
+            measurements_summary: mSummary,
+          }];
+        })() : undefined;
+
       const stream = sidecarApi.explainReportStream({
         extraction_result: extractionResult,
         test_type: testType,
@@ -227,6 +245,7 @@ export function ProcessingScreen() {
         short_comment: true,
         deep_analysis: deepAnalysis || undefined,
         quick_reasons: quickReasons,
+        batch_prior_summaries: priorSummaries,
       });
 
       for await (const event of stream) {
@@ -259,15 +278,22 @@ export function ProcessingScreen() {
             });
 
           setCurrentStep("done");
-          navigate("/results", {
-            state: {
-              explainResponse: response,
-              extractionResult,
-              templateId,
-              clinicalContext,
-              quickReasons,
-            },
-          });
+          // If we have a prior response from Same Patient flow, pass both for comparison
+          const navState: Record<string, unknown> = {
+            explainResponse: response,
+            extractionResult,
+            templateId,
+            clinicalContext,
+            quickReasons,
+          };
+          if (priorExplainResponse) {
+            navState.batchResponses = [priorExplainResponse, response];
+            navState.batchLabels = [
+              `Prior: ${priorExplainResponse.parsed_report.test_type_display}`,
+              `Current: ${response.parsed_report.test_type_display}`,
+            ];
+          }
+          navigate("/results", { state: navState });
           return;
         }
 
@@ -283,7 +309,7 @@ export function ProcessingScreen() {
       setError(categorizeError(msg));
       setCurrentStep("error");
     }
-  }, [extractionResult, templateId, sharedTemplateSyncId, clinicalContext, quickReasons, testType, deepAnalysis, navigate, showToast]);
+  }, [extractionResult, templateId, sharedTemplateSyncId, clinicalContext, quickReasons, testType, deepAnalysis, priorExplainResponse, navigate, showToast]);
 
   useEffect(() => {
     if (isBatchMode) return;
@@ -301,6 +327,23 @@ export function ProcessingScreen() {
       const labels: string[] = [];
       const usedOpenings: string[] = [];
       const batchSummaries: Array<{ label: string; test_type_display: string; measurements_summary: string }> = [];
+
+      // Seed batch summaries with prior response from Same Patient flow
+      if (priorExplainResponse) {
+        const m = priorExplainResponse.explanation.measurements || [];
+        const mSummary = m
+          .slice(0, 5)
+          .map((mx: { abbreviation: string; value: number; unit: string; status: string }) =>
+            `${mx.abbreviation}: ${mx.value} ${mx.unit} [${mx.status}]`)
+          .join("; ");
+        if (mSummary) {
+          batchSummaries.push({
+            label: "Prior report",
+            test_type_display: priorExplainResponse.parsed_report.test_type_display || "Unknown",
+            measurements_summary: mSummary,
+          });
+        }
+      }
 
       for (let i = 0; i < batchExtractionResults!.length; i++) {
         const br = batchExtractionResults![i];

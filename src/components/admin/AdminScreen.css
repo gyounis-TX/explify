@@ -175,3 +175,26 @@
     max-width: none;
   }
 }
+
+/* Collapsible section headers */
+.settings-collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.settings-collapse-arrow {
+  display: inline-block;
+  font-size: 0.85em;
+  transition: transform 0.15s ease;
+}
+
+.settings-collapse-arrow--open {
+  transform: rotate(90deg);
+}
+
+.settings-collapse-count {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
