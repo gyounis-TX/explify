@@ -57,7 +57,8 @@ class TestHistory:
             "full_response": {"explanation": {"overall_summary": "All good."}},
         }
         defaults.update(overrides)
-        return db.save_history(**defaults)
+        result = db.save_history(**defaults)
+        return result["id"]
 
     def test_save_and_get(self, db: Database):
         record_id = self._make_record(db)

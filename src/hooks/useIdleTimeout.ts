@@ -19,8 +19,8 @@ export function useIdleTimeout({
   onWarn?: () => void;
   onLogout: () => void;
 }) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const warnTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const warnTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const resetTimers = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
