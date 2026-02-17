@@ -1632,6 +1632,10 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
         use_analogies = explain_request.use_analogies if explain_request.use_analogies is not None else settings.use_analogies
         include_lifestyle = explain_request.include_lifestyle_recommendations if explain_request.include_lifestyle_recommendations is not None else settings.include_lifestyle_recommendations
         humanization_level = settings.humanization_level
+        scrubbed_avoid_openings = (
+            [scrub_phi(ao, provider_names=providers).scrubbed_text for ao in explain_request.avoid_openings]
+            if explain_request.avoid_openings else None
+        )
 
         system_prompt = prompt_engine.build_system_prompt(
             literacy_level=literacy_level,
@@ -1779,10 +1783,6 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
         scrubbed_next_steps = (
             [scrub_phi(ns, provider_names=providers).scrubbed_text for ns in explain_request.next_steps]
             if explain_request.next_steps else None
-        )
-        scrubbed_avoid_openings = (
-            [scrub_phi(ao, provider_names=providers).scrubbed_text for ao in explain_request.avoid_openings]
-            if explain_request.avoid_openings else None
         )
         scrubbed_batch_summaries = None
         if explain_request.batch_prior_summaries:
