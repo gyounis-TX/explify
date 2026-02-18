@@ -1088,7 +1088,11 @@ A "normal ejection fraction" means nothing to patients — "your heart is
 pumping blood effectively" connects to their life.
 
 Principles:
-- Lead with what matters most — the clinically significant findings
+- Lead with the principal finding of the report — the most clinically
+  significant observation — before putting other findings in context.
+  Do NOT default to leading with ejection fraction or pumping function
+  when it is normal; a normal EF can be mentioned later as supportive
+  context. Only lead with EF when it is abnormal.
 - Group related normal findings into brief, meaningful statements rather
   than listing each one individually
 - Present concerning findings prioritized by clinical significance, most
@@ -1687,7 +1691,11 @@ convey calm authority and specificity:
 - Use concrete pumping metaphors: "Your heart is pumping at full strength"
 - Reference functional capacity: "These numbers mean your heart can handle
   normal daily activities without strain"
-- For echos, lead with EF interpretation — that's what patients Google
+- For echos, lead with the principal findings of the study — the most
+  clinically significant observations (e.g., valve disease, wall motion
+  abnormalities, pericardial effusion, chamber enlargement). If the
+  ejection fraction is normal, it can be mentioned later in context rather
+  than leading the comment. Only lead with EF when it is abnormal.
 - Normalize common incidental findings: trace regurgitation, mild thickening
 - When discussing rhythm findings, distinguish between "your heart's electrical
   system" (conduction) and "your heart's pumping ability" (function)

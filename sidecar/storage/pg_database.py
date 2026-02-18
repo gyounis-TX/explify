@@ -1322,6 +1322,86 @@ class PgDatabase:
                 logger.exception("Failed to load practice templates for user %s", user_id)
         return []
 
+    # --- User Shares (sharing teaching points & templates) ---
+
+    async def get_share_recipients(self, user_id: str | None = None) -> list[dict[str, Any]]:
+        """Return users I am sharing my content with."""
+        if not user_id:
+            return []
+        pool = await _get_pool()
+        rows = await pool.fetch(
+            """SELECT us.id AS share_id, us.recipient_id AS recipient_user_id,
+                      u.email AS recipient_email, us.created_at
+               FROM user_shares us
+               JOIN users u ON u.id = us.recipient_id
+               WHERE us.sharer_id = $1::uuid
+               ORDER BY us.created_at DESC""",
+            user_id,
+        )
+        return [_normalize_row(dict(r)) for r in rows]
+
+    async def get_share_sources(self, user_id: str | None = None) -> list[dict[str, Any]]:
+        """Return users who are sharing their content with me."""
+        if not user_id:
+            return []
+        pool = await _get_pool()
+        rows = await pool.fetch(
+            """SELECT us.id AS share_id, us.sharer_id AS sharer_user_id,
+                      u.email AS sharer_email, us.created_at
+               FROM user_shares us
+               JOIN users u ON u.id = us.sharer_id
+               WHERE us.recipient_id = $1::uuid
+               ORDER BY us.created_at DESC""",
+            user_id,
+        )
+        return [_normalize_row(dict(r)) for r in rows]
+
+    async def lookup_user_by_email(self, email: str, user_id: str | None = None) -> dict[str, Any] | None:
+        """Look up a user by email. Returns {user_id, email} or None."""
+        pool = await _get_pool()
+        row = await pool.fetchrow(
+            "SELECT id AS user_id, email FROM users WHERE LOWER(email) = LOWER($1)",
+            email,
+        )
+        return dict(row) if row else None
+
+    async def add_share_recipient(self, recipient_email: str, user_id: str | None = None) -> int:
+        """Add a share relationship. Returns the share ID."""
+        if not user_id:
+            raise ValueError("User ID required")
+        pool = await _get_pool()
+        # Look up recipient
+        recipient = await pool.fetchrow(
+            "SELECT id FROM users WHERE LOWER(email) = LOWER($1)",
+            recipient_email,
+        )
+        if not recipient:
+            raise ValueError(f"No user found with email '{recipient_email}'")
+        recipient_id = str(recipient["id"])
+        if recipient_id == user_id:
+            raise ValueError("Cannot share with yourself")
+        row = await pool.fetchrow(
+            """INSERT INTO user_shares (sharer_id, recipient_id)
+               VALUES ($1::uuid, $2::uuid)
+               ON CONFLICT (sharer_id, recipient_id) DO NOTHING
+               RETURNING id""",
+            user_id, recipient_id,
+        )
+        if not row:
+            raise ValueError(f"Already sharing with {recipient_email}")
+        return int(row["id"])
+
+    async def remove_share_recipient(self, share_id: int, user_id: str | None = None) -> bool:
+        """Remove a share relationship. Returns True if deleted."""
+        if not user_id:
+            return False
+        pool = await _get_pool()
+        result = await pool.execute(
+            "DELETE FROM user_shares WHERE id = $1 AND sharer_id = $2::uuid",
+            share_id, user_id,
+        )
+        return result.endswith("1")
+
     # --- Sync Helpers (stubs for web mode) ---
     # In web mode, sync is handled at the Supabase/cloud level.
 

@@ -1,11 +1,9 @@
 /**
  * Sharing management — user-to-user sharing relationships.
- *
- * TODO: Migrate to sidecar API endpoints after AWS migration.
- * Currently disabled since direct Supabase client access was removed.
+ * Delegates to sidecar API endpoints.
  */
 
-import { getSession, isAuthConfigured } from "./supabase";
+import { sidecarApi } from "./sidecarApi";
 
 export interface ShareRecipient {
   share_id: number;
@@ -21,34 +19,18 @@ export interface ShareSource {
   created_at: string;
 }
 
-export async function lookupUserByEmail(
-  _email: string,
-): Promise<{ user_id: string; email: string } | null> {
-  throw new Error("Sharing is not yet available. Coming soon.");
+export async function addShareRecipient(recipientEmail: string): Promise<void> {
+  await sidecarApi.addShareRecipient(recipientEmail);
 }
 
-export async function addShareRecipient(
-  _recipientEmail: string,
-): Promise<void> {
-  throw new Error("Sharing is not yet available. Coming soon.");
-}
-
-export async function removeShareRecipient(_shareId: number): Promise<void> {
-  throw new Error("Sharing is not yet available. Coming soon.");
+export async function removeShareRecipient(shareId: number): Promise<void> {
+  await sidecarApi.removeShareRecipient(shareId);
 }
 
 export async function getMyShareRecipients(): Promise<ShareRecipient[]> {
-  if (!isAuthConfigured()) return [];
-  const session = await getSession();
-  if (!session) return [];
-  // TODO: Call sidecar API endpoint
-  return [];
+  return sidecarApi.getShareRecipients();
 }
 
 export async function getMyShareSources(): Promise<ShareSource[]> {
-  if (!isAuthConfigured()) return [];
-  const session = await getSession();
-  if (!session) return [];
-  // TODO: Call sidecar API endpoint
-  return [];
+  return sidecarApi.getShareSources();
 }

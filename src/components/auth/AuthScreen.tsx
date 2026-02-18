@@ -75,6 +75,11 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
       e.preventDefault();
       if (!email.trim() || !password.trim()) return;
 
+      if (mode === "signup" && password.length < 8) {
+        showToast("error", "Password must be at least 8 characters.");
+        return;
+      }
+
       setLoading(true);
       try {
         if (mode === "signin") {
@@ -570,7 +575,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               required
-              minLength={6}
+              minLength={8}
               autoComplete="current-password"
             />
           </label>

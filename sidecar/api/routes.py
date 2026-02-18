@@ -2934,6 +2934,48 @@ async def update_teaching_point(request: Request, point_id: str, body: dict = Bo
     return updated
 
 
+# ---------------------------------------------------------------------------
+# Sharing — user-to-user sharing of teaching points & templates
+# ---------------------------------------------------------------------------
+
+@router.get("/shares/recipients")
+async def get_share_recipients(request: Request):
+    """Return users I am sharing my content with."""
+    user_id = _get_user_id(request)
+    return await _db_call("get_share_recipients", user_id=user_id)
+
+
+@router.get("/shares/sources")
+async def get_share_sources(request: Request):
+    """Return users who are sharing their content with me."""
+    user_id = _get_user_id(request)
+    return await _db_call("get_share_sources", user_id=user_id)
+
+
+@router.post("/shares/recipients")
+async def add_share_recipient(request: Request, body: dict = Body(...)):
+    """Add a share relationship by recipient email."""
+    user_id = _get_user_id(request)
+    email = body.get("email", "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+    try:
+        share_id = await _db_call("add_share_recipient", email, user_id=user_id)
+        return {"share_id": share_id, "recipient_email": email}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/shares/recipients/{share_id}")
+async def remove_share_recipient(request: Request, share_id: int):
+    """Remove a share relationship."""
+    user_id = _get_user_id(request)
+    deleted = await _db_call("remove_share_recipient", share_id, user_id=user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Share not found.")
+    return {"deleted": True, "share_id": share_id}
+
+
 @router.post("/letters/generate", response_model=LetterResponse, status_code=201)
 @limiter.limit(ANALYZE_RATE_LIMIT)
 async def generate_letter(request: Request, body: LetterGenerateRequest = Body(...)):

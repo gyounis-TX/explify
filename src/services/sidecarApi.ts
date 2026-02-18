@@ -1575,6 +1575,45 @@ class SidecarApi {
     }
     return response.json();
   }
+
+  // --- Sharing ---
+
+  async getShareRecipients(): Promise<Array<{ share_id: number; recipient_user_id: string; recipient_email: string; created_at: string }>> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/shares/recipients`);
+    if (!response.ok) return [];
+    return response.json();
+  }
+
+  async getShareSources(): Promise<Array<{ share_id: number; sharer_user_id: string; sharer_email: string; created_at: string }>> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/shares/sources`);
+    if (!response.ok) return [];
+    return response.json();
+  }
+
+  async addShareRecipient(email: string): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/shares/recipients`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ detail: "Failed to add share." }));
+      throw new Error(data.detail || "Failed to add share.");
+    }
+  }
+
+  async removeShareRecipient(shareId: number): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/shares/recipients/${shareId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      throw new Error("Failed to remove share.");
+    }
+  }
 }
 
 export const sidecarApi = new SidecarApi();
