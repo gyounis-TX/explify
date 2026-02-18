@@ -1,5 +1,6 @@
 :root {
   /* Primary palette - calming blues */
+  --color-primary: #2563eb;
   --color-primary-50: #eef6ff;
   --color-primary-100: #d9ecff;
   --color-primary-200: #bcdcff;
