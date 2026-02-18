@@ -387,3 +387,91 @@
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border);
 }
+
+/* Tab bar */
+.tp-tab-bar {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xl);
+  border-bottom: 2px solid var(--color-border);
+}
+
+.tp-tab {
+  padding: var(--space-sm) var(--space-lg);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tp-tab:hover {
+  color: var(--color-text);
+}
+
+.tp-tab--active {
+  color: var(--color-primary-600);
+  border-bottom-color: var(--color-primary-600);
+}
+
+/* Practice Library cards */
+.tp-card--practice {
+  border-left: 3px solid var(--color-gray-300);
+}
+
+.tp-card--contributor {
+  border-left-color: var(--color-primary-400);
+  background-color: #f0f9ff;
+}
+
+.tp-card--browse {
+  border-left-color: var(--color-gray-300);
+}
+
+/* Badges */
+.tp-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tp-badge--auto {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.tp-badge--browse {
+  background-color: var(--color-gray-100);
+  color: var(--color-text-secondary);
+}
+
+/* Adopt button */
+.tp-adopt-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid var(--color-primary-300);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-600);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tp-adopt-btn:hover:not(:disabled) {
+  background-color: var(--color-primary-50);
+  border-color: var(--color-primary-500);
+}
+
+.tp-adopt-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

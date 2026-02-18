@@ -281,6 +281,7 @@ async def list_members(request: Request):
             "user_id": str(r["user_id"]),
             "email": r["email"],
             "role": r["role"],
+            "share_content": r["share_content"],
             "joined_at": str(r["joined_at"]) if r["joined_at"] else None,
             "report_count": r["report_count"],
             "last_active": str(r["last_active"]) if r["last_active"] else None,
@@ -335,6 +336,31 @@ async def update_member_role(member_user_id: str, request: Request):
 
     _invalidate_practice_cache(member_user_id)
     return {"user_id": member_user_id, "role": new_role}
+
+
+@router.patch("/members/{member_user_id}/share-content")
+async def update_member_share_content(member_user_id: str, request: Request):
+    """Toggle share_content for a member. Admin only."""
+    practice_id, _ = await _require_practice_admin(request)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    share_content = body.get("share_content")
+    if not isinstance(share_content, bool):
+        raise HTTPException(status_code=400, detail="share_content must be a boolean.")
+
+    pool = await _get_pool()
+    result = await pool.execute(
+        "UPDATE practice_members SET share_content = $1 WHERE practice_id = $2::uuid AND user_id = $3::uuid",
+        share_content, practice_id, member_user_id,
+    )
+    if result.endswith("0"):
+        raise HTTPException(status_code=404, detail="Member not found in this practice.")
+
+    _invalidate_practice_cache(member_user_id)
+    return {"user_id": member_user_id, "share_content": share_content}
 
 
 # ---------------------------------------------------------------------------

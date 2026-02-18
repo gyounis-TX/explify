@@ -436,6 +436,17 @@ export interface SharedTeachingPoint {
   updated_at: string;
 }
 
+export interface PracticeLibraryPoint {
+  id: string | number;
+  sync_id: string;
+  text: string;
+  test_type: string | null;
+  sharer_email: string;
+  contributor: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SharedTemplate {
   id: string | number;
   sync_id: string;

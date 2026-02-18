@@ -28,6 +28,7 @@ import type {
   TeachingPoint,
   SharedTeachingPoint,
   SharedTemplate,
+  PracticeLibraryPoint,
 } from "../types/sidecar";
 import type { BillingStatus, TierLimits } from "../types/billing";
 import type { PracticeInfo, PracticeMember, Practice, PracticeUsageSummary } from "../types/practice";
@@ -1532,6 +1533,43 @@ class SidecarApi {
     if (!response.ok) {
       await this.handleErrorResponse(response);
     }
+  }
+
+  async updateMemberShareContent(
+    userId: string,
+    shareContent: boolean,
+  ): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/practice/members/${userId}/share-content`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ share_content: shareContent }),
+      },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+  }
+
+  async browsePracticeLibrary(
+    testType?: string,
+  ): Promise<PracticeLibraryPoint[]> {
+    const baseUrl = await this.ensureInitialized();
+    const params = new URLSearchParams();
+    if (testType) {
+      params.set("test_type", testType);
+    }
+    const qs = params.toString();
+    const response = await this.fetchWithAuth(
+      `${baseUrl}/teaching-points/practice-library${qs ? `?${qs}` : ""}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+    return response.json();
   }
 
   async updatePracticeSettings(

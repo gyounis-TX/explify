@@ -4,7 +4,7 @@ import { queueUpsertAfterMutation, deleteFromSupabase } from "../../services/syn
 import { getMyShareRecipients, type ShareRecipient } from "../../services/sharingService";
 import { isAuthConfigured, getSession } from "../../services/supabase";
 import { useToast } from "../shared/Toast";
-import type { TeachingPoint, SharedTeachingPoint } from "../../types/sidecar";
+import type { TeachingPoint, SharedTeachingPoint, PracticeLibraryPoint } from "../../types/sidecar";
 import "./TeachingPointsScreen.css";
 
 export function TeachingPointsScreen() {
@@ -30,6 +30,14 @@ export function TeachingPointsScreen() {
   // History test types for dropdown
   const [historyTypes, setHistoryTypes] = useState<{ test_type: string; test_type_display: string }[]>([]);
 
+  // Tab state + practice library
+  const [activeTab, setActiveTab] = useState<"mine" | "practice">("mine");
+  const [hasSharingPractice, setHasSharingPractice] = useState(false);
+  const [practiceLibrary, setPracticeLibrary] = useState<PracticeLibraryPoint[]>([]);
+  const [practiceLibraryLoaded, setPracticeLibraryLoaded] = useState(false);
+  const [practiceLibraryLoading, setPracticeLibraryLoading] = useState(false);
+  const [adoptingIds, setAdoptingIds] = useState<Set<string | number>>(new Set());
+
   const fetchPoints = useCallback(async () => {
     try {
       const [pts, shared] = await Promise.all([
@@ -50,6 +58,22 @@ export function TeachingPointsScreen() {
     sidecarApi.listHistoryTestTypes().then(setHistoryTypes).catch(() => {});
   }, [fetchPoints]);
 
+  // Check if user is in a sharing-enabled practice
+  useEffect(() => {
+    async function checkPractice() {
+      if (!isAuthConfigured()) return;
+      const session = await getSession();
+      if (!session?.user) return;
+      try {
+        const info = await sidecarApi.getMyPractice();
+        if (info?.practice?.sharing_enabled) {
+          setHasSharingPractice(true);
+        }
+      } catch {}
+    }
+    checkPractice();
+  }, []);
+
   useEffect(() => {
     async function loadRecipients() {
       if (!isAuthConfigured()) return;
@@ -62,6 +86,22 @@ export function TeachingPointsScreen() {
     }
     loadRecipients();
   }, []);
+
+  // Lazy-load practice library when tab is first selected
+  useEffect(() => {
+    if (activeTab === "practice" && !practiceLibraryLoaded && !practiceLibraryLoading) {
+      setPracticeLibraryLoading(true);
+      sidecarApi.browsePracticeLibrary()
+        .then((pts) => {
+          setPracticeLibrary(pts);
+          setPracticeLibraryLoaded(true);
+        })
+        .catch(() => {
+          showToast("error", "Failed to load practice library.");
+        })
+        .finally(() => setPracticeLibraryLoading(false));
+    }
+  }, [activeTab, practiceLibraryLoaded, practiceLibraryLoading, showToast]);
 
   const getDisplayName = (typeId: string): string => {
     const found = historyTypes.find(t => t.test_type === typeId);
@@ -159,6 +199,28 @@ export function TeachingPointsScreen() {
     }
   }, [editingId, editText, editScope, showToast]);
 
+  const handleAdopt = useCallback(async (point: PracticeLibraryPoint) => {
+    if (adoptingIds.has(point.id)) return;
+    setAdoptingIds((prev) => new Set(prev).add(point.id));
+    try {
+      const tp = await sidecarApi.createTeachingPoint({
+        text: point.text,
+        test_type: point.test_type ?? undefined,
+      });
+      setTeachingPoints((prev) => [tp, ...prev]);
+      queueUpsertAfterMutation("teaching_points", tp.id).catch(() => {});
+      showToast("success", "Added to your library.");
+    } catch {
+      showToast("error", "Failed to add teaching point.");
+    } finally {
+      setAdoptingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(point.id);
+        return next;
+      });
+    }
+  }, [adoptingIds, showToast]);
+
   if (loading) {
     return (
       <div className="tp-screen">
@@ -178,123 +240,107 @@ export function TeachingPointsScreen() {
         </p>
       </header>
 
-      {/* Data Entry */}
-      <section className="tp-section tp-entry">
-        <h3 className="tp-section-title">Add Teaching Point</h3>
-        <p className="tp-section-desc">
-          Write an instruction the AI should follow when generating
-          explanations. For example: "Always mention diastolic dysfunction
-          grading" or "De-emphasize trace regurgitation".
-        </p>
-        <div className="tp-entry-form">
-          <textarea
-            className="tp-entry-textarea"
-            placeholder="e.g. Always explain the significance of E/A ratio in the context of diastolic function..."
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && newText.trim()) {
-                e.preventDefault();
-                handleAdd();
-              }
-            }}
-            rows={4}
-          />
-          <div className="tp-entry-actions">
-            <select
-              className="tp-entry-type-dropdown"
-              value={addType}
-              onChange={(e) => setAddType(e.target.value)}
-            >
-              <option value="__all__">All types</option>
-              {historyTypes.map((ht) => (
-                <option key={ht.test_type} value={ht.test_type}>
-                  {ht.test_type_display}
-                </option>
-              ))}
-            </select>
-            <button
-              className="tp-entry-btn"
-              disabled={!newText.trim() || saving}
-              onClick={handleAdd}
-            >
-              {saving ? "Saving..." : "Add"}
-            </button>
-          </div>
+      {/* Tab bar — only shown when user is in a sharing-enabled practice */}
+      {hasSharingPractice && (
+        <div className="tp-tab-bar">
+          <button
+            className={`tp-tab ${activeTab === "mine" ? "tp-tab--active" : ""}`}
+            onClick={() => setActiveTab("mine")}
+          >
+            My Library
+          </button>
+          <button
+            className={`tp-tab ${activeTab === "practice" ? "tp-tab--active" : ""}`}
+            onClick={() => setActiveTab("practice")}
+          >
+            Practice Library
+          </button>
         </div>
-      </section>
+      )}
 
-      {/* Library */}
-      <section className="tp-section tp-library">
-        <h3 className="tp-section-title">
-          Library
-          {teachingPoints.length > 0 && (
-            <span className="tp-library-count">{teachingPoints.length}</span>
-          )}
-        </h3>
-        {teachingPoints.length === 0 ? (
-          <div className="tp-empty">
-            <p>No teaching points yet.</p>
-            <p className="tp-empty-hint">
-              Add your first teaching point above to start customizing the AI.
+      {/* My Library tab (default) */}
+      {activeTab === "mine" && (
+        <>
+          {/* Data Entry */}
+          <section className="tp-section tp-entry">
+            <h3 className="tp-section-title">Add Teaching Point</h3>
+            <p className="tp-section-desc">
+              Write an instruction the AI should follow when generating
+              explanations. For example: &quot;Always mention diastolic dysfunction
+              grading&quot; or &quot;De-emphasize trace regurgitation&quot;.
             </p>
-          </div>
-        ) : (
-          <div className="tp-library-list">
-            {teachingPoints.map((tp) => (
-              <div key={tp.id} className="tp-card">
-                {editingId === tp.id ? (
-                  <div className="tp-card-edit">
-                    <textarea
-                      className="tp-edit-textarea"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      rows={3}
-                      autoFocus
-                    />
-                    <div className="tp-edit-scope">
-                      <span className="tp-edit-scope-label">Scope:</span>
-                      <select
-                        className="tp-edit-scope-dropdown"
-                        value={editScope}
-                        onChange={(e) => setEditScope(e.target.value)}
-                      >
-                        <option value="__all__">All types</option>
-                        {historyTypes.map((ht) => (
-                          <option key={ht.test_type} value={ht.test_type}>
-                            {ht.test_type_display}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="tp-edit-actions">
-                      <button
-                        className="tp-edit-save"
-                        disabled={!editText.trim()}
-                        onClick={handleSaveEdit}
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="tp-edit-cancel"
-                        onClick={cancelEditing}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="tp-card-body">
-                      <p className="tp-card-text">{tp.text}</p>
-                      <div className="tp-card-meta">
-                        {inlineTypeEditId === tp.id ? (
+            <div className="tp-entry-form">
+              <textarea
+                className="tp-entry-textarea"
+                placeholder="e.g. Always explain the significance of E/A ratio in the context of diastolic function..."
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && newText.trim()) {
+                    e.preventDefault();
+                    handleAdd();
+                  }
+                }}
+                rows={4}
+              />
+              <div className="tp-entry-actions">
+                <select
+                  className="tp-entry-type-dropdown"
+                  value={addType}
+                  onChange={(e) => setAddType(e.target.value)}
+                >
+                  <option value="__all__">All types</option>
+                  {historyTypes.map((ht) => (
+                    <option key={ht.test_type} value={ht.test_type}>
+                      {ht.test_type_display}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="tp-entry-btn"
+                  disabled={!newText.trim() || saving}
+                  onClick={handleAdd}
+                >
+                  {saving ? "Saving..." : "Add"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Library */}
+          <section className="tp-section tp-library">
+            <h3 className="tp-section-title">
+              Library
+              {teachingPoints.length > 0 && (
+                <span className="tp-library-count">{teachingPoints.length}</span>
+              )}
+            </h3>
+            {teachingPoints.length === 0 ? (
+              <div className="tp-empty">
+                <p>No teaching points yet.</p>
+                <p className="tp-empty-hint">
+                  Add your first teaching point above to start customizing the AI.
+                </p>
+              </div>
+            ) : (
+              <div className="tp-library-list">
+                {teachingPoints.map((tp) => (
+                  <div key={tp.id} className="tp-card">
+                    {editingId === tp.id ? (
+                      <div className="tp-card-edit">
+                        <textarea
+                          className="tp-edit-textarea"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="tp-edit-scope">
+                          <span className="tp-edit-scope-label">Scope:</span>
                           <select
-                            className="tp-card-type-select"
-                            defaultValue={tp.test_type ?? "__all__"}
-                            autoFocus
-                            onChange={(e) => handleInlineTypeChange(tp.id, e.target.value)}
-                            onBlur={() => setInlineTypeEditId(null)}
+                            className="tp-edit-scope-dropdown"
+                            value={editScope}
+                            onChange={(e) => setEditScope(e.target.value)}
                           >
                             <option value="__all__">All types</option>
                             {historyTypes.map((ht) => (
@@ -303,93 +349,192 @@ export function TeachingPointsScreen() {
                               </option>
                             ))}
                           </select>
-                        ) : tp.test_type ? (
-                          <span
-                            className="tp-card-type tp-card-type--clickable"
-                            onClick={() => setInlineTypeEditId(tp.id)}
-                            title="Click to change type"
+                        </div>
+                        <div className="tp-edit-actions">
+                          <button
+                            className="tp-edit-save"
+                            disabled={!editText.trim()}
+                            onClick={handleSaveEdit}
                           >
-                            {getDisplayName(tp.test_type)}
+                            Save
+                          </button>
+                          <button
+                            className="tp-edit-cancel"
+                            onClick={cancelEditing}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="tp-card-body">
+                          <p className="tp-card-text">{tp.text}</p>
+                          <div className="tp-card-meta">
+                            {inlineTypeEditId === tp.id ? (
+                              <select
+                                className="tp-card-type-select"
+                                defaultValue={tp.test_type ?? "__all__"}
+                                autoFocus
+                                onChange={(e) => handleInlineTypeChange(tp.id, e.target.value)}
+                                onBlur={() => setInlineTypeEditId(null)}
+                              >
+                                <option value="__all__">All types</option>
+                                {historyTypes.map((ht) => (
+                                  <option key={ht.test_type} value={ht.test_type}>
+                                    {ht.test_type_display}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : tp.test_type ? (
+                              <span
+                                className="tp-card-type tp-card-type--clickable"
+                                onClick={() => setInlineTypeEditId(tp.id)}
+                                title="Click to change type"
+                              >
+                                {getDisplayName(tp.test_type)}
+                              </span>
+                            ) : (
+                              <span
+                                className="tp-card-type tp-card-type--global tp-card-type--clickable"
+                                onClick={() => setInlineTypeEditId(tp.id)}
+                                title="Click to assign a type"
+                              >
+                                All types
+                              </span>
+                            )}
+                            <span className="tp-card-date">
+                              {new Date(tp.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          className="tp-card-edit-btn"
+                          onClick={() => startEditing(tp)}
+                          aria-label={`Edit teaching point: ${tp.text.slice(0, 30)}`}
+                          title="Edit this teaching point"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="tp-card-delete"
+                          onClick={() => handleDelete(tp.id)}
+                          aria-label={`Delete teaching point: ${tp.text.slice(0, 30)}`}
+                          title="Delete this teaching point"
+                        >
+                          &times;
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Shared With You */}
+          {sharedPoints.length > 0 && (
+            <section className="tp-section tp-shared">
+              <h3 className="tp-section-title">
+                Shared With You
+                <span className="tp-library-count">{sharedPoints.length}</span>
+              </h3>
+              <p className="tp-section-desc">
+                These teaching points are shared by colleagues and are automatically
+                included in your reports.
+              </p>
+              <div className="tp-library-list">
+                {sharedPoints.map((sp) => (
+                  <div key={sp.sync_id} className="tp-card tp-card--shared">
+                    <div className="tp-card-body">
+                      <p className="tp-card-text">{sp.text}</p>
+                      <div className="tp-card-meta">
+                        <span className="tp-card-sharer">
+                          Shared by {sp.sharer_email}
+                        </span>
+                        {sp.test_type ? (
+                          <span className="tp-card-type">
+                            {getDisplayName(sp.test_type)}
                           </span>
                         ) : (
-                          <span
-                            className="tp-card-type tp-card-type--global tp-card-type--clickable"
-                            onClick={() => setInlineTypeEditId(tp.id)}
-                            title="Click to assign a type"
-                          >
+                          <span className="tp-card-type tp-card-type--global">
                             All types
                           </span>
                         )}
-                        <span className="tp-card-date">
-                          {new Date(tp.created_at).toLocaleDateString()}
-                        </span>
                       </div>
                     </div>
-                    <button
-                      className="tp-card-edit-btn"
-                      onClick={() => startEditing(tp)}
-                      aria-label={`Edit teaching point: ${tp.text.slice(0, 30)}`}
-                      title="Edit this teaching point"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="tp-card-delete"
-                      onClick={() => handleDelete(tp.id)}
-                      aria-label={`Delete teaching point: ${tp.text.slice(0, 30)}`}
-                      title="Delete this teaching point"
-                    >
-                      &times;
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Shared With You */}
-      {sharedPoints.length > 0 && (
-        <section className="tp-section tp-shared">
-          <h3 className="tp-section-title">
-            Shared With You
-            <span className="tp-library-count">{sharedPoints.length}</span>
-          </h3>
-          <p className="tp-section-desc">
-            These teaching points are shared by colleagues and are automatically
-            included in your reports.
-          </p>
-          <div className="tp-library-list">
-            {sharedPoints.map((sp) => (
-              <div key={sp.sync_id} className="tp-card tp-card--shared">
-                <div className="tp-card-body">
-                  <p className="tp-card-text">{sp.text}</p>
-                  <div className="tp-card-meta">
-                    <span className="tp-card-sharer">
-                      Shared by {sp.sharer_email}
-                    </span>
-                    {sp.test_type ? (
-                      <span className="tp-card-type">
-                        {getDisplayName(sp.test_type)}
-                      </span>
-                    ) : (
-                      <span className="tp-card-type tp-card-type--global">
-                        All types
-                      </span>
-                    )}
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          )}
+
+          {recipients.length > 0 && (
+            <p className="tp-shared-footer">
+              Shared with: {recipients.map(r => r.recipient_email).join(", ")}
+            </p>
+          )}
+        </>
       )}
 
-      {recipients.length > 0 && (
-        <p className="tp-shared-footer">
-          Shared with: {recipients.map(r => r.recipient_email).join(", ")}
-        </p>
+      {/* Practice Library tab */}
+      {activeTab === "practice" && (
+        <section className="tp-section tp-practice-library">
+          <h3 className="tp-section-title">
+            Practice Library
+            {practiceLibrary.length > 0 && (
+              <span className="tp-library-count">{practiceLibrary.length}</span>
+            )}
+          </h3>
+          <p className="tp-section-desc">
+            Browse teaching points from all practice members. Points marked
+            &quot;Auto-applied&quot; are automatically included in your reports.
+            You can add any point to your own library.
+          </p>
+          {practiceLibraryLoading ? (
+            <p>Loading practice library...</p>
+          ) : practiceLibrary.length === 0 ? (
+            <div className="tp-empty">
+              <p>No teaching points from practice members yet.</p>
+            </div>
+          ) : (
+            <div className="tp-library-list">
+              {practiceLibrary.map((pt) => (
+                <div
+                  key={pt.id}
+                  className={`tp-card tp-card--practice ${pt.contributor ? "tp-card--contributor" : "tp-card--browse"}`}
+                >
+                  <div className="tp-card-body">
+                    <p className="tp-card-text">{pt.text}</p>
+                    <div className="tp-card-meta">
+                      <span className="tp-card-sharer">{pt.sharer_email}</span>
+                      {pt.test_type ? (
+                        <span className="tp-card-type">
+                          {getDisplayName(pt.test_type)}
+                        </span>
+                      ) : (
+                        <span className="tp-card-type tp-card-type--global">
+                          All types
+                        </span>
+                      )}
+                      <span className={`tp-badge ${pt.contributor ? "tp-badge--auto" : "tp-badge--browse"}`}>
+                        {pt.contributor ? "Auto-applied" : "Browse only"}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    className="tp-adopt-btn"
+                    onClick={() => handleAdopt(pt)}
+                    disabled={adoptingIds.has(pt.id)}
+                    title="Copy this teaching point to your own library"
+                  >
+                    {adoptingIds.has(pt.id) ? "Adding..." : "Add to My Library"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

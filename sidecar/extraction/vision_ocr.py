@@ -42,7 +42,7 @@ Rules:
 
 # Haiku model IDs for cheap vision OCR
 _HAIKU_MODELS = {
-    "claude": "claude-haiku-4-20250514",
+    "claude": "claude-haiku-4-5-20251001",
     "bedrock": None,  # use the user's configured model (Haiku doesn't support images via Bedrock inference profiles)
     "openai": "gpt-4.1-mini",
 }

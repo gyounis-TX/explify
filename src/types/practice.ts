@@ -11,6 +11,7 @@ export interface PracticeMember {
   user_id: string;
   email: string;
   role: "admin" | "member";
+  share_content: boolean;
   joined_at: string;
   report_count: number;
   last_active: string | null;

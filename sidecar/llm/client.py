@@ -34,10 +34,12 @@ CLAUDE_DEEP_MODEL = "claude-opus-4-20250514"
 # Mapping from Anthropic model IDs to Bedrock inference profile IDs.
 # Bedrock requires inference profile IDs (with regional prefix) for on-demand use.
 _BEDROCK_MODEL_MAP = {
-    "claude-sonnet-4-20250514": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6",
     "claude-sonnet-4-5": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "claude-sonnet-4-5-20250929": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "claude-sonnet-4-20250514": "us.anthropic.claude-sonnet-4-20250514-v1:0",
     "claude-opus-4-20250514": "us.anthropic.claude-opus-4-20250514-v1:0",
+    "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "claude-haiku-4-20250514": "us.anthropic.claude-haiku-4-20250514-v1:0",
     "claude-3-5-sonnet-20241022": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     "claude-3-5-haiku-20241022": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
@@ -120,9 +122,9 @@ class LLMClient:
 
     def _default_model(self) -> str:
         if self.provider == LLMProvider.CLAUDE:
-            return "claude-sonnet-4-20250514"
+            return "claude-sonnet-4-6"
         if self.provider == LLMProvider.BEDROCK:
-            return "claude-sonnet-4-20250514"
+            return "claude-sonnet-4-6"
         return "gpt-4.1-mini"
 
     async def call_with_vision(
