@@ -399,18 +399,19 @@
 
 .provider-btn {
   padding: var(--space-xs) var(--space-sm);
-  background-color: var(--color-surface);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+  background-color: var(--color-gray-200, #e2e8f0);
+  color: var(--color-text);
+  border: 2px solid var(--color-gray-400, #94a3b8);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .provider-btn:hover {
-  background-color: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background-color: var(--color-gray-300, #cbd5e1);
+  border-color: var(--color-gray-500, #64748b);
 }
 
 .provider-btn--active {
@@ -653,11 +654,11 @@
 
 .sharing-remove-btn {
   padding: 2px 10px;
-  background: none;
-  border: 1px solid var(--color-border);
+  background: var(--color-gray-100, #f1f5f9);
+  border: 1px solid var(--color-gray-400, #94a3b8);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -709,9 +710,9 @@
 
 .account-export-btn {
   padding: var(--space-sm) var(--space-lg);
-  background-color: var(--color-surface);
+  background-color: var(--color-gray-200, #e2e8f0);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-gray-400, #94a3b8);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -720,8 +721,8 @@
 }
 
 .account-export-btn:hover:not(:disabled) {
-  background-color: var(--color-gray-50);
-  border-color: var(--color-gray-300);
+  background-color: var(--color-gray-300, #cbd5e1);
+  border-color: var(--color-gray-500, #64748b);
 }
 
 .account-export-btn:disabled {
@@ -731,9 +732,9 @@
 
 .account-delete-btn {
   padding: var(--space-sm) var(--space-lg);
-  background-color: var(--color-surface);
+  background-color: #fef2f2;
   color: #dc2626;
-  border: 1px solid #fca5a5;
+  border: 2px solid #f87171;
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -742,7 +743,7 @@
 }
 
 .account-delete-btn:hover {
-  background-color: #fef2f2;
+  background-color: #fee2e2;
   border-color: #dc2626;
 }
 
