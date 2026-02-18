@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+import time
 from typing import Optional
 
 from api.models import ExtractionResult
@@ -9,9 +11,104 @@ from .base import BaseTestType
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Correction-based score adjustment cache
+# ---------------------------------------------------------------------------
+# Loaded from detection_corrections table; refreshed every 10 minutes.
+# Structure: {detected_type: {corrected_type: count}}
+_correction_cache: dict[str, dict[str, int]] = {}
+_cache_ts: float = 0.0
+_CACHE_TTL: float = 600.0  # 10 minutes
+
+
+async def refresh_correction_cache() -> None:
+    """Load aggregate correction stats from DB. Called at startup + periodically."""
+    global _correction_cache, _cache_ts
+
+    stats: list[dict] = []
+    if os.getenv("DATABASE_URL", ""):
+        try:
+            from storage.pg_database import get_correction_stats
+            stats = await get_correction_stats()
+        except Exception:
+            logger.exception("Failed to load PG correction stats")
+    else:
+        try:
+            from storage.database import get_db
+            db = get_db()
+            conn = db._get_conn()
+            try:
+                rows = conn.execute(
+                    """SELECT detected_type, corrected_type, COUNT(*) as cnt
+                       FROM detection_corrections
+                       WHERE created_at > datetime('now', '-6 months')
+                       GROUP BY detected_type, corrected_type
+                       HAVING COUNT(*) >= 2"""
+                ).fetchall()
+                stats = [dict(r) for r in rows]
+            finally:
+                conn.close()
+        except Exception:
+            logger.debug("No detection_corrections table in SQLite (expected on fresh install)")
+
+    cache: dict[str, dict[str, int]] = {}
+    for row in stats:
+        detected = row["detected_type"]
+        corrected = row["corrected_type"]
+        cnt = row["cnt"]
+        cache.setdefault(detected, {})[corrected] = cnt
+    _correction_cache = cache
+    _cache_ts = time.monotonic()
+    if cache:
+        logger.info("Correction cache loaded: %d correction patterns", sum(len(v) for v in cache.values()))
+
+
+def _apply_correction_adjustments(
+    scores: list[tuple[str, float, "BaseTestType"]],
+) -> list[tuple[str, float, "BaseTestType"]]:
+    """Adjust scores based on historical corrections.
+
+    For each scored type that has been frequently corrected FROM, apply a
+    penalty of -0.03 per correction (capped at -0.10).
+    For types it was corrected TO, apply a boost of +0.03 (capped at +0.10).
+    """
+    if not _correction_cache:
+        return scores
+
+    # Collect all corrected-TO types across the cache for boost lookup
+    boost_for: dict[str, int] = {}  # {type_id: total_count}
+    for detected, corrections in _correction_cache.items():
+        for corrected, cnt in corrections.items():
+            boost_for[corrected] = boost_for.get(corrected, 0) + cnt
+
+    adjusted: list[tuple[str, float, "BaseTestType"]] = []
+    for type_id, confidence, handler in scores:
+        adj = 0.0
+
+        # Penalty: this type was frequently corrected FROM
+        if type_id in _correction_cache:
+            total_corrections = sum(_correction_cache[type_id].values())
+            adj -= min(total_corrections * 0.03, 0.10)
+
+        # Boost: this type was frequently corrected TO
+        if type_id in boost_for:
+            adj += min(boost_for[type_id] * 0.03, 0.10)
+
+        new_confidence = max(0.0, min(1.0, confidence + adj))
+        adjusted.append((type_id, new_confidence, handler))
+
+    return adjusted
+
 _HEADER_PATTERNS = [
-    re.compile(r"(?i)(?:report|exam(?:ination)?|test)\s*(?:type)?[:\-]\s*(.+)", re.MULTILINE),
+    # Labeled formats: "Report: ...", "Exam Type: ...", "Study: ...", "Procedure: ..."
+    re.compile(r"(?i)(?:report|exam(?:ination)?|test|study|procedure|modality)\s*(?:type)?[:\-]\s*(.+)", re.MULTILINE),
     re.compile(r"(?i)^(?:IMPRESSION|INDICATION|FINDINGS)\s+(?:FOR|OF)\s+(.+)", re.MULTILINE),
+    # Standalone modality on first line (e.g. "MRI BRAIN WITHOUT CONTRAST")
+    re.compile(
+        r"(?i)^\s*((?:MRI|MR|CT|CTA|MRA|X-?RAY|ULTRASOUND|US|ECHO|PET|SPECT|DEXA|EKG|ECG|EEG|EMG)"
+        r"\s+.{3,60})\s*$",
+        re.MULTILINE,
+    ),
 ]
 
 
@@ -50,6 +147,11 @@ class TestTypeRegistry:
                     return (resolved_id, 0.85)
         return (None, 0.0)
 
+    async def _maybe_refresh_corrections(self) -> None:
+        """Refresh correction cache if stale (> TTL seconds old)."""
+        if time.monotonic() - _cache_ts > _CACHE_TTL:
+            await refresh_correction_cache()
+
     def detect(
         self, extraction_result: ExtractionResult
     ) -> tuple[Optional[str], float]:
@@ -70,6 +172,9 @@ class TestTypeRegistry:
 
         if not scores:
             return (None, 0.0)
+
+        # Apply correction-based adjustments (learned from user overrides)
+        scores = _apply_correction_adjustments(scores)
 
         scores.sort(key=lambda x: x[1], reverse=True)
         best_id, best_confidence, best_handler = scores[0]

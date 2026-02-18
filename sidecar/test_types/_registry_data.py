@@ -210,6 +210,11 @@ _IMAGING_MRI: list[GenericTestType] = [
         "mri hip", "mri ankle", "mri wrist",
         "mri abdomen", "mri pelvis",
         "mri cervical", "mri lumbar", "mri thoracic",
+        # "MR" variants (common hospital format)
+        "mr brain", "mr spine", "mr knee", "mr shoulder",
+        "mr hip", "mr ankle", "mr wrist",
+        "mr abdomen", "mr pelvis",
+        "mr cervical", "mr lumbar", "mr thoracic",
     ], specialty="radiology", category="imaging_mri"),
     GenericTestType("mra", "MR Angiography", [
         "mra", "mr angiography", "magnetic resonance angiography",
@@ -426,8 +431,9 @@ _LAB_ENDOCRINE: list[GenericTestType] = [
 # ---------------------------------------------------------------------------
 _LAB_RHEUMATOLOGY: list[GenericTestType] = [
     GenericTestType("ana_panel", "ANA Panel", [
-        "ana panel", "antinuclear antibody", "ana",
+        "ana panel", "antinuclear antibody",
         "anti-dsdna", "ena panel", "smith antibody",
+        "ana titer", "ana screen", "ana by ifa",
     ], specialty="rheumatology", category="lab", measurement_extractor=extract_lab_measurements),
     GenericTestType("rheumatoid_panel", "Rheumatoid Panel", [
         "rheumatoid factor", "anti-ccp", "rheumatoid panel",

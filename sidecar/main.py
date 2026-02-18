@@ -81,6 +81,11 @@ async def lifespan(app: FastAPI):
         # Desktop mode: initialize SQLite and keychain
         get_db()
         get_keychain()
+
+    # Load correction-based detection adjustments (both PG and SQLite)
+    from test_types.registry import refresh_correction_cache
+    await refresh_correction_cache()
+
     yield
     # Shutdown
     if _USE_PG:

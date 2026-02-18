@@ -778,6 +778,56 @@ def _build_lab_pattern_guidance(detected_patterns: list[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Prior Study Extraction from Clinical Context
+# ---------------------------------------------------------------------------
+
+_PRIOR_STUDY_RE = re.compile(
+    r"(?i)"
+    r"(?:(?:prior|previous|recent|last|earlier)\s+)?"
+    r"(echo(?:cardiogram)?|stress\s*test|cath(?:eterization)?|cardiac\s+cath|"
+    r"ct|cta|mri|mra|pft|ekg|ecg|holter|x-?ray|ultrasound|"
+    r"nuclear\s+stress|pet\s+scan|dexa|mammogram|eeg|emg|"
+    r"coronary\s+angiography|left\s+heart\s+cath|right\s+heart\s+cath|"
+    r"tee|sleep\s+study|carotid\s+(?:doppler|duplex))"
+    r"\s+"
+    r"(?:(?:on|from|dated?|of)\s+)?"
+    r"(\d{1,2}[/\-]\d{1,4}(?:[/\-]\d{2,4})?|\w+\s+\d{4}|\d{4})"  # date
+    r"[:\s]*"
+    r"(?:(?:showed?|reveal(?:ed|s)?|demonstrat(?:ed|es)?|noted|found|with|[:\-])\s*)?"
+    r"([^\n.;]{5,120})?",  # findings (optional, up to 120 chars)
+)
+
+
+def _extract_prior_studies(clinical_context: str) -> list[dict]:
+    """Extract referenced prior studies with dates and findings from clinical text.
+
+    Returns a list of dicts with keys: type, date, findings (optional).
+    """
+    if not clinical_context:
+        return []
+
+    results: list[dict] = []
+    seen: set[tuple[str, str]] = set()  # deduplicate by (type, date)
+
+    for m in _PRIOR_STUDY_RE.finditer(clinical_context):
+        study_type = m.group(1).strip()
+        date = m.group(2).strip()
+        findings = (m.group(3) or "").strip()
+
+        key = (study_type.lower(), date)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        entry: dict = {"type": study_type, "date": date}
+        if findings and len(findings) >= 5:
+            entry["findings"] = findings
+        results.append(entry)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Analogy Library for Patient Understanding
 # ---------------------------------------------------------------------------
 
@@ -3375,6 +3425,23 @@ class PromptEngine:
                 if pattern_guidance:
                     sections.append(pattern_guidance)
                     has_clinical_intelligence = True
+
+            # Extract referenced prior studies (e.g. "Echo 1/2025 showed EF 55%")
+            prior_studies = _extract_prior_studies(effective_context)
+            if prior_studies:
+                sections.append("\n## Referenced Prior Studies (from Clinical Context)")
+                sections.append(
+                    "The clinical context references these prior studies. When interpreting "
+                    "the current report, note relevant trends or changes compared to these "
+                    "prior findings where applicable. Do NOT re-explain the prior study — "
+                    "just reference the trend."
+                )
+                for study in prior_studies:
+                    line = f"- **{study['type']}** ({study['date']})"
+                    if study.get("findings"):
+                        line += f": {study['findings']}"
+                    sections.append(line)
+                has_clinical_intelligence = True
 
             # Cross-reference rule: tell the LLM to connect the clinical
             # intelligence above with the parsed measurements below

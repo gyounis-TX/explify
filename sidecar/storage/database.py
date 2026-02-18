@@ -345,6 +345,15 @@ class Database:
                     updated_at TEXT,
                     UNIQUE(test_type, severity_band, phrase)
                 )""",
+                """CREATE TABLE IF NOT EXISTS detection_corrections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    detected_type TEXT NOT NULL,
+                    corrected_type TEXT NOT NULL,
+                    report_title TEXT,
+                    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                )""",
+                """CREATE INDEX IF NOT EXISTS idx_detection_corrections_types
+                    ON detection_corrections(detected_type, corrected_type)""",
             ]
             for migration in migrations:
                 try:

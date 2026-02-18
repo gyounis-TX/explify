@@ -630,9 +630,30 @@ async def log_detection_correction(request: Request, body: dict = Body(...)):
                    VALUES ($1, $2, $3, $4)""",
                 user_id, detected, corrected, report_title,
             )
+        else:
+            from storage.database import get_db
+            db = get_db()
+            conn = db._get_conn()
+            try:
+                conn.execute(
+                    """INSERT INTO detection_corrections
+                       (detected_type, corrected_type, report_title)
+                       VALUES (?, ?, ?)""",
+                    (detected, corrected, report_title),
+                )
+                conn.commit()
+            finally:
+                conn.close()
     except Exception:
         import logging
         logging.getLogger(__name__).exception("Failed to log detection correction")
+
+    # Refresh correction cache so future detections benefit immediately
+    try:
+        from test_types.registry import refresh_correction_cache
+        await refresh_correction_cache()
+    except Exception:
+        pass
 
     return {"ok": True}
 
@@ -2906,6 +2927,13 @@ async def list_shared_teaching_points(request: Request, test_type: str | None = 
     """Return cached shared teaching points."""
     user_id = _get_user_id(request)
     return await _db_call("list_shared_teaching_points", test_type=test_type, user_id=user_id)
+
+
+@router.get("/teaching-points/practice-library")
+async def browse_practice_library(request: Request, test_type: str | None = Query(None)):
+    """Browse all practice members' teaching points with contributor flag."""
+    user_id = _get_user_id(request)
+    return await _db_call("browse_practice_teaching_points", test_type=test_type, user_id=user_id)
 
 
 @router.delete("/teaching-points/{point_id}")

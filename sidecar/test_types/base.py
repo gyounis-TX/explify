@@ -46,6 +46,18 @@ def split_text_zones(full_text: str) -> tuple[str, str, str]:
     return title, comparison, body
 
 
+_kw_re_cache: dict[str, re.Pattern] = {}
+
+
+def _kw_match(kw: str, text: str) -> bool:
+    """Check if *kw* appears as a whole word in *text* using word boundaries."""
+    pat = _kw_re_cache.get(kw)
+    if pat is None:
+        pat = re.compile(r"\b" + re.escape(kw) + r"\b")
+        _kw_re_cache[kw] = pat
+    return bool(pat.search(text))
+
+
 def keyword_zone_weight(keyword: str, title: str, comparison: str, body: str) -> float:
     """Return a positional weight for *keyword* based on where it appears.
 
@@ -55,9 +67,9 @@ def keyword_zone_weight(keyword: str, title: str, comparison: str, body: str) ->
     - Not found → 0.0
     """
     kw = keyword.lower()
-    in_title = kw in title
-    in_body = kw in body
-    in_comp = kw in comparison
+    in_title = _kw_match(kw, title)
+    in_body = _kw_match(kw, body)
+    in_comp = _kw_match(kw, comparison)
     if in_title:
         return 2.0
     if in_body and not in_comp:
