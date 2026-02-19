@@ -42,9 +42,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Read version from package.json
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Build web frontend
         run: npm run build:web
         env:
+          VITE_APP_VERSION: ${{ steps.pkg.outputs.version }}
           VITE_API_URL: https://api.explify.app
           VITE_COGNITO_USER_POOL_ID: ${{ secrets.VITE_COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ secrets.VITE_COGNITO_CLIENT_ID }}

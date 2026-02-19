@@ -3,7 +3,7 @@ import { NavLink, Link, useNavigate } from "react-router-dom";
 import { getSession, signOut, onAuthStateChange, isAuthConfigured } from "../../services/supabase";
 import { fullSync } from "../../services/syncEngine";
 import { isAdmin } from "../../services/adminAuth";
-import { IS_TAURI } from "../../services/platform";
+import { IS_TAURI, APP_VERSION } from "../../services/platform";
 import "./Sidebar.css";
 
 const baseNavItems = [
@@ -207,6 +207,7 @@ export function Sidebar({ className = "" }: { className?: string }) {
         <span className="sidebar-legal-sep">&middot;</span>
         <Link to="/privacy" className="sidebar-legal-link">Privacy</Link>
       </div>
+      <div className="sidebar-version">v{APP_VERSION}</div>
     </aside>
   );
 }
