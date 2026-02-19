@@ -1751,6 +1751,10 @@ convey calm authority and specificity:
   system" (conduction) and "your heart's pumping ability" (function)
 - Cardiology patients often know their prior numbers — reference trends when
   prior results are available
+- **Note**: These are default reporting preferences. If the physician has
+  provided a template with Structure Instructions or Teaching Points that
+  specify a different format or ordering, follow the physician's template
+  instructions instead.
 """,
     "pulmonology": """\
 ## Specialty Voice — Pulmonology
@@ -2841,11 +2845,16 @@ priority (highest first):
    deliberate, not breezy. Reduce fragment sentences and casual asides for
    severe findings.
 4. **Physician personalization** (edit corrections, teaching points, vocabulary
-   preferences) — these reflect explicit physician intent. They override
-   default phrasing, analogy choices, and style rules below.
-5. **Humanization & style rules** — sentence variety, anti-AI phrasing,
-   opening/closing variety. These shape the voice but yield to the priorities
-   above.
+   preferences, template structure instructions) — these reflect explicit
+   physician intent. They override default phrasing, analogy choices,
+   specialty voice reporting defaults, and style rules below. If a template
+   specifies a particular report structure or ordering (e.g., 'always lead
+   with EF'), follow the template even if the Specialty Voice section suggests
+   a different ordering.
+5. **Humanization & style rules** (including Specialty Voice default reporting
+   preferences) — sentence variety, anti-AI phrasing, opening/closing variety,
+   specialty-specific default ordering. These shape the voice but yield to the
+   priorities above.
 6. **Default tone/detail settings** — the baseline when nothing else applies.
 
 When in doubt: safety > patient anxiety > clinical severity > physician
@@ -3520,6 +3529,11 @@ class PromptEngine:
         # 1e. Template instructions (if provided)
         if template_instructions:
             sections.append("\n## Structure Instructions")
+            sections.append(
+                "The physician has chosen this template for how they want their "
+                "report structured. These instructions override default specialty "
+                "reporting guidelines and voice preferences when they conflict."
+            )
             sections.append(template_instructions)
         if closing_text:
             sections.append("\n## Closing Text")

@@ -19,6 +19,7 @@ import { logUsage } from "../../services/usageTracker";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
 import { clearImportCache } from "../import/ImportScreen";
+import { getResultsCache, setResultsCache, clearResultsCache } from "../../services/resultsCache";
 import { groupTypesByCategory } from "../../utils/testTypeCategories";
 import { CommentPanel } from "./CommentPanel";
 import { KeyFindingsPanel } from "./KeyFindingsPanel";
@@ -126,16 +127,40 @@ export function ResultsScreen() {
     batchLabels?: string[];
   } | null;
 
-  // Restore from sessionStorage if location.state is empty (e.g. after Settings round-trip).
-  const session = locationState?.explainResponse ? null : loadSessionState();
-  const initialResponse = (locationState?.explainResponse
-    ?? session?.explainResponse as ExplainResponse | undefined) ?? null;
-  const fromHistory = locationState?.fromHistory ?? (session?.fromHistory as boolean | undefined) ?? false;
-  const extractionResult = (locationState?.extractionResult
-    ?? session?.extractionResult as ExtractionResult | undefined) ?? null;
-  const templateId = locationState?.templateId ?? (session?.templateId as number | undefined);
-  const clinicalContext = locationState?.clinicalContext ?? (session?.clinicalContext as string | undefined);
-  const quickReasons = locationState?.quickReasons ?? (session?.quickReasons as string[] | undefined);
+  // -------------------------------------------------------------------------
+  // Initialization priority:
+  // 1. location.state.explainResponse → fresh from ProcessingScreen
+  // 2. Module cache has currentResponse → user navigated away and back
+  // 3. sessionStorage fallback → non-PHI metadata only (existing behavior)
+  // -------------------------------------------------------------------------
+  const _rc = getResultsCache();
+  const hasFreshResponse = !!locationState?.explainResponse;
+  const hasCachedResponse = !hasFreshResponse && _rc.currentResponse != null;
+  const session = hasFreshResponse || hasCachedResponse ? null : loadSessionState();
+
+  const initialResponse = locationState?.explainResponse
+    ?? _rc.currentResponse
+    ?? null;
+  const fromHistory = locationState?.fromHistory
+    ?? (hasCachedResponse ? _rc.fromHistory : undefined)
+    ?? (session?.fromHistory as boolean | undefined)
+    ?? false;
+  const extractionResult = locationState?.extractionResult
+    ?? (hasCachedResponse ? _rc.extractionResult : undefined)
+    ?? (session?.extractionResult as ExtractionResult | undefined)
+    ?? null;
+  const templateId = locationState?.templateId
+    ?? (hasCachedResponse ? _rc.selectedTemplateId as number | undefined : undefined)
+    ?? (session?.templateId as number | undefined);
+  const clinicalContext = locationState?.clinicalContext
+    ?? (hasCachedResponse ? _rc.clinicalContext : undefined)
+    ?? (session?.clinicalContext as string | undefined);
+  const quickReasons = locationState?.quickReasons
+    ?? (hasCachedResponse ? _rc.quickReasons : undefined)
+    ?? (session?.quickReasons as string[] | undefined);
+
+  // Track whether we restored from the module cache (used to guard effects)
+  const isRestoredFromCache = useRef(hasCachedResponse);
 
   // Batch mode state
   const batchResponses = locationState?.batchResponses;
@@ -156,10 +181,16 @@ export function ResultsScreen() {
   const [glossary, setGlossary] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [isLiked, setIsLiked] = useState(
-    locationState?.historyLiked ?? (session?.historyLiked as boolean | undefined) ?? false,
+    locationState?.historyLiked
+    ?? (hasCachedResponse ? _rc.isLiked : undefined)
+    ?? (session?.historyLiked as boolean | undefined)
+    ?? false,
   );
   const [historyId, setHistoryId] = useState<string | number | null>(
-    locationState?.historyId ?? (session?.historyId as string | number | undefined) ?? null,
+    locationState?.historyId
+    ?? (hasCachedResponse ? _rc.historyId : undefined)
+    ?? (session?.historyId as string | number | undefined)
+    ?? null,
   );
   const [qualityRating, setQualityRating] = useState<number | null>(null);
   const [sectionSettings, setSectionSettings] = useState({
@@ -169,21 +200,25 @@ export function ResultsScreen() {
     footer_type: "explify_branding" as FooterType,
     custom_footer_text: null as string | null,
   });
-  const [toneSlider, setToneSlider] = useState(3);
-  const [detailSlider, setDetailSlider] = useState(3);
-  const [isSpanish, setIsSpanish] = useState(false);
+  const [toneSlider, setToneSlider] = useState(hasCachedResponse ? _rc.toneSlider : 3);
+  const [detailSlider, setDetailSlider] = useState(hasCachedResponse ? _rc.detailSlider : 3);
+  const [isSpanish, setIsSpanish] = useState(hasCachedResponse ? _rc.isSpanish : false);
 
   // Comment panel state
-  const [commentMode, setCommentMode] = useState<"long" | "short" | "sms">("short");
-  const [shortCommentText, setShortCommentText] = useState<string | null>(
-    initialResponse?.explanation?.overall_summary ?? null,
+  const [commentMode, setCommentMode] = useState<"long" | "short" | "sms">(
+    hasCachedResponse ? _rc.commentMode : "short",
   );
-  const [longExplanationResponse, setLongExplanationResponse] = useState<ExplainResponse | null>(null);
+  const [shortCommentText, setShortCommentText] = useState<string | null>(
+    hasCachedResponse ? _rc.shortCommentText : (initialResponse?.explanation?.overall_summary ?? null),
+  );
+  const [longExplanationResponse, setLongExplanationResponse] = useState<ExplainResponse | null>(
+    hasCachedResponse ? _rc.longExplanationResponse : null,
+  );
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   const [isGeneratingLong, setIsGeneratingLong] = useState(false);
 
   // SMS summary state
-  const [smsText, setSmsText] = useState<string | null>(null);
+  const [smsText, setSmsText] = useState<string | null>(hasCachedResponse ? _rc.smsText : null);
   const [isGeneratingSms, setIsGeneratingSms] = useState(false);
   const [smsEnabled, setSmsEnabled] = useState(false);
 
@@ -204,15 +239,19 @@ export function ResultsScreen() {
   const [checkedNextSteps, setCheckedNextSteps] = useState<Set<string>>(new Set(["No comment"]));
 
   // Refinement
-  const [selectedLiteracy, setSelectedLiteracy] = useState<LiteracyLevel>("grade_8");
+  const [selectedLiteracy, setSelectedLiteracy] = useState<LiteracyLevel>(
+    hasCachedResponse ? _rc.selectedLiteracy : "grade_8",
+  );
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [refinementInstruction, setRefinementInstruction] = useState("");
 
   // Edit state
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedSummary, setEditedSummary] = useState("");
-  const [editedFindings, setEditedFindings] = useState<{ finding: string; explanation: string }[]>([]);
-  const [isDirty, setIsDirty] = useState(false);
+  const [isEditing, setIsEditing] = useState(hasCachedResponse ? _rc.isEditing : false);
+  const [editedSummary, setEditedSummary] = useState(hasCachedResponse ? _rc.editedSummary : "");
+  const [editedFindings, setEditedFindings] = useState<{ finding: string; explanation: string }[]>(
+    hasCachedResponse ? _rc.editedFindings : [],
+  );
+  const [isDirty, setIsDirty] = useState(hasCachedResponse ? _rc.isDirty : false);
 
   // Settings loaded flag
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -256,9 +295,14 @@ export function ResultsScreen() {
   // Effects
   // ---------------------------------------------------------------------------
 
-  // Sync edit state when response changes
+  // Sync edit state when response changes — skip the initial run when
+  // restoring from the module cache so we don't wipe cached edits.
   useEffect(() => {
     if (!currentResponse) return;
+    if (isRestoredFromCache.current) {
+      isRestoredFromCache.current = false;
+      return;
+    }
     const expl = currentResponse.explanation;
 
     setEditedSummary(expl.overall_summary);
@@ -340,8 +384,12 @@ export function ResultsScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  // Load settings
+  // Load settings — when restoring from module cache, keep the user's
+  // adjusted slider positions instead of overwriting with API defaults.
+  const restoredFromCacheOnMount = useRef(hasCachedResponse);
   useEffect(() => {
+    const skipSliders = restoredFromCacheOnMount.current;
+    restoredFromCacheOnMount.current = false;
     sidecarApi
       .getSettings()
       .then((s) => {
@@ -352,23 +400,25 @@ export function ResultsScreen() {
           footer_type: s.footer_type ?? "explify_branding",
           custom_footer_text: s.custom_footer_text,
         });
-        setToneSlider(s.tone_preference);
-        setDetailSlider(s.detail_preference);
-        setSelectedLiteracy(s.literacy_level);
+        if (!skipSliders) {
+          setToneSlider(s.tone_preference);
+          setDetailSlider(s.detail_preference);
+          setSelectedLiteracy(s.literacy_level);
+          const defaultMode = s.default_comment_mode ?? "short";
+          if (defaultMode === "sms" && s.sms_summary_enabled) {
+            setCommentMode("sms");
+          } else if (defaultMode === "long") {
+            setCommentMode("long");
+          } else {
+            setCommentMode("short");
+          }
+        }
         setNextStepsOptions(s.next_steps_options ?? []);
         setExplanationVoice(s.explanation_voice ?? "third_person");
         setNameDrop(s.name_drop ?? true);
         setPracticeProviders(s.practice_providers ?? []);
         setSmsEnabled(s.sms_summary_enabled ?? false);
         setUseAnalogies(s.use_analogies ?? true);
-        const defaultMode = s.default_comment_mode ?? "short";
-        if (defaultMode === "sms" && s.sms_summary_enabled) {
-          setCommentMode("sms");
-        } else if (defaultMode === "long") {
-          setCommentMode("long");
-        } else {
-          setCommentMode("short");
-        }
         const src = s.physician_name_source ?? "auto_extract";
         if (src === "custom" && s.custom_physician_name) setPhysicianOverride(s.custom_physician_name);
         else if (src === "generic") setPhysicianOverride("");
@@ -377,7 +427,7 @@ export function ResultsScreen() {
       .catch(() => setSettingsLoaded(true));
   }, []);
 
-  // Session persistence
+  // Session persistence (non-PHI metadata only)
   useEffect(() => {
     if (!currentResponse) return;
     saveSessionState({
@@ -387,6 +437,33 @@ export function ResultsScreen() {
       historyLiked: isLiked,
     });
   }, [currentResponse, fromHistory, selectedTemplateId, historyId, isLiked]);
+
+  // Sync component state → module-level cache so it survives navigation
+  useEffect(() => {
+    setResultsCache({
+      currentResponse,
+      shortCommentText,
+      longExplanationResponse,
+      smsText,
+      toneSlider,
+      detailSlider,
+      selectedLiteracy,
+      commentMode,
+      isEditing,
+      editedSummary,
+      editedFindings,
+      isDirty,
+      historyId,
+      isLiked,
+      selectedTemplateId,
+      combinedSummary,
+      extractionResult,
+      fromHistory,
+      clinicalContext,
+      quickReasons,
+      isSpanish,
+    });
+  });
 
   // Batch tab switching
   useEffect(() => {
@@ -923,13 +1000,14 @@ export function ResultsScreen() {
           <div className="results-nav-buttons">
             <button
               className="results-back-btn results-back-btn--tertiary"
-              onClick={() => navigate("/")}
+              onClick={() => { clearResultsCache(); navigate("/"); }}
             >
               Back to Import
             </button>
             <button
               className="results-back-btn results-back-btn--secondary"
               onClick={() => {
+                clearResultsCache();
                 navigate("/", { state: {
                   preservedClinicalContext: clinicalContext,
                   preservedQuickReasons: quickReasons,
@@ -940,6 +1018,7 @@ export function ResultsScreen() {
               New Report, Same Patient
             </button>
             <button className="results-back-btn" onClick={() => {
+              clearResultsCache();
               clearImportCache();
               try { sessionStorage.removeItem("explify_results_state"); } catch { /* ignore */ }
               navigate("/");
@@ -1163,6 +1242,7 @@ export function ResultsScreen() {
             className="results-back-btn results-back-btn--tertiary"
             onClick={() => {
               if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
+              clearResultsCache();
               navigate("/");
             }}
           >
@@ -1172,6 +1252,7 @@ export function ResultsScreen() {
             className="results-back-btn results-back-btn--secondary"
             onClick={() => {
               if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
+              clearResultsCache();
               navigate("/", { state: {
                 preservedClinicalContext: clinicalContext,
                 preservedQuickReasons: quickReasons,
@@ -1185,6 +1266,7 @@ export function ResultsScreen() {
             className="results-back-btn"
             onClick={() => {
               if (isDirty && !window.confirm("You have unsaved edits. Leave anyway?")) return;
+              clearResultsCache();
               clearImportCache();
               try { sessionStorage.removeItem("explify_results_state"); } catch { /* ignore */ }
               navigate("/");
