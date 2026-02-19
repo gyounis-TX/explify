@@ -1073,3 +1073,49 @@
   color: var(--color-text-secondary);
   margin-top: 2px;
 }
+
+@media (max-width: 768px) {
+  .slider-label-left,
+  .slider-label-right {
+    min-width: 56px;
+    font-size: 0.65rem;
+  }
+
+  .slider-ticks {
+    padding: 0 calc(56px + var(--space-sm));
+  }
+
+  .literacy-tab-settings {
+    flex: 1 1 44%;
+  }
+
+  .list-add-btn,
+  .save-btn {
+    min-height: 44px;
+  }
+
+  .account-actions,
+  .practice-actions-row,
+  .sharing-add {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .account-actions > *,
+  .practice-actions-row > *,
+  .sharing-add > * {
+    width: 100%;
+  }
+
+  .sharing-item {
+    flex-wrap: wrap;
+  }
+
+  .account-export-btn,
+  .account-delete-btn,
+  .practice-btn,
+  .sharing-add-btn,
+  .sharing-remove-btn {
+    min-height: 44px;
+  }
+}

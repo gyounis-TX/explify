@@ -111,6 +111,22 @@ class CoronaryDiagramHandler(BaseTestType):
             "cine imaging", "t2 stir",
         ]
 
+        # CT-specific terms — if present, this is likely a CT scan,
+        # not an invasive catheterization.
+        ct_negatives = [
+            "ct chest", "chest ct", "ct thorax", "ct scan",
+            "computed tomography", "ct angiography",
+            "cta coronary", "coronary cta", "ccta", "ct coronary",
+            "calcium score", "agatston", "cac score",
+            "heart scan",
+            "ct without contrast", "ct with contrast",
+            "gated ct", "prospective gating", "retrospective gating",
+            "hounsfield",
+            "ct pulmonary", "ctpa",
+            "ct abdomen", "ct pelvis", "ct head", "ct brain",
+            "ct spine", "ct neck",
+        ]
+
         strong_title_or_body = 0
         for k in strong_keywords:
             w = keyword_zone_weight(k, title, comparison, body)
@@ -139,6 +155,12 @@ class CoronaryDiagramHandler(BaseTestType):
                         if keyword_zone_weight(k, title, comparison, body) >= 1.0)
         if cmr_count > 0:
             score *= max(0.0, 1.0 - cmr_count * 0.3)
+
+        # Suppress when CT terms are present in title/body
+        ct_count = sum(1 for k in ct_negatives
+                       if keyword_zone_weight(k, title, comparison, body) >= 1.0)
+        if ct_count > 0:
+            score *= max(0.0, 1.0 - ct_count * 0.3)
 
         return score
 

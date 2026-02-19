@@ -475,3 +475,34 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+@media (max-width: 768px) {
+  .tp-entry-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tp-entry-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .tp-card {
+    flex-direction: column;
+  }
+
+  .tp-edit-actions {
+    flex-direction: column;
+  }
+
+  .tp-edit-save,
+  .tp-edit-cancel {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .tp-tab-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

@@ -32,3 +32,29 @@ body {
 :focus:not(:focus-visible) {
   outline: none;
 }
+
+/* Mobile: touch targets & font scaling */
+@media (max-width: 768px) {
+  button,
+  select,
+  [role="button"] {
+    min-height: 44px;
+  }
+
+  h1,
+  .settings-title,
+  .import-title,
+  .results-title,
+  .history-title,
+  .templates-title,
+  .tp-title,
+  .comparison-title {
+    font-size: var(--font-size-xl);
+  }
+
+  .settings-section-title,
+  .section-heading,
+  .comparison-section-heading {
+    font-size: var(--font-size-base);
+  }
+}

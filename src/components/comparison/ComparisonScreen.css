@@ -421,3 +421,18 @@
     -webkit-print-color-adjust: exact;
   }
 }
+
+@media (max-width: 768px) {
+  .comparison-table {
+    min-width: 500px;
+  }
+
+  .comparison-actions {
+    flex-direction: column;
+  }
+
+  .comparison-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

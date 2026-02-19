@@ -341,3 +341,20 @@
 .billing-cancel-back:hover {
   background: var(--color-gray-50);
 }
+
+@media (max-width: 768px) {
+  .billing-tier-btn {
+    min-height: 44px;
+  }
+
+  .billing-cancel-actions,
+  .billing-manage-actions {
+    flex-direction: column;
+  }
+
+  .billing-cancel-actions button,
+  .billing-manage-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

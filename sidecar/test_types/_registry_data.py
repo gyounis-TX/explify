@@ -109,10 +109,18 @@ _CARDIAC: list[GenericTestType] = [
         "left heart cath", "coronary angiography", "coronary angiogram",
         "cardiac catheterization", "cardiac cath", "lvedp",
         "coronary arteries", "left main", "lad", "circumflex", "rca",
-    ], category="cardiac"),
+    ], category="cardiac",
+        negative_keywords=[
+            "ct chest", "chest ct", "ct scan", "computed tomography",
+            "ct angiography", "cta coronary", "coronary cta", "ccta",
+            "ct coronary", "calcium score", "agatston", "cac score",
+            "heart scan", "gated ct", "hounsfield",
+            "ct pulmonary", "ctpa",
+        ],
+    ),
     GenericTestType("ct_calcium_score", "CT Calcium Score", [
         "calcium score", "agatston score", "coronary calcium",
-        "cac score", "calcium scoring",
+        "cac score", "calcium scoring", "heart scan",
     ], category="cardiac"),
     GenericTestType("tee", "Transesophageal Echocardiogram", [
         "transesophageal", "tee", "tee echo",

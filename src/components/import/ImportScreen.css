@@ -1268,6 +1268,29 @@
   .batch-add-buttons {
     flex-direction: column;
   }
+
+  .detection-override,
+  .test-type-hint-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .redetect-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .preview-stats,
+  .text-entry-header {
+    flex-wrap: wrap;
+  }
+
+  .extract-btn,
+  .proceed-btn,
+  .proceed-btn--quick-normal,
+  .start-over-btn {
+    min-height: 44px;
+  }
 }
 
 /* Prior / Current Role Labels */

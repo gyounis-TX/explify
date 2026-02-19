@@ -374,3 +374,26 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+@media (max-width: 768px) {
+  .history-filters {
+    flex-wrap: wrap;
+  }
+
+  .history-filter-btn,
+  .history-type-filter,
+  .history-search-input,
+  .history-tab {
+    min-height: 44px;
+  }
+
+  .history-compare-toggle {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .history-delete-btn,
+  .history-like-action {
+    min-height: 44px;
+  }
+}

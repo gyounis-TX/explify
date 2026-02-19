@@ -69,6 +69,7 @@ class CTACoronaryHandler(BaseTestType):
             "agatston",
             "coronary artery calcium",
             "cac score",
+            "heart scan",
             "coronary stenosis",
             "plaque burden",
             "coronary arteries",

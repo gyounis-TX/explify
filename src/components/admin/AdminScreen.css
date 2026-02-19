@@ -199,6 +199,25 @@
   .dashboard-controls .form-input {
     max-width: none;
   }
+
+  .usage-table {
+    min-width: 700px;
+  }
+
+  .stat-value {
+    font-size: var(--font-size-xl);
+  }
+
+  .deploy-btn,
+  .dashboard-refresh-btn {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .admin-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 /* Collapsible section headers */

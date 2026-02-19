@@ -1960,6 +1960,59 @@
   .measurement-explanation {
     max-width: none;
   }
+
+  .measurements-table {
+    min-width: 600px;
+  }
+
+  .literacy-tabs {
+    flex-wrap: wrap;
+  }
+
+  .literacy-tab-btn {
+    flex: 1 1 auto;
+    font-size: 0.75rem;
+  }
+
+  .quick-slider-end {
+    display: none;
+  }
+
+  .results-batch-tab {
+    flex: 1 1 calc(50% - 1px);
+  }
+
+  .comment-panel-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .feedback-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .teaching-point-save-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .comment-copy-btn,
+  .comment-export-btn,
+  .refine-btn,
+  .edit-toggle-btn,
+  .export-btn,
+  .like-btn,
+  .teaching-point-save-btn,
+  .quick-action-btn,
+  .results-back-btn {
+    min-height: 44px;
+  }
+
+  .results-settings-panel {
+    border-top: 2px solid var(--color-primary-200);
+    padding-top: var(--space-lg);
+  }
 }
 
 /* Print Styles */
