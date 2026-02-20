@@ -168,6 +168,53 @@ _MEDICATION_EFFECTS: dict[str, list[str]] = {
         "calcineurin inhibitors), CBC (cytopenias), and electrolytes (hyperkalemia, "
         "hypomagnesemia with tacrolimus). Infection risk with low WBC."
     ],
+    "glp1_agonists": [
+        "GLP-1 receptor agonists (semaglutide/Ozempic/Wegovy, liraglutide/Victoza, "
+        "dulaglutide/Trulicity, tirzepatide/Mounjaro/Zepbound) slow gastric emptying "
+        "(affects gastric emptying study timing), may cause pancreatitis (check lipase), "
+        "reduce appetite/weight. Can affect pre-surgical fasting guidelines. Do NOT "
+        "attribute delayed gastric emptying on imaging solely to gastroparesis without "
+        "considering GLP-1 use."
+    ],
+    "sglt2_inhibitors": [
+        "SGLT2 inhibitors (empagliflozin/Jardiance, dapagliflozin/Farxiga, "
+        "canagliflozin/Invokana) cause glycosuria (glucose in urine — expected, not "
+        "pathologic), may cause euglycemic DKA (normal glucose but positive ketones + "
+        "acidosis), increase UTI/genital yeast infection risk. Beneficial in heart "
+        "failure and CKD independent of diabetes. May slightly lower eGFR initially "
+        "(hemodynamic effect, not true kidney damage — expected to stabilize)."
+    ],
+    "biologics_immunotherapy": [
+        "Biologic agents and immunotherapy: TNF inhibitors (adalimumab/Humira, "
+        "infliximab/Remicade, etanercept/Enbrel) increase infection risk, may "
+        "reactivate TB. IL-17 inhibitors (secukinumab, ixekizumab) affect neutrophils. "
+        "Checkpoint inhibitors (pembrolizumab/Keytruda, nivolumab/Opdivo) can cause "
+        "immune-mediated thyroiditis, hepatitis, colitis, myocarditis, and multi-organ "
+        "inflammation. Any new lab abnormality in a patient on immunotherapy should "
+        "prompt consideration of immune-related adverse events."
+    ],
+    "opioids": [
+        "Opioids (morphine, oxycodone, hydrocodone, fentanyl, methadone, tramadol) "
+        "cause central sleep apnea (dose-dependent), delayed gastric emptying, "
+        "constipation affecting abdominal imaging, and may suppress adrenal function "
+        "(opioid-induced adrenal insufficiency). Chronic use can lower testosterone. "
+        "Respiratory depression risk increases with concurrent benzodiazepines."
+    ],
+    "antipsychotics": [
+        "Antipsychotics: atypical (olanzapine, quetiapine, risperidone, aripiprazole, "
+        "clozapine) cause metabolic syndrome (weight gain, hyperglycemia, dyslipidemia). "
+        "Clozapine requires regular CBC monitoring (risk of agranulocytosis). QTc "
+        "prolongation common with many antipsychotics (especially ziprasidone, "
+        "haloperidol IV). Elevated prolactin with risperidone and typical antipsychotics."
+    ],
+    "factor_xa_inhibitors": [
+        "Direct oral anticoagulants — Factor Xa inhibitors (apixaban/Eliquis, "
+        "rivaroxaban/Xarelto, edoxaban/Savaysa) and direct thrombin inhibitors "
+        "(dabigatran/Pradaxa): do NOT reliably affect PT/INR (unlike warfarin). "
+        "Standard coagulation tests may be normal even at therapeutic levels. "
+        "Anti-Xa activity assay is needed for quantitative assessment. Renal dosing "
+        "required (especially dabigatran which is 80% renally cleared)."
+    ],
 }
 
 # Medication name patterns for extraction
@@ -256,6 +303,37 @@ _MEDICATION_PATTERNS: dict[str, list[str]] = {
         r"\b(?:tacrolimus|prograf|cyclosporine|neoral|sandimmune|"
         r"mycophenolate|cellcept|myfortic|azathioprine|imuran|"
         r"sirolimus|rapamune|everolimus)\b"
+    ],
+    "glp1_agonists": [
+        r"\b(?:semaglutide|ozempic|wegovy|rybelsus|liraglutide|victoza|saxenda|"
+        r"dulaglutide|trulicity|tirzepatide|mounjaro|zepbound|exenatide|byetta|"
+        r"bydureon|glp[- ]?1)\b"
+    ],
+    "sglt2_inhibitors": [
+        r"\b(?:empagliflozin|jardiance|dapagliflozin|farxiga|canagliflozin|invokana|"
+        r"ertugliflozin|steglatro|sglt2|sglt[- ]?2)\b"
+    ],
+    "biologics_immunotherapy": [
+        r"\b(?:adalimumab|humira|infliximab|remicade|etanercept|enbrel|"
+        r"pembrolizumab|keytruda|nivolumab|opdivo|atezolizumab|tecentriq|"
+        r"durvalumab|imfinzi|ipilimumab|yervoy|secukinumab|cosentyx|"
+        r"ixekizumab|taltz|ustekinumab|stelara|rituximab|rituxan|"
+        r"tocilizumab|actemra|biologic|immunotherapy|checkpoint\s*inhibitor)\b"
+    ],
+    "opioids": [
+        r"\b(?:morphine|oxycodone|oxycontin|percocet|hydrocodone|vicodin|norco|"
+        r"fentanyl|methadone|tramadol|ultram|codeine|hydromorphone|dilaudid|"
+        r"buprenorphine|suboxone|subutex|opioid|narcotic)\b"
+    ],
+    "antipsychotics": [
+        r"\b(?:olanzapine|zyprexa|quetiapine|seroquel|risperidone|risperdal|"
+        r"aripiprazole|abilify|clozapine|clozaril|ziprasidone|geodon|"
+        r"haloperidol|haldol|lurasidone|latuda|paliperidone|invega|"
+        r"antipsychotic)\b"
+    ],
+    "factor_xa_inhibitors": [
+        r"\b(?:apixaban|eliquis|rivaroxaban|xarelto|edoxaban|savaysa|"
+        r"dabigatran|pradaxa|doac|noac)\b"
     ],
 }
 
@@ -379,6 +457,78 @@ _CONDITION_GUIDANCE: dict[str, str] = {
         "Anemia of chronic disease, elevated inflammatory markers expected. "
         "Immunosuppressive medications have their own effects."
     ),
+    "pregnancy": (
+        "PREGNANCY: Physiological changes affect nearly all tests. Heart rate "
+        "increases 15-20 bpm, cardiac output increases 30-50%, mild anemia is "
+        "normal (hemodilution), WBC rises (up to 15K normal in third trimester, "
+        "up to 25K in labor), D-dimer and fibrinogen are elevated, eGFR increases "
+        "(creatinine >0.8 may be abnormal in pregnancy), alkaline phosphatase "
+        "rises (placental). BNP/NT-proBNP are normally lower in pregnancy. Echo "
+        "may show mild TR, mild MR, small pericardial effusion, and mild chamber "
+        "dilation — all physiological. Do NOT apply non-pregnant reference ranges."
+    ),
+    "pulmonary_hypertension": (
+        "PULMONARY HYPERTENSION: Mean PA pressure > 20 mmHg on RHC. RV dilation "
+        "and dysfunction on echo are expected. RVSP on echo is an estimate — "
+        "may over- or underestimate true PA pressure. TR is usually secondary. "
+        "BNP correlates with RV dysfunction severity. Classify as pre-capillary "
+        "(PCWP <= 15, PVR > 2 WU) vs post-capillary (PCWP > 15). Treatment "
+        "differs fundamentally between groups."
+    ),
+    "known_cad": (
+        "KNOWN CORONARY ARTERY DISEASE: Prior stents or CABG grafts on imaging "
+        "should be noted. Stress testing evaluates for new ischemia in non-stented "
+        "territories or in-stent restenosis. Calcium score is not useful in known "
+        "CAD (will always be elevated). Graft patency on CTA should be assessed. "
+        "Prior MI territory on echo may show wall motion abnormalities at baseline."
+    ),
+    "dvt_pe_history": (
+        "DVT/PE HISTORY: Chronic post-thrombotic changes on venous duplex (wall "
+        "thickening, partial compressibility, collaterals) are expected and should "
+        "not be confused with acute DVT. Chronic PE can cause pulmonary hypertension "
+        "(CTEPH). On anticoagulation, coagulation studies are expected to be affected. "
+        "May have IVC filter visible on imaging."
+    ),
+    "sickle_cell": (
+        "SICKLE CELL DISEASE: Chronic hemolytic anemia (low Hgb 6-10 is baseline), "
+        "elevated LDH and bilirubin at baseline (hemolysis), reticulocytosis is "
+        "expected. Functional asplenia increases infection risk. Dactylitis on X-ray, "
+        "avascular necrosis on MRI, and autosplenectomy on CT are expected findings. "
+        "Low SpO2 may be baseline. Do not alarm about mild anemia if at patient's "
+        "known baseline."
+    ),
+    "chronic_liver_disease": (
+        "CHRONIC LIVER DISEASE: Low albumin, low platelets, elevated INR/PT are "
+        "expected (impaired synthetic function). Elevated bilirubin proportional to "
+        "disease severity. Ascites, splenomegaly, varices, and portosystemic "
+        "collaterals on imaging are signs of portal hypertension. Calculate MELD "
+        "score when relevant. AFP is monitored for HCC surveillance."
+    ),
+    "hiv": (
+        "HIV: On antiretroviral therapy (ART), CD4 count and viral load are key "
+        "monitoring labs. Metabolic complications are common (dyslipidemia, insulin "
+        "resistance, lipodystrophy). Coronary calcium and cardiovascular risk may be "
+        "elevated beyond traditional risk factors. Certain medications affect renal "
+        "function (tenofovir) and bone density. Immune reconstitution may unmask "
+        "previously silent infections."
+    ),
+    "transplant": (
+        "ORGAN TRANSPLANT: Immunosuppressive drug levels (tacrolimus, cyclosporine) "
+        "must be closely monitored. Creatinine in kidney transplant recipients "
+        "reflects graft function — rising creatinine may indicate rejection. Infections "
+        "are a constant concern (CMV, BK virus, opportunistic). Malignancy screening "
+        "is heightened (PTLD, skin cancer). Metabolic complications include NODAT "
+        "(new-onset diabetes after transplant), hypertension, dyslipidemia."
+    ),
+    "aortic_aneurysm": (
+        "AORTIC ANEURYSM: Imaging measurements of aortic diameter are critical — "
+        "compare to prior studies for growth rate. Abdominal aorta >= 3.0 cm is "
+        "aneurysmal. Surgical thresholds: >= 5.5 cm abdominal (men), >= 5.0 cm "
+        "(women), >= 5.5 cm ascending thoracic (or 5.0 cm in bicuspid aortic valve "
+        "or connective tissue disease). Growth > 0.5 cm/year warrants referral. "
+        "Endoleak on post-EVAR surveillance CT is an expected finding that requires "
+        "classification (Type I/III = urgent, Type II = usually monitored)."
+    ),
 }
 
 # Condition detection patterns
@@ -437,6 +587,47 @@ _CONDITION_PATTERNS: dict[str, list[str]] = {
         r"\b(?:lupus|sle|rheumatoid\s*arthritis|ra\b|psoriatic\s*arthritis|"
         r"sjogren|autoimmune|inflammatory\s*arthritis|vasculitis|"
         r"scleroderma|myasthenia)\b"
+    ],
+    "pregnancy": [
+        r"\b(?:pregnan|gravid|trimester|gestational|prenatal|obstetric|"
+        r"postpartum|peripartum|ectopic|preeclampsia|eclampsia)\b"
+    ],
+    "pulmonary_hypertension": [
+        r"\b(?:pulmonary\s*hypertension|pah\b|ph\b.*pulmonary|"
+        r"elevated\s*(?:pa|pulmonary)\s*pressure|rvsp\s*(?:>|elevated)|"
+        r"right\s*heart\s*failure)\b"
+    ],
+    "known_cad": [
+        r"\b(?:(?:known|history\s*of|h/o|s/p)\s*(?:cad|coronary)|"
+        r"prior\s*(?:stent|pci|cabg|mi|heart\s*attack)|"
+        r"coronary\s*(?:stent|bypass|disease)|ischemic\s*heart)\b"
+    ],
+    "dvt_pe_history": [
+        r"\b(?:(?:history|h/o|prior|recurrent)\s*(?:dvt|pe|pulmonary\s*embol|"
+        r"deep\s*vein|venous\s*thromb)|anticoagul|blood\s*thinner|"
+        r"post[- ]?thrombotic|ivc\s*filter)\b"
+    ],
+    "sickle_cell": [
+        r"\b(?:sickle\s*cell|hgb\s*ss|hgb\s*sc|scd\b|sickle\s*trait|"
+        r"hemoglobin\s*(?:ss|sc|s[- ]?beta))\b"
+    ],
+    "chronic_liver_disease": [
+        r"\b(?:cirrhosis|hepatic\s*(?:fibrosis|steatosis)|nash\b|nafld\b|masld\b|"
+        r"liver\s*(?:disease|failure|transplant)|meld\b|child[- ]?pugh|"
+        r"portal\s*hypertension|varices|hepatitis\s*[bc])\b"
+    ],
+    "hiv": [
+        r"\b(?:hiv|human\s*immunodeficiency|aids|antiretroviral|art\b|haart\b|"
+        r"cd4|viral\s*load)\b"
+    ],
+    "transplant": [
+        r"\b(?:transplant|post[- ]?transplant|graft|rejection|"
+        r"immunosuppress|donor|recipient|allograph)\b"
+    ],
+    "aortic_aneurysm": [
+        r"\b(?:aortic\s*aneurysm|aaa\b|thoracic\s*aneurysm|"
+        r"aortic\s*(?:dilation|ectasia)|evar\b|tevar\b|"
+        r"endoleak|marfan|ehlers[- ]?danlos)\b"
     ],
 }
 
@@ -528,6 +719,73 @@ _SYMPTOM_FINDING_CORRELATIONS: dict[str, list[str]] = {
         "fluid status, and nutritional markers. Unintentional weight loss "
         "warrants malignancy consideration."
     ],
+    "abdominal_pain": [
+        "Abdominal pain workup: Location guides evaluation. RUQ: liver enzymes, "
+        "biliary imaging (gallstones, cholecystitis). Epigastric: lipase "
+        "(pancreatitis), H. pylori, EGD findings. RLQ: appendicitis on CT. "
+        "Diffuse: bowel obstruction, mesenteric ischemia, IBD. Correlate lab "
+        "values (WBC, lactate) with imaging findings for severity assessment."
+    ],
+    "joint_pain": [
+        "Joint pain/arthralgia workup: Inflammatory markers (CRP, ESR), "
+        "rheumatologic panels (RF, anti-CCP, ANA, uric acid), and imaging "
+        "findings guide diagnosis. Monoarticular: consider gout/pseudogout "
+        "(crystal analysis), septic joint, or trauma. Polyarticular: RA, "
+        "SLE, psoriatic arthritis. Address whether findings support "
+        "inflammatory vs mechanical cause."
+    ],
+    "cough": [
+        "Cough workup: Chest imaging (infiltrate, nodule, effusion), PFTs "
+        "(obstruction, restriction), and labs (eosinophils, IgE for allergy) "
+        "are relevant. Chronic cough differential: GERD, post-nasal drip, "
+        "asthma, ACE inhibitor side effect, ILD. Correlate imaging with "
+        "symptoms duration and character (productive vs dry)."
+    ],
+    "fever": [
+        "Fever workup: CBC with differential (WBC, bands, neutrophils), "
+        "blood cultures, procalcitonin, CRP/ESR, urinalysis, and imaging "
+        "(chest X-ray, CT if needed) are key. Neutropenic fever (ANC < 500 "
+        "with fever) is a medical emergency. Address source identification "
+        "based on lab pattern and imaging findings."
+    ],
+    "claudication": [
+        "Claudication/leg pain workup: ABI, arterial duplex, and segmental "
+        "pressures assess peripheral arterial disease. Distinguish vascular "
+        "claudication (reproducible with walking, relieved by rest) from "
+        "neurogenic claudication (spinal stenosis — position-dependent, "
+        "relieved by sitting/leaning forward). Venous studies if swelling "
+        "is also present."
+    ],
+    "headache": [
+        "Headache workup: Brain imaging (MRI preferred, CT for acute/emergent) "
+        "to evaluate for mass, hemorrhage, sinus disease, or structural cause. "
+        "MRA/CTA if vascular cause suspected (aneurysm, dissection). ESR/CRP "
+        "in patients > 50 to evaluate for giant cell arteritis. CSF analysis "
+        "if meningitis or IIH suspected. Most imaging for headache is normal — "
+        "address the reassurance value of negative findings."
+    ],
+    "nausea_vomiting": [
+        "Nausea/vomiting workup: Metabolic panel (electrolytes, glucose, BUN/Cr), "
+        "liver panel, lipase, and abdominal imaging are relevant. Consider DKA, "
+        "gastric outlet obstruction, gastroparesis (gastric emptying study), "
+        "hepatitis, pancreatitis. Address dehydration impact on labs "
+        "(prerenal azotemia, hemoconcentration)."
+    ],
+    "skin_rash": [
+        "Skin rash workup: Skin biopsy provides definitive diagnosis. ANA, "
+        "complement, ANCA, and specific antibodies for autoimmune causes. "
+        "Patch testing for contact dermatitis. Drug reaction workup (timing "
+        "with new medications). Eosinophilia on CBC may suggest allergic or "
+        "drug-related cause."
+    ],
+    "back_pain": [
+        "Back pain workup: MRI spine for disc herniation, stenosis, infection "
+        "(discitis/osteomyelitis), compression fracture, or tumor. X-ray for "
+        "alignment and bony changes. DEXA for osteoporosis if compression "
+        "fracture. ESR/CRP if infection or inflammatory cause suspected. "
+        "EMG/NCS if radiculopathy suspected. Most disc changes on MRI are "
+        "age-related and do not correlate with symptoms — contextualize findings."
+    ],
 }
 
 _SYMPTOM_PATTERNS: dict[str, list[str]] = {
@@ -544,6 +802,42 @@ _SYMPTOM_PATTERNS: dict[str, list[str]] = {
     "weight_changes": [
         r"\b(?:weight\s*(?:loss|gain)|losing\s*weight|gaining\s*weight|"
         r"unintentional\s*weight)\b"
+    ],
+    "abdominal_pain": [
+        r"\b(?:abdominal\s*pain|belly\s*pain|stomach\s*(?:pain|ache)|"
+        r"epigastric|ruq\s*pain|rlq\s*pain|flank\s*pain|cramping)\b"
+    ],
+    "joint_pain": [
+        r"\b(?:joint\s*pain|arthralgia|arthritis|knee\s*pain|hip\s*pain|"
+        r"shoulder\s*pain|wrist\s*pain|swollen\s*joint)\b"
+    ],
+    "cough": [
+        r"\b(?:cough|chronic\s*cough|productive\s*cough|dry\s*cough|"
+        r"hemoptysis|coughing\s*(?:blood|up))\b"
+    ],
+    "fever": [
+        r"\b(?:fever|febrile|temperature|chills|rigors|fuo\b|"
+        r"fever\s*of\s*unknown)\b"
+    ],
+    "claudication": [
+        r"\b(?:claudication|leg\s*pain\s*(?:walking|with\s*exercise)|"
+        r"calf\s*pain|intermittent\s*claudication|rest\s*pain|"
+        r"critical\s*limb)\b"
+    ],
+    "headache": [
+        r"\b(?:headache|migraine|cephalgia|head\s*pain|"
+        r"thunderclap|cluster\s*headache|tension\s*headache)\b"
+    ],
+    "nausea_vomiting": [
+        r"\b(?:nausea|vomiting|emesis|retching|dry\s*heav)\b"
+    ],
+    "skin_rash": [
+        r"\b(?:rash|skin\s*(?:lesion|eruption|change)|dermatitis|"
+        r"urticaria|hives|pruritus|itching|eczema|psoriasis)\b"
+    ],
+    "back_pain": [
+        r"\b(?:back\s*pain|low\s*back|lumbar\s*pain|lbp\b|sciatica|"
+        r"radiculopathy|disc\s*(?:herniation|bulge)|spinal\s*stenosis)\b"
     ],
 }
 
@@ -712,6 +1006,71 @@ _LAB_PATTERN_GUIDANCE: dict[str, str] = {
         "possible troponin/BNP elevation (right heart strain). D-dimer has high "
         "negative predictive value; elevated D-dimer needs imaging confirmation."
     ),
+    "severe_hyperkalemia": (
+        "SEVERE HYPERKALEMIA: K+ > 6.0 mEq/L is a medical emergency. EKG changes "
+        "progress: peaked T waves → PR prolongation → P wave loss → QRS widening → "
+        "sine wave → cardiac arrest. Causes: renal failure, ACE-I/ARBs, K-sparing "
+        "diuretics, tissue destruction (rhabdomyolysis, hemolysis, tumor lysis). "
+        "Hemolyzed specimen is most common lab artifact — verify with non-hemolyzed redraw."
+    ),
+    "severe_hyponatremia": (
+        "SEVERE HYPONATREMIA: Na < 120 mEq/L or symptomatic hyponatremia (seizures, "
+        "altered mental status). Calculate serum osmolality to classify: hypertonic "
+        "(hyperglycemia — correct Na by 1.6 for each 100 mg/dL glucose above 100), "
+        "isotonic (pseudohyponatremia from lipemia/paraprotein), hypotonic (true "
+        "hyponatremia — assess volume status: hypovolemic, euvolemic/SIADH, "
+        "hypervolemic/CHF/cirrhosis). Correction must be slow (< 8-10 mEq/L per "
+        "24 hours) to avoid osmotic demyelination."
+    ),
+    "hypercalcemic_crisis": (
+        "HYPERCALCEMIC CRISIS: Ca > 14 mg/dL or symptomatic hypercalcemia. "
+        "Symptoms: confusion, polyuria, constipation, abdominal pain, QT shortening "
+        "on EKG. Two main causes: primary hyperparathyroidism (PTH elevated) or "
+        "malignancy (PTH suppressed, PTHrP may be elevated). Requires aggressive "
+        "IV hydration and calcitonin for acute management."
+    ),
+    "neutropenic_fever": (
+        "NEUTROPENIC FEVER: ANC < 500/µL (or < 1000 and expected to decline) + "
+        "temperature >= 38.3°C single or >= 38.0°C sustained. This is a medical "
+        "emergency requiring blood cultures and empiric broad-spectrum antibiotics "
+        "within 1 hour. Common in post-chemotherapy patients. Risk stratification "
+        "guides inpatient vs outpatient management."
+    ),
+    "hellp": (
+        "HELLP SYNDROME: Hemolysis (elevated LDH, low haptoglobin, schistocytes) + "
+        "Elevated Liver enzymes (AST/ALT often > 70) + Low Platelets (< 100K). "
+        "Occurs in pregnancy (usually third trimester) and is a severe variant of "
+        "preeclampsia. Requires urgent delivery consideration. Can be confused with "
+        "TTP/HUS — timing and pregnancy context differentiate."
+    ),
+    "acute_kidney_injury": (
+        "ACUTE KIDNEY INJURY PATTERN: Rising creatinine (>= 0.3 mg/dL increase in "
+        "48 hours, or >= 1.5x baseline in 7 days) or oliguria (< 0.5 mL/kg/hr for "
+        "6 hours). Classify: prerenal (BUN:Cr > 20:1, FENa < 1%, concentrated urine), "
+        "intrinsic (muddy brown casts, FENa > 2%), or postrenal (hydronephrosis on "
+        "imaging). Prerenal is most common and responds to volume repletion."
+    ),
+    "metabolic_alkalosis": (
+        "METABOLIC ALKALOSIS: pH > 7.45 + HCO3 > 28 mEq/L. Classify by urine "
+        "chloride: chloride-responsive (UCl < 20 — vomiting, NG suction, diuretics) "
+        "vs chloride-resistant (UCl > 20 — hyperaldosteronism, severe hypokalemia, "
+        "Bartter/Gitelman). Saline-responsive alkalosis corrects with volume and "
+        "chloride replacement."
+    ),
+    "lactic_acidosis": (
+        "LACTIC ACIDOSIS: Lactate > 2 mmol/L with metabolic acidosis. Type A "
+        "(tissue hypoxia): shock, sepsis, cardiac arrest, severe anemia, mesenteric "
+        "ischemia. Type B (non-hypoxic): metformin, liver failure, malignancy, "
+        "seizures, thiamine deficiency, linezolid. Lactate > 4 mmol/L significantly "
+        "increases mortality risk. Serial lactate clearance guides treatment response."
+    ),
+    "hemochromatosis": (
+        "HEMOCHROMATOSIS/IRON OVERLOAD: Transferrin saturation > 45% + elevated "
+        "ferritin (often > 300 men, > 200 women). Confirm with HFE gene testing "
+        "(C282Y homozygosity most common). MRI liver can quantify iron deposition "
+        "(T2* or R2* measurement). Untreated causes cirrhosis, cardiomyopathy, "
+        "diabetes, arthropathy, and skin hyperpigmentation."
+    ),
 }
 
 
@@ -850,6 +1209,63 @@ When explaining measurements and findings, use relatable comparisons to help pat
 - 40-54%: "Your heart is pumping but not at full strength — like an engine running on fewer cylinders"
 - <40%: "Your heart is working harder than it should to pump blood"
 
+### Stenosis / Narrowing Percentages
+- 0-30%: "Minimal narrowing — like a very slight dent in a garden hose that doesn't affect water flow"
+- 30-49%: "Mild narrowing — the blood vessel is slightly narrower but blood flows well"
+- 50-69%: "Moderate narrowing — like pinching a garden hose part-way; blood still flows but with some restriction"
+- 70-89%: "Significant narrowing — the blood vessel is substantially narrower and blood flow is restricted"
+- 90-99%: "Severe narrowing — the blood vessel is nearly pinched shut with very limited flow"
+
+### Ankle-Brachial Index (ABI)
+- > 1.0: "Your leg arteries are delivering blood as well as your arm arteries — that's normal"
+- 0.9-0.99: "Your leg blood flow is borderline — very close to normal"
+- 0.7-0.89: "Your leg arteries are delivering about 70-89% of expected blood flow"
+- 0.5-0.69: "Your leg arteries are delivering only about half to two-thirds of normal blood flow"
+- < 0.5: "Your leg arteries are significantly restricted — delivering less than half of normal flow"
+
+### Lung Function (FEV1 % Predicted)
+- >= 80%: "Your lungs are moving air well — at or near expected capacity"
+- 50-79%: "Your lungs are moving less air than expected — think of breathing through a slightly narrower straw"
+- 35-49%: "Your lung function is significantly reduced — your airways are notably narrower"
+- < 35%: "Your lung capacity is severely reduced — your airways are very restricted"
+
+### Sleep Apnea (AHI)
+- < 5: "Fewer than 5 breathing interruptions per hour — normal sleep breathing"
+- 5-14: "Your breathing pauses 5-14 times per hour — like briefly holding your breath many times during the night"
+- 15-29: "Your breathing pauses 15-29 times per hour — that's roughly once every 2-4 minutes"
+- >= 30: "Your breathing pauses 30+ times per hour — that's at least once every 2 minutes all night long"
+
+### Bone Density (T-score)
+- T-score > -1.0: "Your bones are at normal density — strong and healthy"
+- T-score -1.0 to -2.5: "Your bones are thinner than ideal but not yet in the osteoporosis range — think of it as the bones having slightly less mineral packed in"
+- T-score < -2.5: "Your bones have lost significant mineral density, making them more fragile — like a piece of chalk that's thinner than it should be"
+
+### BI-RADS Categories (Patient-Friendly)
+- BI-RADS 1: "Your mammogram looks completely normal"
+- BI-RADS 2: "Something was seen but it's clearly benign — like seeing a cyst that we know is harmless"
+- BI-RADS 3: "A finding that's almost certainly benign (less than 2% chance of anything concerning) — we just want to recheck it in a few months to make sure"
+- BI-RADS 4: "A finding that needs a closer look with a biopsy — most of these turn out to be benign, but we want to be sure"
+
+### Kidney Function (eGFR)
+- >= 90: "Your kidneys are filtering at full capacity — working great"
+- 60-89: "Your kidneys are filtering at about 60-89% — mildly reduced, very common with age"
+- 45-59: "Your kidneys are filtering at about half to two-thirds capacity"
+- 30-44: "Your kidneys are working at about one-third to one-half capacity"
+- 15-29: "Your kidneys are working at less than a third of capacity"
+- < 15: "Your kidneys are working at less than 15% — severely impaired"
+
+### Hemoglobin A1c (Blood Sugar Control)
+- < 5.7%: "Your average blood sugar over the past 3 months is in the normal range"
+- 5.7-6.4%: "Your average blood sugar is slightly elevated — in the prediabetes range"
+- 6.5-7.0%: "Your blood sugar average is in the diabetic range, but well-controlled"
+- 7.0-8.0%: "Your blood sugar control has room for improvement"
+- > 9.0%: "Your blood sugar has been running high — better control would reduce your risk of complications"
+
+### Troponin (Heart Muscle Marker)
+- Normal/undetectable: "No sign of heart muscle stress or injury"
+- Mildly elevated (stable): "A small amount of heart muscle stress detected — many things besides a heart attack can cause this"
+- Rising pattern: "The rising trend suggests active heart muscle injury — this is important and your doctor is monitoring it closely"
+
 ### Lab Value Analogies
 - **Hemoglobin**: "Carries oxygen in your blood — like cargo trucks delivering oxygen to your body"
 - **Cholesterol**: "LDL is like delivery trucks dropping packages in your arteries; HDL is like cleanup trucks removing them"
@@ -898,6 +1314,14 @@ most effective reassurance tools real physicians use.
 **Vascular:**
 - "Mild carotid plaque without significant narrowing is extremely common with aging — found in ~40% of adults over 60"
 - "Mild venous reflux in the saphenous veins is found in ~20% of adults"
+- "An ABI of 0.95 means your leg arteries are delivering about 95% of normal blood flow — very close to fully normal"
+
+**Pulmonary:**
+- "Mild obstruction on PFTs is found in about 10-15% of adults over 50, especially former smokers"
+- "A mildly reduced DLCO can be seen with age alone — your lungs' ability to transfer oxygen naturally decreases slightly over time"
+
+**Sleep:**
+- "Mild sleep apnea (AHI 5-15) is found in about 20-30% of adults — many people have it without knowing"
 
 **General Rule:** When you cite prevalence, connect it to reassurance:
 "This is extremely common — about X% of people your age have the same finding,
@@ -1862,6 +2286,124 @@ findings into understandable terms:
 - For comparison studies, emphasize stability as a positive finding
 - Use size comparisons patients understand (pea, grape, walnut, etc.)
 """,
+    "vascular_surgery": """\
+## Specialty Voice — Vascular Surgery
+
+Vascular patients often deal with chronic progressive disease. Your voice
+should be clear about severity while avoiding catastrophizing:
+
+- Frame PAD in functional terms: "Your arteries are delivering X% of normal blood flow"
+- Use plumbing analogies patients understand: narrowing, blockage, bypass, rerouting
+- For carotid disease, clearly distinguish symptom status (symptomatic vs asymptomatic)
+- For aneurysm surveillance, contextualize size relative to thresholds
+- Distinguish between chronic stable disease and acute changes requiring urgent attention
+- Normalize mild plaque as part of aging: "Some arterial plaque is expected as we age"
+""",
+    "interventional_radiology": """\
+## Specialty Voice — Interventional Radiology
+
+IR patients undergo minimally invasive procedures and may not fully understand
+what was done. Your voice should demystify procedures:
+
+- Explain procedural findings in plain language: "A small tube was guided through
+  your blood vessels to the target area"
+- Distinguish between diagnostic findings and therapeutic interventions performed
+- Technical success language: "The procedure accomplished what was intended"
+- For follow-up imaging, explain what surveillance is looking for
+""",
+    "dermatology": """\
+## Specialty Voice — Dermatology
+
+Skin biopsy patients often worry about cancer. Your voice should be precise
+about pathology results:
+
+- Lead with the diagnosis in plain language before the pathology terminology
+- Clearly distinguish benign from pre-malignant from malignant
+- For melanoma, emphasize depth (Breslow) as the key prognostic factor
+- Normalize common benign findings: seborrheic keratosis, dermatitis, nevi
+- For dysplastic nevi, explain the spectrum from benign to atypical clearly
+""",
+    "infectious_disease": """\
+## Specialty Voice — Infectious Disease
+
+ID patients may be dealing with acute infections or chronic conditions (HIV,
+hepatitis). Your voice should balance urgency with context:
+
+- For culture results, explain sensitivities in practical terms: "The bacteria
+  is susceptible to these antibiotics"
+- For HIV viral load and CD4, frame in terms of immune health and treatment goals
+- Normalize expected lab changes during acute infection (elevated WBC, CRP)
+- For hepatitis panels, clearly explain immunity vs active vs chronic infection
+- Distinguish colonization from active infection
+""",
+    "rheumatology": """\
+## Specialty Voice — Rheumatology
+
+Rheumatology patients often have complex autoimmune conditions with fluctuating
+disease activity. Your voice should help navigate lab complexity:
+
+- Explain antibody panels practically: what a positive test means AND doesn't mean
+- Distinguish disease activity markers (anti-dsDNA, complement) from diagnostic
+  markers (anti-CCP, ANA)
+- Frame inflammatory markers in terms of disease control: "Your inflammation levels
+  suggest good disease control"
+- Normalize positive ANA in low titers: "A mildly positive ANA is very common
+  and doesn't mean you have lupus"
+- For joint imaging, distinguish inflammatory from degenerative changes
+""",
+    "pathology": """\
+## Specialty Voice — Pathology
+
+Patients receiving pathology results are often anxious about cancer. Your voice
+must be precise and measured:
+
+- Lead with the bottom line: benign, pre-malignant, or malignant
+- Explain grade and margin status in practical terms
+- For cancer diagnoses, explain the key prognostic features without overwhelming
+- Use clear language: "The tissue sample showed..." rather than passive pathology jargon
+- For benign results, provide explicit reassurance: "This confirms the growth is
+  not cancerous"
+""",
+    "allergy_immunology": """\
+## Specialty Voice — Allergy / Immunology
+
+Allergy patients want practical guidance. Your voice should be action-oriented:
+
+- Translate IgE levels and skin test results into practical relevance
+- Distinguish between sensitization (positive test) and clinical allergy (symptoms)
+- For immunoglobulin levels, explain immune system function in simple terms
+- Normalize common environmental sensitivities
+- Frame results in terms of avoidance strategies and treatment options
+""",
+    "sleep_medicine": """\
+## Specialty Voice — Sleep Medicine
+
+Sleep patients are often tired and frustrated. Your voice should validate
+symptoms while explaining findings clearly:
+
+- Translate AHI into practical terms: "Your breathing was interrupted X times
+  per hour during sleep"
+- Connect oxygen desaturation to daytime symptoms: "These drops in oxygen
+  level during sleep may explain your daytime tiredness"
+- For mild OSA, contextualize prevalence: "This is very common"
+- Explain treatment options in practical terms without being prescriptive
+- Frame CPAP not as a punishment but as a tool: "This keeps your airway open
+  while you sleep"
+""",
+    "hepatology": """\
+## Specialty Voice — Hepatology
+
+Liver patients worry about cirrhosis and cancer. Your voice should be honest
+about severity while focusing on what can be managed:
+
+- Frame fibrosis staging clearly: F0-F4 with practical meaning
+- Distinguish between compensated and decompensated cirrhosis
+- For fatty liver, normalize while noting importance of management
+- For hepatitis panels, clearly explain the viral status and treatment implications
+- For surveillance labs (AFP, imaging), explain what is being monitored and why
+- Connect lab trends to liver function: "Your liver's ability to make proteins
+  is holding steady"
+""",
 }
 
 # Default voice for specialties without a specific profile
@@ -2659,6 +3201,49 @@ Apply these cardiac-specific interpretation rules:
   flow. "Normal" values do not apply. Systemic ventricular EF is typically
   lower, CVP is elevated, and exercise capacity is limited.
 
+- EBSTEIN ANOMALY: Apical displacement of the tricuspid valve (septal leaflet
+  displaced >= 8mm/m² from the mitral annulus). Results in "atrialized" RV,
+  TR, and a functional small RV. Associated with accessory pathways (WPW in
+  10-25%), ASD, and right-to-left shunting. Severity ranges from minimal to
+  severe RV dysfunction. Surgical repair when significant symptoms or
+  progressive RV dilation.
+
+- PATENT DUCTUS ARTERIOSUS (PDA): Persistent communication between
+  descending aorta and pulmonary artery. Small PDA: continuous murmur,
+  normal heart size, may close spontaneously or with observation. Moderate/
+  large PDA: LV volume overload, LA/LV dilation, eventually pulmonary
+  hypertension. Closure indicated for hemodynamically significant PDA
+  (LV dilation, Qp:Qs > 1.5:1). Transcatheter closure is standard.
+
+- EISENMENGER SYNDROME: End-stage consequence of long-standing left-to-right
+  shunt (ASD, VSD, PDA) causing irreversible pulmonary vascular disease.
+  Shunt reverses to right-to-left → cyanosis, clubbing, erythrocytosis.
+  Surgical repair is CONTRAINDICATED once Eisenmenger develops (removing
+  the shunt decompresses the RV and causes acute RV failure). Managed
+  medically with pulmonary vasodilators. Lung or heart-lung transplant
+  is the definitive therapy.
+
+- CYANOTIC vs ACYANOTIC CLASSIFICATION:
+  - Cyanotic (right-to-left shunt, deoxygenated blood enters systemic
+    circulation): Tetralogy of Fallot, transposition of great arteries,
+    truncus arteriosus, total anomalous pulmonary venous return (TAPVR),
+    tricuspid atresia, Ebstein (severe with ASD), Eisenmenger.
+  - Acyanotic (left-to-right shunt or obstructive): ASD, VSD, PDA,
+    AVSD (canal defect), coarctation, aortic/pulmonary stenosis, bicuspid AV.
+  - Key principle: Acyanotic lesions can become cyanotic if untreated
+    (Eisenmenger physiology).
+
+- PREGNANCY IN CONGENITAL HEART DISEASE: Hemodynamic changes of pregnancy
+  (increased blood volume 40-50%, increased cardiac output, decreased SVR)
+  are poorly tolerated in certain conditions:
+  - HIGH RISK (contraindicated/very high risk): Eisenmenger, severe
+    pulmonary hypertension, severe systemic ventricular dysfunction,
+    mechanical valves on warfarin, severe aortic stenosis, Marfan with
+    dilated aorta (> 4.0 cm).
+  - MODERATE RISK: Fontan, moderate systemic ventricular dysfunction,
+    unrepaired coarctation, moderate mitral stenosis.
+  - LOW RISK: Small ASD/VSD, repaired simple lesions, mild valvular disease.
+
 ### Structural Heart Imaging (CT Planning)
 
 - TAVR CT PLANNING: CT provides aortic annulus sizing (area-derived diameter),
@@ -3442,6 +4027,80 @@ individual values second.
   (conventional dosing). Extended-interval dosing uses single daily dose with
   level-based nomograms. Nephrotoxicity and ototoxicity are cumulative.
 
+- TACROLIMUS (FK506): Therapeutic trough 5-15 ng/mL (varies by organ transplant,
+  time post-transplant, and protocol). Early post-transplant: higher target
+  (10-15 ng/mL). Maintenance: 5-10 ng/mL. Nephrotoxicity is dose-related
+  (monitor creatinine, BUN, potassium, magnesium). Drug interactions: CYP3A4
+  and P-glycoprotein substrate — levels affected by azole antifungals,
+  macrolides, diltiazem (increase) and rifampin, phenytoin (decrease).
+  Whole blood trough drawn 12 hours post-dose (or immediately pre-dose).
+
+- CYCLOSPORINE: Therapeutic trough 100-300 ng/mL (varies by transplant type
+  and protocol). C2 monitoring (2-hour post-dose level) used by some centers.
+  Nephrotoxicity profile similar to tacrolimus. Monitor creatinine,
+  potassium, magnesium, uric acid, lipids, blood pressure. Gingival
+  hyperplasia and hirsutism are distinctive side effects. Same CYP3A4
+  interactions as tacrolimus.
+
+- SIROLIMUS (RAPAMYCIN): Therapeutic trough 5-15 ng/mL (varies by protocol
+  and whether combined with calcineurin inhibitor). NOT a calcineurin
+  inhibitor — works via mTOR inhibition. Key side effects: hyperlipidemia,
+  thrombocytopenia, impaired wound healing, mouth ulcers, interstitial
+  pneumonitis. Monitor lipids, CBC, liver function. Long half-life (60 hrs)
+  — steady state takes 5-7 days after dose change. CYP3A4 substrate with
+  similar drug interactions as tacrolimus/cyclosporine.
+
+### Allergy Testing Interpretation
+
+- TOTAL IgE: Elevated (> 100 IU/mL in adults) suggests atopic tendency but
+  is nonspecific. Very high levels (> 1000 IU/mL) seen in allergic
+  bronchopulmonary aspergillosis (ABPA), parasitic infections, hyper-IgE
+  syndrome, and atopic dermatitis. Normal total IgE does NOT exclude allergy.
+
+- SPECIFIC IgE (formerly RAST): Quantifies IgE antibody to individual
+  allergens. Class 0 (< 0.35 kU/L) = negative. Class 1-6 = increasing
+  sensitization. Higher levels generally correlate with clinical reactivity
+  but thresholds vary by allergen. Sensitization ≠ clinical allergy —
+  must correlate with symptoms. 95% predictive values established for
+  some food allergens (e.g., peanut > 14 kU/L, egg > 7 kU/L, milk > 15 kU/L).
+
+- COMPONENT-RESOLVED DIAGNOSTICS (CRD): Tests for specific allergenic
+  proteins within an allergen source. Helps distinguish true allergy from
+  cross-reactivity:
+  - Peanut: Ara h 2 (storage protein, high risk anaphylaxis) vs Ara h 8
+    (PR-10/birch cross-reactive, usually mild oral symptoms)
+  - Tree nut: specific components predict severity
+  - Milk: Casein (Bos d 8, persistent allergy) vs whey (may be outgrown)
+  - Venom: rApi m 1 (bee), rVes v 5 (wasp) — guides immunotherapy selection
+
+- SKIN PRICK TESTING: Wheal >= 3mm greater than negative control is positive.
+  Histamine (positive control) should produce >= 3mm wheal — if not, consider
+  antihistamine interference. Mean wheal diameter correlates loosely with
+  reactivity. Skin testing is more sensitive than specific IgE for most
+  aeroallergens. Must hold antihistamines (H1: 3-7 days, H2: 1-2 days).
+
+- INTRADERMAL TESTING: More sensitive but less specific than skin prick.
+  Used primarily for drug allergy (penicillin) and venom allergy evaluation.
+  1:1000 starting dilution for venom, 1:10000 for drugs.
+
+- DRUG ALLERGY TESTING:
+  - Penicillin skin testing: Major determinant (penicilloyl-polylysine/PRE-PEN)
+    and minor determinant (penicillin G). Negative predictive value > 97%.
+  - If skin test negative: graded oral challenge can be performed.
+  - Cross-reactivity: penicillin-cephalosporin cross-reactivity is ~2% (not
+    the 10% historically quoted). Based on R1 side chain similarity.
+
+- TRYPTASE: Baseline > 11.4 ng/mL suggests mastocytosis or mast cell
+  activation disorder. Acute elevation (drawn within 1-4 hours of reaction)
+  supports anaphylaxis diagnosis. Serial levels: baseline, 1-2 hours,
+  24 hours post-event.
+
+- PATCH TESTING: For delayed-type (Type IV) hypersensitivity / contact
+  dermatitis. Standard series of 80+ allergens applied for 48 hours, read
+  at 48 and 96 hours. Grading: negative, irritant, +1 (erythema/papules),
+  +2 (vesicles), +3 (bullous). Identifies causative contact allergens for
+  eczematous dermatitis.
+
 """
 
 _CLINICAL_DOMAIN_KNOWLEDGE_IMAGING = """\
@@ -3949,6 +4608,26 @@ Apply this interpretation structure for EKG/ECG reports:
   with risk of ventricular fibrillation and sudden cardiac death. Important
   to distinguish from benign early repolarization or RBBB.
 
+- EARLY REPOLARIZATION vs BRUGADA DIFFERENTIATION:
+  - Early repolarization (benign): Concave-up ST elevation, prominent J-point
+    notching/slurring, most common in young males, athletes. Typically in
+    inferior and lateral leads (II, III, aVF, V4-V6). J-wave amplitude
+    usually < 2mm. Normal QRS duration.
+  - Brugada: Coved (Type 1) or saddleback (Type 2/3) ST elevation confined
+    to V1-V3 (right precordial leads). Associated with RBBB morphology.
+    Type 1 is diagnostic (coved ST >= 2mm, negative T-wave). Unmasked by
+    fever, sodium channel blockers (ajmaline/procainamide challenge).
+  - Key differentiators: Lead distribution (lateral vs right precordial),
+    ST morphology (concave-up vs coved), T-wave polarity (upright in early
+    repolarization vs inverted in Brugada Type 1), response to exercise
+    (early repolarization normalizes, Brugada may worsen).
+
+- J-POINT ELEVATION: The junction between QRS end and ST segment onset.
+  Isolated J-point elevation (< 1mm) in healthy young adults is a normal
+  variant. Significance depends on clinical context: associated ST changes,
+  symptoms, family history. J-point elevation > 2mm in inferior leads may
+  carry prognostic significance ("malignant early repolarization").
+
 - LONG QT SYNDROME: QTc > 500ms is high risk for torsades de pointes.
   QTc 460-500ms is borderline and warrants medication review. Common
   acquired causes: medications (antiarrhythmics, antibiotics like
@@ -4064,23 +4743,131 @@ _CLINICAL_DOMAIN_KNOWLEDGE_PFT = """\
 
 Apply this interpretation structure:
 
+### Obstructive Pattern
+
 - OBSTRUCTIVE PATTERN: FEV1/FVC ratio < 0.70 (or below lower limit of normal).
-  Classify severity by FEV1 % predicted: mild (>= 70%), moderate (50-69%),
-  severe (35-49%), very severe (< 35%). Common in COPD, asthma.
+  Classify severity by FEV1 % predicted:
+  - Mild: FEV1 >= 80% predicted (ratio reduced but airflow preserved)
+  - Moderate: FEV1 50-79% predicted
+  - Moderately severe: FEV1 35-49% predicted
+  - Severe: FEV1 < 35% predicted
+  Common causes: COPD, asthma, bronchiectasis, bronchiolitis obliterans.
+
+- GOLD STAGING (COPD-specific): Based on post-bronchodilator FEV1 % predicted.
+  - GOLD 1 (mild): FEV1 >= 80%
+  - GOLD 2 (moderate): FEV1 50-79%
+  - GOLD 3 (severe): FEV1 30-49%
+  - GOLD 4 (very severe): FEV1 < 30%
+  GOLD stage alone does not determine symptoms — a patient in GOLD 2 can be
+  more symptomatic than GOLD 3. Always integrate with clinical context.
+
+- BRONCHODILATOR RESPONSE: Significant response = >= 12% AND >= 200mL
+  improvement in FEV1 (or FVC). Suggests reversible obstruction (asthma
+  pattern). Some COPD patients have partial reversibility — does not
+  exclude COPD. Lack of response on a single test does not exclude
+  asthma (day-to-day variability exists).
+
+### Restrictive Pattern
 
 - RESTRICTIVE PATTERN: FVC reduced with normal or elevated FEV1/FVC ratio.
-  Confirm with total lung capacity (TLC) if available. Common in
-  interstitial lung disease, chest wall disorders.
+  MUST be confirmed with total lung capacity (TLC < 80% predicted) if
+  available. Without TLC, can only say "suggests restriction."
+  Severity by TLC % predicted:
+  - Mild: TLC 70-80%
+  - Moderate: TLC 60-69%
+  - Severe: TLC 50-59%
+  - Very severe: TLC < 50%
+  Common causes: interstitial lung disease (IPF, sarcoidosis), chest wall
+  disorders (kyphoscoliosis, obesity), neuromuscular disease (ALS, myasthenia),
+  pleural disease.
 
-- MIXED PATTERN: Both obstructive and restrictive features present.
-  FEV1/FVC ratio reduced AND FVC reduced disproportionately.
+- MIXED PATTERN: Both obstructive and restrictive features. FEV1/FVC ratio
+  reduced AND TLC reduced. Identify the predominant component. Common in
+  combined COPD + obesity or COPD + pulmonary fibrosis (CPFE syndrome).
 
-- DLCO: Reduced DLCO suggests impaired gas exchange (emphysema, interstitial
-  disease, pulmonary vascular disease). Normal DLCO with obstruction suggests
-  asthma over emphysema.
+### Lung Volumes
 
-- BRONCHODILATOR RESPONSE: Significant response (>= 12% AND >= 200mL
-  improvement in FEV1) suggests reversible obstruction (asthma pattern).
+- TOTAL LUNG CAPACITY (TLC):
+  - Elevated (> 120% predicted): hyperinflation — emphysema, severe asthma
+  - Normal: 80-120% predicted
+  - Reduced (< 80%): restriction confirmed
+  TLC is the gold standard for confirming restriction.
+
+- RESIDUAL VOLUME (RV): Air remaining after maximal exhalation.
+  - Elevated RV: air trapping (emphysema, severe asthma, small airway disease)
+  - RV/TLC ratio > 40%: significant air trapping
+  Air trapping may be the earliest sign of small airway disease even when
+  FEV1 and FVC are normal.
+
+- FUNCTIONAL RESIDUAL CAPACITY (FRC): Elevated in hyperinflation (COPD).
+  Reduced in restriction.
+
+### Diffusion Capacity (DLCO)
+
+- DLCO (diffusing capacity for carbon monoxide):
+  - Normal: 80-120% predicted
+  - Mildly reduced: 60-79%
+  - Moderately reduced: 40-59%
+  - Severely reduced: < 40%
+  Reduced DLCO suggests impaired gas exchange:
+  - Low DLCO + obstruction: emphysema (destroyed alveolar surface)
+  - Low DLCO + restriction: interstitial lung disease (thickened membrane)
+  - Low DLCO + normal spirometry: pulmonary vascular disease (PE, PAH),
+    anemia (correct for hemoglobin), early ILD
+  - Normal DLCO + obstruction: asthma (airways disease, not parenchymal)
+  - Elevated DLCO: pulmonary hemorrhage, polycythemia, left-to-right shunt,
+    asthma (sometimes mildly elevated)
+
+### Flow-Volume Loop Patterns
+
+- NORMAL: Rapid rise to peak flow, gradual decline. Inspiratory limb is
+  relatively symmetric semicircle.
+- OBSTRUCTIVE: Scooped-out or concave expiratory limb (especially mid/late
+  expiration). Peak flow may be preserved.
+- FIXED UPPER AIRWAY OBSTRUCTION: Flattening of BOTH inspiratory and
+  expiratory limbs (box-shaped). Suggests tracheal stenosis, goiter,
+  or tracheal mass compressing from outside.
+- VARIABLE EXTRATHORACIC OBSTRUCTION: Flattened inspiratory limb with
+  normal expiratory limb. Suggests vocal cord dysfunction, laryngeal
+  lesion, or extrathoracic tracheomalacia.
+- VARIABLE INTRATHORACIC OBSTRUCTION: Flattened expiratory limb with
+  normal inspiratory limb. Suggests intrathoracic tracheal compression
+  or tracheomalacia.
+
+### Special Tests
+
+- METHACHOLINE CHALLENGE: Positive if FEV1 drops >= 20% at a provocative
+  concentration (PC20) <= 16 mg/mL. A positive test supports airway
+  hyperresponsiveness (asthma). A NEGATIVE test essentially rules out
+  asthma (high negative predictive value). Not performed if baseline
+  FEV1 is already < 70% predicted.
+
+- EXERCISE OXIMETRY / 6-MINUTE WALK: Desaturation > 4% or below 88%
+  during exercise is significant. Correlates with functional impairment
+  and may qualify for supplemental oxygen. Distance walked in 6 minutes
+  is a functional capacity metric — < 350m is significantly impaired.
+
+- MAXIMUM INSPIRATORY/EXPIRATORY PRESSURES (MIP/MEP): Measure respiratory
+  muscle strength. Reduced in neuromuscular disease. MIP < -60 cm H2O or
+  MEP < 40 cm H2O suggests respiratory muscle weakness.
+
+### PFT Abbreviations
+- FEV1 → forced expiratory volume in 1 second
+- FVC → forced vital capacity
+- TLC → total lung capacity
+- RV → residual volume
+- FRC → functional residual capacity
+- DLCO → diffusing capacity for carbon monoxide
+- PEF → peak expiratory flow
+- FEF25-75 → forced expiratory flow at 25-75% of FVC
+- MVV → maximum voluntary ventilation
+- MIP → maximum inspiratory pressure
+- MEP → maximum expiratory pressure
+- LLN → lower limit of normal
+- GOLD → Global Initiative for Chronic Obstructive Lung Disease
+- ILD → interstitial lung disease
+- IPF → idiopathic pulmonary fibrosis
+- PAH → pulmonary arterial hypertension
 
 """
 
@@ -4203,6 +4990,207 @@ When describing perfusion defects, map them to the likely coronary artery:
 Always explain in plain language: "The area of your heart supplied by the
 [artery name] showed reduced blood flow during the stress portion of the test."
 
+### SPECT Imaging Artifacts & Pitfalls
+
+- DIAPHRAGMATIC ATTENUATION: Most common artifact. Causes apparent inferior
+  wall defect due to photon absorption by the diaphragm. More common in men
+  and obese patients. Clues: fixed (not reversible), normal wall motion on
+  gated images, typical location (inferior wall only).
+  - Correction: Prone imaging (repositions diaphragm), attenuation correction
+    (AC) maps, gated wall motion analysis (normal motion = artifact).
+
+- BREAST ATTENUATION: Causes apparent anterior/anterolateral defect. More
+  common in women with large/dense breasts. May shift with positioning.
+  Clues: fixed defect in anterior wall, normal wall motion, correlates with
+  breast shadow on raw projection data.
+  - Correction: Attenuation correction (CT-based AC), prone imaging, comparing
+    supine vs prone images, gated wall motion analysis.
+
+- PATIENT MOTION: Causes misalignment between projections, producing artifactual
+  defects in any territory. May create "hurricane sign" on sinogram. Review
+  raw cine data for movement. Motion > 1 pixel can cause significant artifacts.
+  - Correction: Motion correction software, repeat acquisition if severe.
+
+- EXTRACARDIAC ACTIVITY: GI uptake (stomach, bowel loops) adjacent to inferior
+  wall can scatter into myocardium creating false defects or "hot spots."
+  Liver uptake can obscure inferior wall. Water/milk before imaging helps
+  clear subdiaphragmatic activity.
+
+- SMALL HEART ARTIFACT: In patients with small LV chambers, resolution
+  limitations cause apparent hot spots or decreased cavity-to-wall contrast.
+  More common in women. Can mimic normal study when disease is actually present.
+
+### PET Imaging Artifacts & Pitfalls
+
+- CT-PET MISREGISTRATION: The most important PET artifact. CT (for attenuation
+  correction) and PET are acquired sequentially — respiratory or patient motion
+  between scans causes spatial misalignment. Creates artifactual defects
+  (typically anterior wall) or overcorrection. Always review fusion/overlay
+  images for alignment. May need manual registration correction.
+
+- RESPIRATORY MOTION: Breathing during acquisition blurs the inferior and
+  anterior walls. Respiratory gating can reduce this artifact.
+
+- RUBIDIUM-82 GENERATOR ISSUES: Low generator yield (especially toward end
+  of generator life) results in poor count statistics and noisy images.
+  Ensure adequate injected activity.
+
+- SPILLOVER / PARTIAL VOLUME: In patients with severe LV hypertrophy or
+  small hearts, blood pool activity spills into myocardium and vice versa,
+  affecting quantitative MBF measurements. Partial volume correction
+  algorithms help but are not universally applied.
+
+- RATE-PRESSURE PRODUCT: Resting MBF is influenced by cardiac workload
+  (heart rate x systolic BP). Elevated resting MBF from high RPP may
+  artificially lower CFR. Some centers normalize resting MBF to a standard RPP.
+
+"""
+
+_CLINICAL_DOMAIN_KNOWLEDGE_VASCULAR = """\
+## Clinical Domain Knowledge — Vascular Studies
+
+### Carotid Duplex / Carotid Ultrasound
+
+- CAROTID STENOSIS GRADING (SRU Consensus Criteria):
+  - Normal: ICA PSV < 125 cm/s, no plaque
+  - < 50% stenosis: ICA PSV < 125 cm/s, visible plaque
+  - 50-69% stenosis: ICA PSV 125-230 cm/s, ICA/CCA ratio 2.0-4.0
+  - >= 70% stenosis (severe): ICA PSV > 230 cm/s, ICA/CCA ratio > 4.0
+  - Near-occlusion: high-grade stenosis with diminished flow distally,
+    variable PSV (may be low due to reduced flow)
+  - Total occlusion: no detectable flow in the ICA
+  Symptomatic patients (recent TIA/stroke) with >= 50% stenosis may benefit
+  from intervention. Asymptomatic patients typically considered for intervention
+  at >= 70%. Always mention which side is affected (left vs right).
+
+- PLAQUE CHARACTERIZATION:
+  - Calcified plaque: bright, shadowing — generally more stable
+  - Soft/hypoechoic plaque: darker, no shadowing — potentially more vulnerable
+  - Ulcerated plaque: irregular surface, niche — higher embolic risk
+  - Heterogeneous plaque: mixed echogenicity — intermediate risk
+  Plaque morphology can add context but stenosis grade remains the primary
+  clinical metric for decision-making.
+
+- VERTEBRAL ARTERY: Antegrade flow is normal. Retrograde (reversed) flow
+  suggests proximal subclavian stenosis (subclavian steal). Absent or
+  diminished flow may indicate vertebral stenosis or occlusion.
+
+- INTIMA-MEDIA THICKNESS (IMT): Measured at CCA. IMT > 1.0mm is abnormal.
+  Historically used as a cardiovascular risk marker but has limited clinical
+  utility for individual decision-making. If reported, contextualize as a
+  marker of arterial aging.
+
+### Lower Extremity Arterial Duplex / Peripheral Arterial Disease
+
+- ANKLE-BRACHIAL INDEX (ABI):
+  - > 1.3: Non-compressible arteries (calcified — common in diabetes, CKD).
+    Cannot be used for diagnosis; consider toe-brachial index (TBI).
+  - 1.0-1.3: Normal
+  - 0.9-0.99: Borderline — correlate with symptoms
+  - 0.7-0.89: Mild PAD
+  - 0.5-0.69: Moderate PAD
+  - < 0.5: Severe PAD (critical limb ischemia risk)
+  ABI is a screening tool — does not localize the disease. Post-exercise ABI
+  (drop > 20%) can unmask PAD not seen at rest.
+
+- ARTERIAL WAVEFORM PATTERNS:
+  - Triphasic: normal — sharp systolic peak, brief reversal, diastolic component
+  - Biphasic: loss of reversal component — mild disease or distal run-off changes
+  - Monophasic: dampened, continuous flow — significant proximal disease
+  Waveform change from triphasic to monophasic across a segment localizes stenosis.
+
+- SEGMENTAL PRESSURES: Pressure drop > 20 mmHg between adjacent segments
+  indicates hemodynamically significant stenosis at that level.
+
+- PAD CLINICAL CORRELATION:
+  - Claudication: leg pain with walking that resolves with rest. Matches
+    arterial territory (calf = SFA/popliteal, thigh/buttock = aortoiliac).
+  - Rest pain: continuous pain (especially at night) = critical limb ischemia
+  - Tissue loss (ulcer/gangrene): most severe — requires urgent revascularization
+  Fontaine classification: Stage I (asymptomatic), II (claudication),
+  III (rest pain), IV (tissue loss).
+
+### Lower Extremity Venous Duplex / DVT Evaluation
+
+- DVT DIAGNOSIS: Primary criterion is non-compressibility of the vein.
+  Acute DVT: distended vein, hypoechoic (dark) thrombus, non-compressible.
+  Chronic DVT: echogenic (bright) thrombus, thickened vein wall, collaterals,
+  partially compressible.
+
+- DVT LOCATION AND SIGNIFICANCE:
+  - Proximal DVT (popliteal and above): high risk for PE, always requires
+    anticoagulation
+  - Distal DVT (below popliteal — calf veins): lower PE risk, may be observed
+    with serial imaging or anticoagulated depending on risk factors
+  - Iliofemoral DVT: extensive clot burden, consider catheter-directed therapy
+    in certain patients
+  - Superficial vein thrombosis: if within 3 cm of saphenofemoral junction,
+    higher risk of extension into deep system — may warrant anticoagulation
+
+- VENOUS INSUFFICIENCY / REFLUX:
+  - Reflux > 0.5 seconds in superficial veins (GSV, SSV) or > 1.0 second
+    in deep veins indicates chronic venous insufficiency
+  - GSV reflux: most common cause of varicose veins
+  - Perforator incompetence: contributes to skin changes and ulceration
+  - CEAP classification: C0-C6 from no visible disease to active venous ulcer
+  - Chronic venous insufficiency causes stasis dermatitis, lipodermatosclerosis,
+    and venous ulcers — different from arterial ulcers (venous = medial malleolus,
+    irregular, moist; arterial = distal, punched-out, painful)
+
+### Upper Extremity Venous / Arterial Duplex
+
+- UPPER EXTREMITY DVT: Often catheter-related (PICC lines, ports, central
+  lines) or effort-related (Paget-Schroetter syndrome in young, active patients).
+  Treatment approach differs from lower extremity DVT.
+
+- THORACIC OUTLET: Arterial compression (positional) may be seen with
+  provocative maneuvers. Subclavian steal diagnosed by reversed vertebral
+  artery flow.
+
+### Aortic Ultrasound / Abdominal Aorta
+
+- ABDOMINAL AORTIC ANEURYSM (AAA):
+  - Normal aortic diameter: < 3.0 cm
+  - Ectatic: 3.0-4.9 cm (monitor with periodic ultrasound)
+  - Aneurysmal: >= 3.0 cm (or > 1.5x normal diameter)
+  - Surveillance: 3.0-3.9 cm every 3 years, 4.0-4.9 cm every 12 months,
+    5.0-5.4 cm every 6 months
+  - Surgical/intervention threshold: >= 5.5 cm in men, >= 5.0 cm in women,
+    or growth > 0.5 cm in 6 months
+  Most AAAs are asymptomatic and found incidentally or on screening (recommended
+  once for men 65-75 who have ever smoked).
+
+### Renal Artery Doppler
+
+- RENAL ARTERY STENOSIS:
+  - PSV > 200 cm/s: suggests >= 60% stenosis
+  - Renal-to-aortic ratio (RAR) > 3.5: hemodynamically significant stenosis
+  - Tardus-parvus waveform (delayed, dampened intrarenal flow): suggests
+    proximal stenosis
+  - Resistive index (RI) > 0.80: may indicate intrinsic renal disease or
+    chronic changes limiting benefit from revascularization
+
+### Abbreviations — Vascular
+- ICA → internal carotid artery
+- ECA → external carotid artery
+- CCA → common carotid artery
+- PSV → peak systolic velocity
+- EDV → end-diastolic velocity
+- IMT → intima-media thickness
+- ABI → ankle-brachial index
+- TBI → toe-brachial index
+- PAD → peripheral arterial disease
+- DVT → deep vein thrombosis
+- PE → pulmonary embolism
+- GSV → great saphenous vein
+- SSV → small saphenous vein
+- CVI → chronic venous insufficiency
+- AAA → abdominal aortic aneurysm
+- RAR → renal-to-aortic ratio
+- RI → resistive index
+- SFA → superficial femoral artery
+- CFA → common femoral artery
+
 """
 
 _CLINICAL_DOMAIN_KNOWLEDGE_SLEEP = """\
@@ -4258,6 +5246,48 @@ Apply these sleep study interpretation rules:
 - CPAP TITRATION: Optimal pressure determined during titration study.
   Target: AHI < 5 at the prescribed pressure. Residual AHI on CPAP download
   data helps assess treatment effectiveness.
+
+### Advanced Sleep Interpretation
+
+- POSITIONAL OSA: AHI significantly worse in supine position (supine AHI
+  > 2x non-supine AHI). Positional therapy (sleeping off the back) may be
+  sufficient for mild positional OSA. Report supine vs non-supine AHI
+  separately when available.
+
+- SPLIT-NIGHT STUDY: First half is diagnostic, second half is CPAP titration.
+  Valid if diagnostic portion shows AHI >= 40 in >= 2 hours of sleep, OR
+  AHI 20-40 with clinical judgment. If diagnostic portion is insufficient,
+  a full-night titration study is needed.
+
+- MSLT (MULTIPLE SLEEP LATENCY TEST): Measures daytime sleepiness.
+  5 nap opportunities at 2-hour intervals.
+  - Mean sleep latency < 8 minutes: pathological sleepiness
+  - Mean sleep latency 8-10 minutes: borderline
+  - Mean sleep latency > 10 minutes: normal
+  - >= 2 sleep-onset REM periods (SOREMPs): strongly suggests narcolepsy
+    (when combined with short mean sleep latency)
+  MSLT must be preceded by adequate overnight sleep and free of REM-
+  suppressing medications for valid results.
+
+- MWT (MAINTENANCE OF WAKEFULNESS TEST): Measures ability to stay awake.
+  Used for fitness-for-duty evaluations (commercial drivers, pilots).
+  - Mean sleep latency < 8 minutes: unable to stay awake (impaired)
+  - Mean sleep latency > 40 minutes: normal wakefulness
+
+- OBESITY HYPOVENTILATION SYNDROME (OHS): BMI >= 30 + awake hypercapnia
+  (PaCO2 > 45 mmHg) + sleep-disordered breathing, in absence of other
+  causes. Often coexists with severe OSA. Requires BiPAP or PAP with
+  backup rate (not CPAP alone). Serum bicarbonate > 27 mEq/L on labs
+  may be a clue to chronic hypoventilation.
+
+- COMPLEX SLEEP APNEA (CompSA): Central apneas emerge or persist when
+  obstructive events are treated with CPAP. May require ASV instead of
+  standard CPAP. Distinguished from pure CSA by the emergence pattern.
+
+- PEDIATRIC SCORING DIFFERENCES: In children, AHI > 1 is abnormal
+  (vs > 5 in adults). Obstructive hypoventilation (prolonged hypopneas
+  with CO2 elevation) may be more prominent than discrete apneas in children.
+  Adenotonsillectomy is first-line treatment for pediatric OSA.
 
 ### Abbreviations — Sleep Medicine
 - PSG → polysomnography
@@ -4456,6 +5486,62 @@ _CLINICAL_DOMAIN_KNOWLEDGE_ENDOSCOPY = """\
   Present in ~50% of people over 60. Incidental finding — not a disease.
   Only mention if specifically relevant to symptoms.
 
+### Polyp Morphology — Paris Classification
+
+- TYPE 0-I (POLYPOID / PROTRUDING):
+  - 0-Ip: Pedunculated (on a stalk) — easier to remove with snare
+  - 0-Is: Sessile (broad base, no stalk)
+  - 0-Isp: Sub-pedunculated (intermediate between pedunculated and sessile)
+
+- TYPE 0-II (NON-POLYPOID / FLAT):
+  - 0-IIa: Slightly elevated (< 2.5mm above mucosa)
+  - 0-IIb: Completely flat
+  - 0-IIc: Slightly depressed
+  Flat and depressed lesions have higher malignancy risk per millimeter of
+  size than polypoid lesions. 0-IIc (depressed) lesions are particularly
+  concerning even when small.
+
+- TYPE 0-III (EXCAVATED): Ulcerated lesion — high suspicion for malignancy.
+
+Paris classification helps endoscopists decide removal technique (snare vs
+EMR vs ESD) and predict submucosal invasion risk.
+
+### Peptic Ulcer — Forrest Classification (Bleeding Risk)
+
+- Forrest Ia: Spurting arterial hemorrhage — active bleed, highest rebleeding
+  risk (~90%). Requires endoscopic intervention.
+- Forrest Ib: Oozing hemorrhage — active bleed but lower pressure. Rebleeding
+  risk ~50%. Typically treated endoscopically.
+- Forrest IIa: Non-bleeding visible vessel — a raised, pigmented protuberance
+  in ulcer base. Rebleeding risk ~40-50%. Endoscopic treatment recommended.
+- Forrest IIb: Adherent clot — overlying the ulcer base. Rebleeding risk
+  ~20-35%. May warrant clot removal and treatment of underlying lesion.
+- Forrest IIc: Flat pigmented spot (hematin spot) — dark discoloration in
+  ulcer base. Low rebleeding risk (~7-10%). Usually no endoscopic treatment.
+- Forrest III: Clean-based ulcer — no stigmata of bleeding. Very low
+  rebleeding risk (< 5%). Medical management (PPI) is sufficient.
+
+Forrest classification guides whether endoscopic intervention is needed
+and helps predict risk of rebleeding. Classes Ia through IIa generally
+require endoscopic hemostasis.
+
+### Additional Endoscopy Findings
+
+- CAMERON LESIONS: Linear erosions at the waist of a large hiatal hernia.
+  Can cause chronic blood loss and iron deficiency anemia.
+
+- MALLORY-WEISS TEAR: Linear mucosal tear at the gastroesophageal junction,
+  usually from forceful vomiting. Most heal spontaneously. Active bleeding
+  from a Mallory-Weiss tear may require endoscopic treatment.
+
+- DIEULAFOY LESION: Large submucosal artery that erodes through the mucosa
+  without an overlying ulcer. Can cause massive, intermittent GI bleeding.
+  May be hard to identify when not actively bleeding.
+
+- ANGIODYSPLASIA (ARTERIOVENOUS MALFORMATION): Dilated, tortuous blood
+  vessels in the mucosa. Common in elderly and patients with CKD or aortic
+  stenosis (Heyde syndrome). Can cause chronic or recurrent GI bleeding.
+
 ### Abbreviations — Endoscopy
 - EGD → esophagogastroduodenoscopy (upper endoscopy)
 - EMR → endoscopic mucosal resection
@@ -4549,6 +5635,55 @@ _CLINICAL_DOMAIN_KNOWLEDGE_PATHOLOGY = """\
   ER/PR status (hormone receptor), HER2 status, Ki-67 (proliferation index).
   These determine treatment options.
 
+### TNM Staging System — General Principles
+
+The TNM system describes cancer extent. T = primary tumor size/invasion,
+N = regional lymph node involvement, M = distant metastasis. Combined into
+overall stage (I-IV). Higher stage = more advanced disease. Pathological
+staging (pTNM) from surgical specimens is more accurate than clinical staging.
+
+- COLORECTAL CANCER (simplified):
+  - T1: Invades submucosa. T2: Invades muscularis propria (muscle layer).
+    T3: Through muscularis into pericolorectal tissue. T4: Into adjacent
+    organs (T4a: visceral peritoneum, T4b: directly invades other organs).
+  - N0: No node involvement. N1: 1-3 positive nodes. N2: >= 4 positive nodes.
+  - Stage I (T1-T2, N0): localized, excellent prognosis (>90% 5-year survival).
+    Stage II (T3-T4, N0): locally advanced, no nodes. Stage III (any T, N+):
+    node-positive, adjuvant chemo usually recommended. Stage IV (M1): distant
+    metastasis (liver, lung most common).
+
+- BREAST CANCER (simplified):
+  - T1: Tumor <= 2 cm. T2: 2-5 cm. T3: > 5 cm. T4: chest wall or skin
+    involvement (T4d = inflammatory breast cancer).
+  - N0: No axillary node involvement. N1: 1-3 axillary nodes. N2: 4-9 nodes
+    or internal mammary nodes. N3: >= 10 axillary or infraclavicular nodes.
+  - Biomarker subtype affects prognosis more than stage in early breast cancer:
+    ER+/HER2- (most common, best prognosis), HER2+ (targeted therapy available),
+    Triple-negative (ER-/PR-/HER2-, most aggressive).
+
+- LUNG CANCER (simplified):
+  - T1: <= 3 cm, surrounded by lung. T2: 3-5 cm or involves main bronchus.
+    T3: 5-7 cm or invades chest wall. T4: > 7 cm or invades mediastinum/heart.
+  - N0: No nodes. N1: ipsilateral peribronchial/hilar. N2: ipsilateral
+    mediastinal. N3: contralateral mediastinal or supraclavicular.
+  - Small cell vs non-small cell distinction is more important than TNM for
+    treatment. Non-small cell staging guides surgical candidacy (generally
+    stages I-IIIA are potentially resectable).
+
+- PROSTATE CANCER (simplified):
+  - T1: Not palpable or visible (found on biopsy). T2: Confined to prostate.
+    T3: Extends through capsule. T4: Invades adjacent structures.
+  - Gleason score (now Grade Group 1-5) is the primary grading system:
+    Grade Group 1 (Gleason 3+3=6): very low risk, often suitable for
+    active surveillance. Grade Group 5 (Gleason 9-10): highest risk.
+  - PSA level + Gleason + clinical stage together determine risk category
+    (very low, low, intermediate favorable/unfavorable, high, very high).
+
+When explaining staging to patients, focus on what it means for their
+situation: "Stage I means the cancer was found early and is confined to
+one area" rather than technical T/N/M details. Always defer to the
+treating physician for prognosis discussion.
+
 ### Abbreviations — Pathology
 - H&E → hematoxylin and eosin stain
 - IHC → immunohistochemistry
@@ -4618,6 +5753,38 @@ _CLINICAL_DOMAIN_KNOWLEDGE_PROCEDURES = """\
   contraindication resolves. Report filter position, tilt, strut
   integrity, and any trapped thrombus.
 
+### Coronary Physiology & Intravascular Imaging
+
+- FFR (FRACTIONAL FLOW RESERVE): Pressure wire measurement during maximal
+  hyperemia (adenosine). FFR = distal coronary pressure / aortic pressure.
+  - FFR > 0.80: Stenosis is NOT hemodynamically significant — medical therapy.
+    Deferring PCI for FFR > 0.80 is safe and guideline-supported.
+  - FFR <= 0.80: Stenosis IS significant — revascularization improves outcomes.
+  - FFR 0.75-0.80: "Gray zone" — clinical context and symptoms guide decisions.
+  FFR measures the FUNCTIONAL significance of a stenosis, not just anatomy.
+  A 60% stenosis with FFR 0.85 does not need a stent.
+
+- iFR (INSTANTANEOUS WAVE-FREE RATIO): Resting (non-hyperemic) index.
+  - iFR > 0.89: Not significant — defer intervention.
+  - iFR <= 0.89: Significant — consider revascularization.
+  - iFR 0.86-0.93: "Hybrid" approach — may proceed to FFR for confirmation.
+  Advantage: no adenosine needed (avoids drug side effects). Non-inferior
+  to FFR in clinical trials (DEFINE-FLAIR, iFR-SWEDEHEART).
+
+- IVUS (INTRAVASCULAR ULTRASOUND): Cross-sectional ultrasound of vessel wall.
+  - Minimum lumen area (MLA): < 6.0 mm² in left main, < 4.0 mm² in other
+    epicardial vessels suggests significant stenosis.
+  - Plaque characterization: fibrous, fibrofatty, calcific, necrotic core.
+  - Post-stent assessment: adequate expansion (MLA > 80% of reference vessel),
+    good apposition, no edge dissection.
+  IVUS guidance during PCI improves outcomes compared to angiography alone,
+  especially in left main and complex bifurcation lesions.
+
+- OCT (OPTICAL COHERENCE TOMOGRAPHY): Higher resolution than IVUS (~10µm vs
+  ~100µm). Better for thin-cap fibroatheroma detection, thrombus
+  characterization, stent strut coverage assessment, and neoatherosclerosis.
+  Limited by blood clearance requirement and penetration depth.
+
 ### Abbreviations — Interventional
 - PTA → percutaneous transluminal angioplasty
 - EVAR → endovascular aneurysm repair
@@ -4637,6 +5804,66 @@ _CLINICAL_DOMAIN_KNOWLEDGE_PROCEDURES = """\
 
 # Default domain knowledge for backwards compatibility
 _CLINICAL_DOMAIN_KNOWLEDGE = _CLINICAL_DOMAIN_KNOWLEDGE_CARDIAC
+
+
+# Cross-block knowledge snippets for test types that span two domains
+_CROSS_BLOCK_STRESS_ECHO = """
+### Stress Echo — Wall Motion Interpretation (from Cardiac Domain)
+
+- WALL MOTION SCORING: 1 = normal, 2 = hypokinesis (reduced motion),
+  3 = akinesis (no motion), 4 = dyskinesis (paradoxical motion).
+  New wall motion abnormalities at peak stress that were not present at
+  rest indicate ischemia in that coronary territory. Persistent
+  abnormalities at rest may indicate prior infarction (scar).
+
+- STRESS ECHO vs NUCLEAR: Stress echo evaluates WALL MOTION (mechanical
+  function) rather than PERFUSION (blood flow). A segment that moves
+  normally at stress has adequate blood supply. New hypokinesis or
+  akinesis at peak stress = ischemia.
+
+- EF RESPONSE TO STRESS: Normal response is EF increase >= 5% from rest
+  to stress. Failure to augment or drop in EF during stress suggests
+  multivessel ischemia or cardiomyopathy. Report rest and stress EF values.
+
+- VIABILITY ASSESSMENT (dobutamine stress echo): Low-dose dobutamine may
+  "awaken" stunned or hibernating myocardium — segments that improve at
+  low dose but worsen at high dose (biphasic response) suggest viable but
+  ischemic myocardium that may benefit from revascularization.
+"""
+
+_CROSS_BLOCK_PACEMAKER_EKG = """
+### Pacemaker — EKG Rhythm Context (from EKG Domain)
+
+- PACED RHYTHM on EKG: Ventricular pacing produces wide QRS with LBBB
+  morphology (paced from RV). Standard ischemia criteria do NOT apply.
+  Look for appropriate capture and sensing.
+
+- UNDERLYING RHYTHM: When available, the underlying rhythm (with pacing
+  temporarily inhibited) reveals the patient's native conduction. Complete
+  heart block, sick sinus syndrome, and bradycardia-tachycardia syndrome
+  are common indications.
+
+- ARRHYTHMIA INTERPRETATION: Device-stored electrograms classify events.
+  Distinguish appropriate therapy (VT/VF correctly detected and treated)
+  from inappropriate therapy (SVT, noise, or T-wave oversensing
+  misclassified as VT).
+"""
+
+_CROSS_BLOCK_HOLTER_CARDIAC = """
+### Holter/Event Monitor — Cardiac Arrhythmia Context (from Cardiac Domain)
+
+- ARRHYTHMIA SIGNIFICANCE depends on cardiac structure. PVCs and brief
+  SVT runs are usually benign in a structurally normal heart. In patients
+  with cardiomyopathy or prior MI, even brief VT runs may be significant.
+
+- ATRIAL FIBRILLATION detected on monitoring warrants CHA2DS2-VASc
+  scoring for stroke risk assessment. Even brief paroxysms (minutes)
+  carry stroke risk if the score is >= 2 in men or >= 3 in women.
+
+- PVC MORPHOLOGY: Uniform (monomorphic) PVCs from a single focus are
+  generally more benign than multiform (polymorphic) PVCs. RVOT PVCs
+  (LBBB morphology with inferior axis) are the most common benign type.
+"""
 
 
 def _select_domain_knowledge(prompt_context: dict) -> str:
@@ -4663,24 +5890,37 @@ def _select_domain_knowledge(prompt_context: dict) -> str:
     elif test_type in ("pathology", "skin_biopsy"):
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_PATHOLOGY
     elif test_type in ("holter_monitor", "event_monitor"):
-        domain = _CLINICAL_DOMAIN_KNOWLEDGE_EKG
+        # Holter/event monitors need EKG knowledge + cardiac arrhythmia context
+        domain = _CLINICAL_DOMAIN_KNOWLEDGE_EKG + _CROSS_BLOCK_HOLTER_CARDIAC
     elif test_type in ("pacemaker_check",):
-        domain = _CLINICAL_DOMAIN_KNOWLEDGE_CARDIAC
+        # Pacemaker checks need cardiac knowledge + EKG rhythm context
+        domain = _CLINICAL_DOMAIN_KNOWLEDGE_CARDIAC + _CROSS_BLOCK_PACEMAKER_EKG
+    elif test_type in ("exercise_stress_echo", "pharma_stress_echo"):
+        # Stress echo needs nuclear stress knowledge + echo wall motion context
+        domain = _CLINICAL_DOMAIN_KNOWLEDGE_NUCLEAR + _CROSS_BLOCK_STRESS_ECHO
     elif test_type in ("nuclear_stress", "ct_calcium_score", "cardiac_pet",
                        "pharmacological_stress_test",
                        "pharma_spect_stress", "exercise_spect_stress",
                        "pharma_pet_stress", "exercise_pet_stress",
-                       "exercise_treadmill_test", "exercise_stress_test",
-                       "exercise_stress_echo", "pharma_stress_echo"):
+                       "exercise_treadmill_test", "exercise_stress_test"):
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_NUCLEAR
     # Category-based routing
     elif category == "lab":
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_LABS
-    elif category in ("imaging_ct", "imaging_mri", "imaging_xray",
-                      "imaging_ultrasound"):
+    elif category in ("imaging_ct", "imaging_mri", "imaging_xray"):
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_IMAGING
-    elif category in ("cardiac", "vascular"):
+    elif category == "imaging_ultrasound":
+        # Route vascular ultrasound types to VASCULAR block for detailed
+        # interpretation criteria (carotid, renal artery, AAA, mesenteric)
+        if test_type in ("renal_artery_doppler", "mesenteric_doppler",
+                         "abdominal_aorta"):
+            domain = _CLINICAL_DOMAIN_KNOWLEDGE_VASCULAR
+        else:
+            domain = _CLINICAL_DOMAIN_KNOWLEDGE_IMAGING
+    elif category == "cardiac":
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_CARDIAC
+    elif category == "vascular":
+        domain = _CLINICAL_DOMAIN_KNOWLEDGE_VASCULAR
     elif category == "neurophysiology":
         domain = _CLINICAL_DOMAIN_KNOWLEDGE_NEURO
     elif category == "pulmonary":
