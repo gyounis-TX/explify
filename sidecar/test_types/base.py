@@ -139,7 +139,7 @@ class BaseTestType(ABC):
         Override in subclass; defaults to 'other'."""
         return "other"
 
-    def get_prompt_context(self, extraction_result: ExtractionResult | None = None, **kwargs) -> dict:
+    def get_prompt_context(self, extraction_result: ExtractionResult | None = None) -> dict:
         """Additional context for LLM prompt construction (Phase 4).
         Default returns empty dict; override in subclass."""
         return {}
