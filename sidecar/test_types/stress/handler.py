@@ -59,6 +59,7 @@ _PHARMA_AGENTS = [
 _PET_KEYWORDS = [
     "pet/ct", "pet-ct", "pet ct", "rb-82", "rubidium",
     "n-13", "ammonia pet", "positron emission", "cardiac pet",
+    "cardiac positron emission tomography", "positron emission tomography",
     "myocardial blood flow", "mbf", "coronary flow reserve", "cfr",
     "positron", "n-13 ammonia",
 ]
@@ -324,6 +325,8 @@ class StressTestHandler(BaseTestType):
             "sestamibi",
             # PET
             "cardiac pet",
+            "cardiac positron emission tomography",
+            "positron emission tomography",
             "pet/ct",
             "pet-ct",
             "rb-82",
@@ -417,6 +420,8 @@ class StressTestHandler(BaseTestType):
             "pharmacologic stress",
             # PET
             "cardiac pet",
+            "cardiac positron emission tomography",
+            "positron emission tomography",
             "myocardial blood flow",
             "coronary flow reserve",
             # Echo
@@ -459,6 +464,8 @@ class StressTestHandler(BaseTestType):
             "rb-82",
             "rubidium",
             "positron",
+            "positron emission tomography",
+            "cardiac positron emission tomography",
             # Pharmacologic agents
             "lexiscan",
             "regadenoson",

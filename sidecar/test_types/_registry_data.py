@@ -75,8 +75,10 @@ _CARDIAC: list[GenericTestType] = [
         "spect", "sestamibi", "treadmill nuclear",
     ], category="cardiac"),
     GenericTestType("pharma_pet_stress", "Pharmacologic PET/PET-CT Stress", [
-        "cardiac pet", "pet/ct", "pet-ct", "rb-82", "rubidium", "positron",
-        "n-13 ammonia", "myocardial blood flow", "mbf", "coronary flow reserve",
+        "cardiac pet", "cardiac positron emission tomography",
+        "positron emission tomography", "pet/ct", "pet-ct", "rb-82",
+        "rubidium", "positron", "n-13 ammonia", "myocardial blood flow",
+        "mbf", "coronary flow reserve",
         "pharmacologic", "lexiscan", "regadenoson", "adenosine",
     ], category="cardiac",
         measurement_extractor=extract_cardiac_pet_measurements,
@@ -84,7 +86,9 @@ _CARDIAC: list[GenericTestType] = [
         glossary=CARDIAC_PET_GLOSSARY,
     ),
     GenericTestType("exercise_pet_stress", "Exercise PET/PET-CT Stress", [
-        "cardiac pet", "pet/ct", "pet-ct", "rb-82", "rubidium", "positron",
+        "cardiac pet", "cardiac positron emission tomography",
+        "positron emission tomography", "pet/ct", "pet-ct", "rb-82",
+        "rubidium", "positron",
         "exercise", "treadmill", "myocardial blood flow", "mbf",
     ], category="cardiac",
         measurement_extractor=extract_cardiac_pet_measurements,
