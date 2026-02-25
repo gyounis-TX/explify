@@ -13,19 +13,22 @@ from .reference_ranges import REFERENCE_RANGES, classify_measurement
 _pet_extractor = None
 _pet_ref_ranges = None
 _pet_glossary = None
+_pet_get_cfc = None
 
 
 def _load_pet():
-    global _pet_extractor, _pet_ref_ranges, _pet_glossary
+    global _pet_extractor, _pet_ref_ranges, _pet_glossary, _pet_get_cfc
     if _pet_extractor is None:
         from test_types.extractors.cardiac_pet import (
             extract_cardiac_pet_measurements,
             CARDIAC_PET_REFERENCE_RANGES,
             CARDIAC_PET_GLOSSARY,
+            get_cfc,
         )
         _pet_extractor = extract_cardiac_pet_measurements
         _pet_ref_ranges = CARDIAC_PET_REFERENCE_RANGES
         _pet_glossary = CARDIAC_PET_GLOSSARY
+        _pet_get_cfc = get_cfc
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +75,212 @@ _ECHO_KEYWORDS = [
     "wall motion at stress", "exercise echocardiogram",
     "treadmill echo", "dobutamine echocardiogram",
 ]
+
+# ---------------------------------------------------------------------------
+# PET prompt rule constants — V1 (current) and V2 (enhanced)
+# ---------------------------------------------------------------------------
+
+_PET_PHARMA_STYLE_V1 = (
+    "This is a pharmacologic cardiac PET/PET-CT perfusion study. "
+    "The PRIMARY focus is the presence or absence of ISCHEMIA "
+    "(reversible perfusion defects). ALWAYS discuss ischemia and "
+    "perfusion findings FIRST, BEFORE mentioning ejection fraction "
+    "or pump strength. Ejection fraction should be mentioned as a "
+    "secondary data point later in the explanation — do not celebrate "
+    "or emphasize a normal EF, simply note it.\n"
+    "For coronary flow reserve (CFR) and myocardial flow reserve "
+    "(MFR): do NOT state 'we may make adjustments based on mild "
+    "reductions in flow reserve.' Instead, only mention CFR/MFR "
+    "if there are significant defects (CFR < 1.5 in a territory) "
+    "that support or corroborate perfusion defect findings. Mildly "
+    "reduced CFR (1.5-2.0) in the absence of perfusion defects "
+    "should be noted briefly without alarm.\n"
+    "IMPORTANT pharmacological stress rules:\n"
+    "- Do NOT mention heart rate response to stress AT ALL. "
+    "Heart rate response to exercise is invalid with pharmacological "
+    "stress. Do NOT comment on target heart rate, predicted maximum "
+    "heart rate, or % of max predicted heart rate.\n"
+    "- Do NOT state that the heart rate response may limit "
+    "interpretation of the EKG stress test."
+)
+
+_PET_PHARMA_RULES_V1 = (
+    "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
+    "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
+    "ischemia / perfusion findings BEFORE any mention of ejection "
+    "fraction or pump strength. Do NOT lead with EF. If there is "
+    "no ischemia, say so first, then mention EF afterward.\n"
+    "1. ISCHEMIA is the primary focus. State clearly whether "
+    "ischemia is present or absent. Describe the location, extent, "
+    "and severity of any perfusion defects.\n"
+    "2. Ejection fraction is secondary — mention it AFTER perfusion "
+    "findings. Do not emphasize or celebrate a normal EF. Do not "
+    "make EF the headline of the explanation.\n"
+    "3. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
+    "   - Do NOT say 'we may need to make adjustments based on "
+    "mild reductions in flow reserve'\n"
+    "   - If CFR is significantly reduced (< 1.5) in a territory "
+    "AND there are corresponding perfusion defects, mention that "
+    "the reduced flow reserve supports/corroborates the perfusion "
+    "findings\n"
+    "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
+    "defects, note it briefly as a finding without alarm (e.g., "
+    "'flow reserve was mildly reduced in this territory')\n"
+    "   - Globally reduced CFR without focal perfusion defects "
+    "may suggest microvascular disease\n"
+    "4. Wall motion abnormalities during stress (stunning) are "
+    "significant markers of ischemia."
+)
+
+_PET_PHARMA_STYLE_V2 = (
+    "This is a pharmacologic cardiac PET/PET-CT perfusion study. "
+    "Follow the DECISION TREE in the interpretation rules strictly.\n"
+    "At Clinical literacy: structured impression format. Use CFC "
+    "category names directly (normal, mildly reduced, etc.).\n"
+    "At Grade 12 literacy: explain CFC in context with brief definitions. "
+    "Explain what coronary flow capacity means before stating the result.\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library for "
+    "CFC, MBF, and CFR. Use very simple language.\n"
+    "ALWAYS: ischemia first, EF secondary, don't celebrate normal EF.\n"
+    "IMPORTANT pharmacological stress rules:\n"
+    "- Do NOT mention heart rate response to stress AT ALL.\n"
+    "- Do NOT comment on target heart rate, predicted maximum "
+    "heart rate, or % of max predicted heart rate.\n"
+    "- Do NOT state that the heart rate response may limit "
+    "interpretation of the EKG stress test."
+)
+
+_PET_PHARMA_RULES_V2 = (
+    "CARDIAC PET/PET-CT INTERPRETATION — DECISION TREE:\n\n"
+    "STEP 1 — ISCHEMIA CHECK (always first):\n"
+    "  - Examine SSS, SDS, and perfusion images.\n"
+    "  - SSS >= 4 OR SDS >= 2 → ischemia likely present. State location, extent, severity.\n"
+    "  - SSS 0-3 AND SDS 0-1 → no significant ischemia. State this clearly.\n"
+    "  - Fixed defects (SRS elevated, SDS low) → prior infarct/scar, not active ischemia.\n\n"
+    "STEP 2 — FLOW ANALYSIS (after ischemia assessment):\n"
+    "  - Report MFR/CFR (global and per-territory if available).\n"
+    "  - Report stress MBF (global and per-territory if available).\n"
+    "  - Classify CFC (coronary flow capacity) — the composite of stress MBF + CFR:\n"
+    "    * Normal: stress MBF >= 2.0 AND CFR >= 2.0\n"
+    "    * Mildly reduced: stress MBF 1.5-2.0 OR CFR 1.5-2.0\n"
+    "    * Moderately reduced: stress MBF 1.0-1.5 OR CFR 1.0-1.5\n"
+    "    * Severely reduced: stress MBF < 1.0 OR CFR < 1.0\n\n"
+    "STEP 3 — INTEGRATION & RISK CATEGORIZATION:\n"
+    "  a) Ischemia present + reduced CFC in same territory → epicardial CAD.\n"
+    "     Do NOT label as microvascular disease.\n"
+    "  b) No ischemia + globally reduced CFC (>= 2 territories) → may indicate\n"
+    "     microvascular dysfunction. Use cautious language: 'may suggest',\n"
+    "     'could be consistent with'. Do NOT diagnose definitively.\n"
+    "  c) No ischemia + normal CFC → reassuring. State clearly.\n"
+    "  d) No ischemia + isolated mildly reduced CFC in 1 territory → note\n"
+    "     briefly without alarm. May be normal variant or technical.\n\n"
+    "STEP 4 — SECONDARY FINDINGS:\n"
+    "  - LVEF (mention after perfusion/flow, do NOT lead with it)\n"
+    "  - TID ratio (if elevated, note as supporting evidence for ischemia)\n"
+    "  - Wall motion abnormalities at stress (stunning = ischemia marker)\n\n"
+    "GUARDRAILS:\n"
+    "  - Do NOT label microvascular disease when perfusion defects are present\n"
+    "  - Low MFR/CFR + perfusion defect = epicardial disease, not microvascular\n"
+    "  - Globally reduced MFR/CFR without focal defects → 'may suggest' microvascular\n"
+    "  - Do NOT over-alarm borderline values (mildly reduced CFC without other findings)\n"
+    "  - Do NOT say 'we may need to make adjustments based on mild reductions'\n"
+    "  - Pharmacologic stress: Do NOT mention heart rate response AT ALL"
+)
+
+_PET_EXERCISE_STYLE_V1 = (
+    "This is an exercise cardiac PET/PET-CT perfusion study. "
+    "The PRIMARY focus is the presence or absence of ISCHEMIA "
+    "(reversible perfusion defects). ALWAYS discuss ischemia and "
+    "perfusion findings FIRST, BEFORE mentioning ejection fraction "
+    "or pump strength. Also comment on exercise capacity (METs) "
+    "and heart rate response. Ejection fraction should be mentioned "
+    "as a secondary data point later in the explanation — do not "
+    "celebrate or emphasize a normal EF, simply note it.\n"
+    "For coronary flow reserve (CFR) and myocardial flow reserve "
+    "(MFR): do NOT state 'we may make adjustments based on mild "
+    "reductions in flow reserve.' Instead, only mention CFR/MFR "
+    "if there are significant defects (CFR < 1.5 in a territory) "
+    "that support or corroborate perfusion defect findings. Mildly "
+    "reduced CFR (1.5-2.0) in the absence of perfusion defects "
+    "should be noted briefly without alarm."
+)
+
+_PET_EXERCISE_RULES_V1 = (
+    "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
+    "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
+    "ischemia / perfusion findings BEFORE any mention of ejection "
+    "fraction or pump strength. Do NOT lead with EF. If there is "
+    "no ischemia, say so first, then mention EF afterward.\n"
+    "1. ISCHEMIA is the primary focus. State clearly whether "
+    "ischemia is present or absent. Describe the location, extent, "
+    "and severity of any perfusion defects.\n"
+    "2. Exercise capacity and heart rate response provide context "
+    "for the adequacy of the test.\n"
+    "3. Ejection fraction is secondary — mention it AFTER perfusion "
+    "findings. Do not emphasize or celebrate a normal EF.\n"
+    "4. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
+    "   - Do NOT say 'we may need to make adjustments based on "
+    "mild reductions in flow reserve'\n"
+    "   - If CFR is significantly reduced (< 1.5) in a territory "
+    "AND there are corresponding perfusion defects, mention that "
+    "the reduced flow reserve supports/corroborates the perfusion "
+    "findings\n"
+    "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
+    "defects, note it briefly without alarm\n"
+    "   - Globally reduced CFR without focal perfusion defects "
+    "may suggest microvascular disease\n"
+    "5. Wall motion abnormalities during stress (stunning) are "
+    "significant markers of ischemia."
+)
+
+_PET_EXERCISE_STYLE_V2 = (
+    "This is an exercise cardiac PET/PET-CT perfusion study. "
+    "Follow the DECISION TREE in the interpretation rules strictly.\n"
+    "Also comment on exercise capacity (METs) and heart rate response.\n"
+    "At Clinical literacy: structured impression format. Use CFC "
+    "category names directly.\n"
+    "At Grade 12 literacy: explain CFC in context with brief definitions.\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library for "
+    "CFC, MBF, and CFR. Use very simple language.\n"
+    "ALWAYS: ischemia first, exercise capacity second, EF last."
+)
+
+_PET_EXERCISE_RULES_V2 = (
+    "CARDIAC PET/PET-CT INTERPRETATION — DECISION TREE:\n\n"
+    "STEP 1 — ISCHEMIA CHECK (always first):\n"
+    "  - Examine SSS, SDS, and perfusion images.\n"
+    "  - SSS >= 4 OR SDS >= 2 → ischemia likely present. State location, extent, severity.\n"
+    "  - SSS 0-3 AND SDS 0-1 → no significant ischemia. State this clearly.\n"
+    "  - Fixed defects (SRS elevated, SDS low) → prior infarct/scar, not active ischemia.\n\n"
+    "STEP 2 — FLOW ANALYSIS (after ischemia assessment):\n"
+    "  - Report MFR/CFR (global and per-territory if available).\n"
+    "  - Report stress MBF (global and per-territory if available).\n"
+    "  - Classify CFC (coronary flow capacity) — the composite of stress MBF + CFR:\n"
+    "    * Normal: stress MBF >= 2.0 AND CFR >= 2.0\n"
+    "    * Mildly reduced: stress MBF 1.5-2.0 OR CFR 1.5-2.0\n"
+    "    * Moderately reduced: stress MBF 1.0-1.5 OR CFR 1.0-1.5\n"
+    "    * Severely reduced: stress MBF < 1.0 OR CFR < 1.0\n\n"
+    "STEP 3 — INTEGRATION & RISK CATEGORIZATION:\n"
+    "  a) Ischemia present + reduced CFC in same territory → epicardial CAD.\n"
+    "     Do NOT label as microvascular disease.\n"
+    "  b) No ischemia + globally reduced CFC (>= 2 territories) → may indicate\n"
+    "     microvascular dysfunction. Use cautious language: 'may suggest',\n"
+    "     'could be consistent with'. Do NOT diagnose definitively.\n"
+    "  c) No ischemia + normal CFC → reassuring. State clearly.\n"
+    "  d) No ischemia + isolated mildly reduced CFC in 1 territory → note\n"
+    "     briefly without alarm. May be normal variant or technical.\n\n"
+    "STEP 4 — SECONDARY FINDINGS:\n"
+    "  - Exercise capacity (METs) and heart rate response (% of max predicted)\n"
+    "  - LVEF (mention after perfusion/flow, do NOT lead with it)\n"
+    "  - TID ratio (if elevated, note as supporting evidence for ischemia)\n"
+    "  - Wall motion abnormalities at stress (stunning = ischemia marker)\n\n"
+    "GUARDRAILS:\n"
+    "  - Do NOT label microvascular disease when perfusion defects are present\n"
+    "  - Low MFR/CFR + perfusion defect = epicardial disease, not microvascular\n"
+    "  - Globally reduced MFR/CFR without focal defects → 'may suggest' microvascular\n"
+    "  - Do NOT over-alarm borderline values (mildly reduced CFC without other findings)\n"
+    "  - Do NOT say 'we may need to make adjustments based on mild reductions'"
+)
 
 
 class StressTestHandler(BaseTestType):
@@ -372,7 +581,11 @@ class StressTestHandler(BaseTestType):
     # ------------------------------------------------------------------
     # Prompt context (subtype-specific)
     # ------------------------------------------------------------------
-    def get_prompt_context(self, extraction_result: ExtractionResult | None = None) -> dict:
+    def get_prompt_context(
+        self,
+        extraction_result: ExtractionResult | None = None,
+        pet_rules_v2: bool = False,
+    ) -> dict:
         text = extraction_result.full_text if extraction_result else ""
         subtype_id, _ = self._classify_subtype(text)
 
@@ -475,104 +688,25 @@ class StressTestHandler(BaseTestType):
         elif subtype_id == "pharma_pet_stress":
             base["test_type"] = "pharma_pet_stress"
             base["guidelines"] = "ASNC 2016 PET Myocardial Perfusion Imaging Guidelines"
-            base["explanation_style"] = (
-                "This is a pharmacologic cardiac PET/PET-CT perfusion study. "
-                "The PRIMARY focus is the presence or absence of ISCHEMIA "
-                "(reversible perfusion defects). ALWAYS discuss ischemia and "
-                "perfusion findings FIRST, BEFORE mentioning ejection fraction "
-                "or pump strength. Ejection fraction should be mentioned as a "
-                "secondary data point later in the explanation — do not celebrate "
-                "or emphasize a normal EF, simply note it.\n"
-                "For coronary flow reserve (CFR) and myocardial flow reserve "
-                "(MFR): do NOT state 'we may make adjustments based on mild "
-                "reductions in flow reserve.' Instead, only mention CFR/MFR "
-                "if there are significant defects (CFR < 1.5 in a territory) "
-                "that support or corroborate perfusion defect findings. Mildly "
-                "reduced CFR (1.5-2.0) in the absence of perfusion defects "
-                "should be noted briefly without alarm.\n"
-                "IMPORTANT pharmacological stress rules:\n"
-                "- Do NOT mention heart rate response to stress AT ALL. "
-                "Heart rate response to exercise is invalid with pharmacological "
-                "stress. Do NOT comment on target heart rate, predicted maximum "
-                "heart rate, or % of max predicted heart rate.\n"
-                "- Do NOT state that the heart rate response may limit "
-                "interpretation of the EKG stress test."
-            )
-            base["interpretation_rules"] = (
-                "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
-                "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
-                "ischemia / perfusion findings BEFORE any mention of ejection "
-                "fraction or pump strength. Do NOT lead with EF. If there is "
-                "no ischemia, say so first, then mention EF afterward.\n"
-                "1. ISCHEMIA is the primary focus. State clearly whether "
-                "ischemia is present or absent. Describe the location, extent, "
-                "and severity of any perfusion defects.\n"
-                "2. Ejection fraction is secondary — mention it AFTER perfusion "
-                "findings. Do not emphasize or celebrate a normal EF. Do not "
-                "make EF the headline of the explanation.\n"
-                "3. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
-                "   - Do NOT say 'we may need to make adjustments based on "
-                "mild reductions in flow reserve'\n"
-                "   - If CFR is significantly reduced (< 1.5) in a territory "
-                "AND there are corresponding perfusion defects, mention that "
-                "the reduced flow reserve supports/corroborates the perfusion "
-                "findings\n"
-                "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
-                "defects, note it briefly as a finding without alarm (e.g., "
-                "'flow reserve was mildly reduced in this territory')\n"
-                "   - Globally reduced CFR without focal perfusion defects "
-                "may suggest microvascular disease\n"
-                "4. Wall motion abnormalities during stress (stunning) are "
-                "significant markers of ischemia."
-            )
+            if pet_rules_v2:
+                base["explanation_style"] = _PET_PHARMA_STYLE_V2
+                base["interpretation_rules"] = _PET_PHARMA_RULES_V2
+                # Inject CFC data for the LLM
+                self._inject_cfc(base, text, extraction_result)
+            else:
+                base["explanation_style"] = _PET_PHARMA_STYLE_V1
+                base["interpretation_rules"] = _PET_PHARMA_RULES_V1
 
         elif subtype_id == "exercise_pet_stress":
             base["test_type"] = "exercise_pet_stress"
             base["guidelines"] = "ASNC 2016 PET Myocardial Perfusion Imaging Guidelines"
-            base["explanation_style"] = (
-                "This is an exercise cardiac PET/PET-CT perfusion study. "
-                "The PRIMARY focus is the presence or absence of ISCHEMIA "
-                "(reversible perfusion defects). ALWAYS discuss ischemia and "
-                "perfusion findings FIRST, BEFORE mentioning ejection fraction "
-                "or pump strength. Also comment on exercise capacity (METs) "
-                "and heart rate response. Ejection fraction should be mentioned "
-                "as a secondary data point later in the explanation — do not "
-                "celebrate or emphasize a normal EF, simply note it.\n"
-                "For coronary flow reserve (CFR) and myocardial flow reserve "
-                "(MFR): do NOT state 'we may make adjustments based on mild "
-                "reductions in flow reserve.' Instead, only mention CFR/MFR "
-                "if there are significant defects (CFR < 1.5 in a territory) "
-                "that support or corroborate perfusion defect findings. Mildly "
-                "reduced CFR (1.5-2.0) in the absence of perfusion defects "
-                "should be noted briefly without alarm."
-            )
-            base["interpretation_rules"] = (
-                "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
-                "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
-                "ischemia / perfusion findings BEFORE any mention of ejection "
-                "fraction or pump strength. Do NOT lead with EF. If there is "
-                "no ischemia, say so first, then mention EF afterward.\n"
-                "1. ISCHEMIA is the primary focus. State clearly whether "
-                "ischemia is present or absent. Describe the location, extent, "
-                "and severity of any perfusion defects.\n"
-                "2. Exercise capacity and heart rate response provide context "
-                "for the adequacy of the test.\n"
-                "3. Ejection fraction is secondary — mention it AFTER perfusion "
-                "findings. Do not emphasize or celebrate a normal EF.\n"
-                "4. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
-                "   - Do NOT say 'we may need to make adjustments based on "
-                "mild reductions in flow reserve'\n"
-                "   - If CFR is significantly reduced (< 1.5) in a territory "
-                "AND there are corresponding perfusion defects, mention that "
-                "the reduced flow reserve supports/corroborates the perfusion "
-                "findings\n"
-                "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
-                "defects, note it briefly without alarm\n"
-                "   - Globally reduced CFR without focal perfusion defects "
-                "may suggest microvascular disease\n"
-                "5. Wall motion abnormalities during stress (stunning) are "
-                "significant markers of ischemia."
-            )
+            if pet_rules_v2:
+                base["explanation_style"] = _PET_EXERCISE_STYLE_V2
+                base["interpretation_rules"] = _PET_EXERCISE_RULES_V2
+                self._inject_cfc(base, text, extraction_result)
+            else:
+                base["explanation_style"] = _PET_EXERCISE_STYLE_V1
+                base["interpretation_rules"] = _PET_EXERCISE_RULES_V1
 
         elif subtype_id == "exercise_stress_echo":
             base["test_type"] = "exercise_stress_echo"
@@ -632,6 +766,17 @@ class StressTestHandler(BaseTestType):
             )
 
         return base
+
+    @staticmethod
+    def _inject_cfc(base: dict, text: str, extraction_result: ExtractionResult | None) -> None:
+        """Lazy-load CFC and inject into prompt context when V2 is active."""
+        if not extraction_result:
+            return
+        _load_pet()
+        parsed = _pet_extractor(text)
+        cfc = _pet_get_cfc(text, parsed)
+        if cfc:
+            base["cfc_summary"] = cfc
 
     # ------------------------------------------------------------------
     # Section / findings extraction (unchanged)

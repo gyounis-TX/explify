@@ -16,6 +16,8 @@ import type {
 } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
 import { logUsage } from "../../services/usageTracker";
+import { isAdmin } from "../../services/adminAuth";
+import { getSession, isAuthConfigured } from "../../services/supabase";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
 import { clearImportCache } from "../import/ImportScreen";
@@ -227,6 +229,8 @@ export function ResultsScreen() {
   const [highAnxietyMode, setHighAnxietyMode] = useState(false);
   const [anxietyLevel, setAnxietyLevel] = useState(0);
   const [useAnalogies, setUseAnalogies] = useState(true);
+  const [petRulesV2, setPetRulesV2] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Physician voice & attribution
   const [explanationVoice, setExplanationVoice] = useState<ExplanationVoice>("third_person");
@@ -294,6 +298,17 @@ export function ResultsScreen() {
   // ---------------------------------------------------------------------------
   // Effects
   // ---------------------------------------------------------------------------
+
+  // Fetch user email for admin check
+  useEffect(() => {
+    if (!isAuthConfigured()) return;
+    getSession().then((session) => {
+      setUserEmail(session?.user?.email ?? null);
+    });
+  }, []);
+
+  const isPetType = effectiveTestType === "pharma_pet_stress" || effectiveTestType === "exercise_pet_stress";
+  const showPetToggle = isAdmin(userEmail) && isPetType;
 
   // Sync edit state when response changes — skip the initial run when
   // restoring from the module cache so we don't wipe cached edits.
@@ -500,8 +515,9 @@ export function ResultsScreen() {
     anxiety_level: anxietyLevel || undefined,
     quick_reasons: quickReasons,
     use_analogies: useAnalogies,
+    pet_rules_v2: petRulesV2 || undefined,
     ...overrides,
-  }), [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, deepAnalysis, highAnxietyMode, anxietyLevel, quickReasons, useAnalogies]);
+  }), [extractionResult, effectiveTestType, selectedLiteracy, selectedTemplateId, clinicalContext, toneSlider, detailSlider, checkedNextSteps, explanationVoice, nameDrop, physicianOverride, deepAnalysis, highAnxietyMode, anxietyLevel, quickReasons, useAnalogies, petRulesV2]);
 
   // ---------------------------------------------------------------------------
   // Callbacks
@@ -939,6 +955,9 @@ export function ResultsScreen() {
     setScrubbedText,
     isScrubbing,
     setIsScrubbing,
+    petRulesV2,
+    setPetRulesV2,
+    showPetToggle,
   } as const;
 
   const teachingProps = {

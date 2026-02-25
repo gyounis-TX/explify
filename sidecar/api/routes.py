@@ -931,7 +931,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         name_drop = settings.name_drop
 
         prompt_engine = PromptEngine()
-        prompt_context = handler.get_prompt_context(extraction_result) if handler else {}
+        prompt_context = handler.get_prompt_context(extraction_result, pet_rules_v2=bool(body.pet_rules_v2)) if handler else {}
         prompt_context["test_type_display"] = parsed_report.test_type_display
         if settings.specialty and "specialty" not in prompt_context:
             prompt_context["specialty"] = settings.specialty
@@ -1079,7 +1079,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
     # 6. Build prompts
     literacy_level = LiteracyLevel(body.literacy_level.value)
     prompt_engine = PromptEngine()
-    prompt_context = handler.get_prompt_context(extraction_result) if handler else {}
+    prompt_context = handler.get_prompt_context(extraction_result, pet_rules_v2=bool(body.pet_rules_v2)) if handler else {}
     if not handler:
         # For unknown test types, tell the LLM what the user thinks it is
         prompt_context["test_type_hint"] = test_type
@@ -1633,7 +1633,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
 
         literacy_level = LiteracyLevel(explain_request.literacy_level.value)
         prompt_engine = PromptEngine()
-        prompt_context = handler.get_prompt_context(extraction_result) if handler else {}
+        prompt_context = handler.get_prompt_context(extraction_result, pet_rules_v2=bool(explain_request.pet_rules_v2)) if handler else {}
         if not handler:
             prompt_context["test_type_hint"] = test_type
         if settings.specialty and "specialty" not in prompt_context:

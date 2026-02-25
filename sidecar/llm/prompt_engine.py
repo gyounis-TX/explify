@@ -1359,6 +1359,44 @@ and the vast majority never have any problems from it."
   "Many people have this and live completely normal, active lives."
 - When anxiety is none/mild and findings are normal, prevalence is unnecessary —
   just state that things look good.
+
+### Coronary Flow Capacity (CFC) & Myocardial Blood Flow
+
+**Freeway analogy (for CFC):**
+- Normal CFC: "Think of your coronary arteries like a freeway with no traffic —
+  blood flows freely even during rush hour (stress)."
+- Mildly reduced CFC: "Like a freeway with some congestion during rush hour —
+  traffic still moves but a bit slower than ideal."
+- Moderately reduced CFC: "Like a freeway with significant traffic backup —
+  blood flow is noticeably restricted when your heart needs it most."
+- Severely reduced CFC: "Like a freeway with a major bottleneck — blood flow
+  is significantly restricted during stress."
+
+**Water pipe analogy (for stress MBF):**
+- Normal stress MBF (>= 2.0): "Your heart's blood vessels can deliver plenty of
+  blood when demand increases — like a water pipe with strong pressure."
+- Mildly reduced (1.5-2.0): "The pipe still delivers water but the pressure
+  drops a little when multiple faucets are running."
+- Moderately reduced (1.0-1.5): "The pipe delivers noticeably less water under
+  high demand — like low water pressure when everyone's showering."
+- Severely reduced (< 1.0): "The pipe can barely keep up with demand —
+  very limited flow even when the heart needs it most."
+
+**MFR/CFR (flow reserve):**
+- Normal (>= 2.0): "Your heart can at least double its blood flow when needed —
+  like having plenty of reserve fuel in the tank."
+- Mildly reduced (1.5-2.0): "Your heart can increase blood flow but not quite
+  as much as expected — the reserve tank is a little lower than ideal."
+- Moderately reduced (1.0-1.5): "Your heart has limited ability to increase
+  blood flow under stress."
+- Severely reduced (< 1.0): "Your heart can barely increase blood flow at all
+  when it needs to — the reserve is very limited."
+
+**PET Prevalence (for reassurance):**
+- "Mildly reduced coronary flow reserve in a single territory is seen in
+  ~15-20% of PET studies and often has no clinical significance."
+- "A normal PET perfusion study with mildly reduced flow reserve is generally
+  very reassuring — the most important finding is the absence of ischemia."
 """
 
 
@@ -6693,6 +6731,27 @@ def _select_domain_knowledge(prompt_context: dict) -> str:
     # Append any handler-provided interpretation rules
     if interpretation_rules:
         domain = domain + f"\n{interpretation_rules}\n"
+
+    # Append CFC summary if provided by handler (PET V2 rules)
+    cfc_summary = prompt_context.get("cfc_summary")
+    if cfc_summary and isinstance(cfc_summary, dict):
+        cfc_lines = ["## Coronary Flow Capacity (Pre-Computed)\n"]
+        _cfc_labels = {
+            "normal": "Normal",
+            "mildly_reduced": "Mildly reduced",
+            "moderately_reduced": "Moderately reduced",
+            "severely_reduced": "Severely reduced",
+        }
+        for key, val in cfc_summary.items():
+            label = key.replace("CFC_", "")
+            severity = _cfc_labels.get(val, val)
+            cfc_lines.append(f"- {label}: {severity}")
+        cfc_lines.append(
+            "\nThese CFC classifications were pre-computed from the report's "
+            "stress MBF and CFR values (or extracted directly from the report "
+            "text). Use them in your flow analysis and integration steps.\n"
+        )
+        domain = domain + "\n".join(cfc_lines) + "\n"
 
     return domain
 
