@@ -292,9 +292,12 @@ _PET_MEASUREMENTS: list[dict] = [
         "min": 0.1,
         "max": 5.0,
         "patterns": [
-            rf"(?:global|overall)\s+(?:rest(?:ing)?)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
-            rf"(?:rest(?:ing)?)\s+(?:global\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            rf"(?:global|overall|whole\s+heart)\s+(?:rest(?:ing)?)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            rf"(?:rest(?:ing)?)\s+(?:global\s+|whole\s+heart\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            rf"(?:whole\s+heart)\s+(?:rest(?:ing)?)\s+(?:MBF|myocardial\s+blood\s+flow)\s+(?:is|of|=)\s+{_NUM}",
             rf"MBF\s+rest{_SEP}{_NUM}",
+            # Table format: | WHOLE HEART | rest_val | stress_val | cfr_val |
+            rf"WHOLE\s+HEART\s*\|\s*{_NUM}\s*\|",
         ],
     },
     # --- Global MBF at Stress ---
@@ -305,12 +308,16 @@ _PET_MEASUREMENTS: list[dict] = [
         "min": 0.1,
         "max": 8.0,
         "patterns": [
-            rf"(?:global|overall)\s+(?:stress)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
-            rf"(?:stress)\s+(?:global\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            rf"(?:global|overall|whole\s+heart)\s+(?:stress)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            rf"(?:stress)\s+(?:global\s+|whole\s+heart\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            rf"(?:whole\s+heart)\s+(?:stress)\s+(?:MBF|myocardial\s+blood\s+flow)\s+(?:is|of|=)\s+{_NUM}",
             rf"MBF\s+stress{_SEP}{_NUM}",
+            # Table format: | WHOLE HEART | rest_val | stress_val | cfr_val |
+            rf"WHOLE\s+HEART\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}\s*\|",
         ],
     },
     # --- Territory MBF at Stress ---
+    # Wall-segment mapping: Anterior→LAD, Lateral→LCx, Inferior→RCA
     {
         "name": "LAD Stress MBF",
         "abbr": "MBF_Stress_LAD",
@@ -321,6 +328,8 @@ _PET_MEASUREMENTS: list[dict] = [
             rf"LAD\s+(?:territory\s+)?(?:stress\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:stress)\s+(?:LAD|left\s+anterior\s+descending)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:left\s+anterior\s+descending)\s+(?:territory\s+)?(?:stress\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            # Table: | Anterior | rest | stress | cfr |
+            rf"Anterior\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}\s*\|",
         ],
     },
     {
@@ -332,6 +341,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "patterns": [
             rf"(?:LCx|LCX|circumflex)\s+(?:territory\s+)?(?:stress\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:stress)\s+(?:LCx|LCX|circumflex)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            # Table: | Lateral | rest | stress | cfr |
+            rf"Lateral\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}\s*\|",
         ],
     },
     {
@@ -343,6 +354,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "patterns": [
             rf"(?:RCA|right\s+coronary)\s+(?:territory\s+)?(?:stress\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:stress)\s+(?:RCA|right\s+coronary)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            # Table: | Inferior | rest | stress | cfr |
+            rf"Inferior\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}\s*\|",
         ],
     },
     # --- Territory MBF at Rest ---
@@ -355,6 +368,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "patterns": [
             rf"LAD\s+(?:territory\s+)?(?:rest(?:ing)?\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:rest(?:ing)?)\s+(?:LAD|left\s+anterior\s+descending)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            # Table: | Anterior | rest | stress | cfr |
+            rf"Anterior\s*\|\s*{_NUM}\s*\|",
         ],
     },
     {
@@ -366,6 +381,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "patterns": [
             rf"(?:LCx|LCX|circumflex)\s+(?:territory\s+)?(?:rest(?:ing)?\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:rest(?:ing)?)\s+(?:LCx|LCX|circumflex)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            # Table: | Lateral | rest | stress | cfr |
+            rf"Lateral\s*\|\s*{_NUM}\s*\|",
         ],
     },
     {
@@ -377,6 +394,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "patterns": [
             rf"(?:RCA|right\s+coronary)\s+(?:territory\s+)?(?:rest(?:ing)?\s+)?(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
             rf"(?:rest(?:ing)?)\s+(?:RCA|right\s+coronary)\s+(?:MBF|myocardial\s+blood\s+flow){_SEP}{_NUM}",
+            # Table: | Inferior | rest | stress | cfr |
+            rf"Inferior\s*\|\s*{_NUM}\s*\|",
         ],
     },
     # --- Global CFR (with MFR aliases) ---
@@ -387,8 +406,11 @@ _PET_MEASUREMENTS: list[dict] = [
         "min": 0.5,
         "max": 6.0,
         "patterns": [
-            rf"(?:global|overall)\s+(?:CFR|coronary\s+flow\s+(?:reserve|capacity)|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
-            rf"(?:CFR|coronary\s+flow\s+(?:reserve|capacity)|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
+            rf"(?:global|overall|whole\s+heart)\s+(?:CFR|coronary\s+flow\s+(?:reserve|capacity)|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
+            rf"(?:whole\s+heart)\s+(?:coronary\s+flow\s+reserve)\s+(?:is|of|=)\s+{_NUM}",
+            rf"(?:CFR|coronary\s+flow\s+reserve|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
+            # Table format: | WHOLE HEART | rest | stress | cfr |
+            rf"WHOLE\s+HEART\s*\|\s*\d+\.?\d*\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}",
         ],
     },
     # --- LAD CFR (with MFR aliases) ---
@@ -401,6 +423,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "patterns": [
             rf"LAD\s+(?:territory\s+)?(?:CFR|coronary\s+flow\s+(?:reserve|capacity)|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
             rf"(?:left\s+anterior\s+descending)\s+(?:CFR|flow\s+reserve|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
+            # Table: | Anterior | rest | stress | cfr |
+            rf"Anterior\s*\|\s*\d+\.?\d*\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}",
         ],
     },
     # --- LCx CFR (with MFR aliases) ---
@@ -412,6 +436,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "max": 6.0,
         "patterns": [
             rf"(?:LCx|LCX|circumflex)\s+(?:territory\s+)?(?:CFR|coronary\s+flow\s+(?:reserve|capacity)|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
+            # Table: | Lateral | rest | stress | cfr |
+            rf"Lateral\s*\|\s*\d+\.?\d*\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}",
         ],
     },
     # --- RCA CFR (with MFR aliases) ---
@@ -423,6 +449,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "max": 6.0,
         "patterns": [
             rf"(?:RCA|right\s+coronary)\s+(?:territory\s+)?(?:CFR|coronary\s+flow\s+(?:reserve|capacity)|MFR|myocardial\s+flow\s+reserve){_SEP}{_NUM}",
+            # Table: | Inferior | rest | stress | cfr |
+            rf"Inferior\s*\|\s*\d+\.?\d*\s*\|\s*\d+\.?\d*\s*\|\s*{_NUM}",
         ],
     },
     # --- LVEF ---
@@ -434,6 +462,8 @@ _PET_MEASUREMENTS: list[dict] = [
         "max": 85.0,
         "patterns": [
             rf"(?:LVEF|LV\s+ejection\s+fraction|ejection\s+fraction){_SEP}{_NUM}\s*%?",
+            # "Calculated Stress EF | 75%" or "Calculated Rest EF | 65%" (stress first)
+            rf"(?:Calculated\s+)?(?:Stress|Rest)\s+(?:EF|ejection\s+fraction)\s*\|?\s*{_NUM}\s*%",
             rf"{_NUM}\s*%\s*(?:LVEF|ejection\s+fraction)",
         ],
     },
@@ -488,11 +518,11 @@ _PET_MEASUREMENTS: list[dict] = [
 # CFC (Coronary Flow Capacity) — extraction + computation fallback
 # ---------------------------------------------------------------------------
 
-_CFC_CATEGORIES = {"normal": 0, "mildly reduced": 1, "moderately reduced": 2, "severely reduced": 3}
+_CFC_CATEGORIES = {"normal": 0, "mildly reduced": 1, "minimally reduced": 1, "moderately reduced": 2, "severely reduced": 3}
 _CFC_PATTERN = re.compile(
     r"(?:CFC|coronary\s+flow\s+capacity)"
-    r"[\s:=]+\s*"
-    r"(normal|mildly\s+reduced|moderately\s+reduced|severely\s+reduced)",
+    r"[\s:=]+\s*(?:is\s+)?"
+    r"(normal(?:\s+to\s+(?:minimally|mildly)\s+reduced)?|minimally\s+reduced|mildly\s+reduced|moderately\s+reduced|severely\s+reduced)",
     re.IGNORECASE,
 )
 _CFC_TERRITORY_PATTERNS = {
@@ -530,15 +560,27 @@ def _extract_cfc_classifications(full_text: str) -> dict[str, str]:
     # Global CFC
     m = _CFC_PATTERN.search(full_text)
     if m:
-        results["CFC_Global"] = m.group(1).strip().lower().replace(" ", "_")
+        results["CFC_Global"] = _normalize_cfc(m.group(1))
 
     # Territory CFC
     for key, pat in _CFC_TERRITORY_PATTERNS.items():
         m = pat.search(full_text)
         if m:
-            results[key] = m.group(1).strip().lower().replace(" ", "_")
+            results[key] = _normalize_cfc(m.group(1))
 
     return results
+
+
+def _normalize_cfc(raw: str) -> str:
+    """Normalize CFC text to a standard category."""
+    val = raw.strip().lower()
+    # "normal to minimally reduced" / "normal to mildly reduced" → normal
+    if val.startswith("normal to"):
+        return "normal"
+    # "minimally reduced" → mildly_reduced
+    if "minimally" in val:
+        return "mildly_reduced"
+    return val.replace(" ", "_")
 
 
 def _compute_cfc(stress_mbf: float | None, cfr: float | None) -> str | None:
