@@ -10,6 +10,84 @@ from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
 
+# ---------------------------------------------------------------------------
+# Carotid Doppler prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_CAROTID_DOPPLER_STYLE = (
+    "This is a carotid Doppler ultrasound.\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by system "
+    "(stenosis grading -> velocity details -> plaque characteristics -> "
+    "vertebral arteries -> IMT).\n"
+    "At Grade 12 literacy: explain what each finding means in context. Define "
+    "terms before using them (e.g., 'peak systolic velocity, which measures "
+    "how fast blood flows through the artery...').\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very "
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: Lead with the most clinically significant finding. If no "
+    "significant stenosis, say so clearly and concisely up front."
+)
+
+_CAROTID_DOPPLER_RULES = (
+    "CAROTID DOPPLER — DECISION TREE:\n\n"
+    "STEP 1 — STENOSIS GRADING (SRU Consensus Criteria):\n"
+    "  - Normal: ICA PSV <125 cm/s, no plaque.\n"
+    "  - <50%% stenosis: ICA PSV <125 cm/s with visible plaque.\n"
+    "  - 50-69%% stenosis: ICA PSV 125-230 cm/s, ICA/CCA ratio 2.0-4.0.\n"
+    "  - >=70%% stenosis: ICA PSV >230 cm/s, ICA/CCA ratio >4.0.\n"
+    "  - Near-occlusion: variable PSV (may be high or paradoxically low),\n"
+    "    visible narrowing on B-mode.\n"
+    "  - Total occlusion: no detectable flow.\n"
+    "  - Grade each side (right and left) separately.\n\n"
+    "STEP 2 — VELOCITY DETAILS:\n"
+    "  - Report ICA PSV, ICA EDV, and ICA/CCA ratio for each side.\n"
+    "  - Higher velocity = more stenosis (blood speeds up through a\n"
+    "    narrower opening).\n"
+    "  - Note which side has higher velocities / more disease.\n\n"
+    "STEP 3 — PLAQUE CHARACTERISTICS:\n"
+    "  - Calcified plaque: echogenic, stable, lower embolic risk.\n"
+    "  - Soft / hypoechoic plaque: more vulnerable, higher embolic risk.\n"
+    "  - Ulcerated plaque: irregular surface, embolic risk.\n"
+    "  - Heterogeneous plaque: mixed composition.\n"
+    "  - Note plaque characteristics only if described in the report.\n\n"
+    "STEP 4 — VERTEBRAL ARTERIES:\n"
+    "  - Antegrade flow = normal direction.\n"
+    "  - Retrograde flow = subclavian steal physiology (blood flowing\n"
+    "    backward due to subclavian artery stenosis).\n"
+    "  - Note if vertebral arteries are not well visualized.\n\n"
+    "STEP 5 — IMT (Intima-Media Thickness, if reported):\n"
+    "  - >1.0 mm = abnormal, marker of arterial aging and atherosclerosis.\n"
+    "  - If not reported, skip this step.\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Stroke / TIA → stenosis severity is the key finding.\n"
+    "  - Bruit → correlate with stenosis grade.\n"
+    "  - Dizziness → vertebral artery flow direction.\n"
+    "  - Screening (asymptomatic) → percentile context for age.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "RISK CONTEXT:\n"
+    "  - <50%% stenosis asymptomatic: very low annual stroke risk (~1%%).\n"
+    "  - 50-69%% asymptomatic: ~1-2%% annual stroke risk.\n"
+    "  - >=70%% asymptomatic: ~2-5%% annual stroke risk without treatment.\n\n"
+    "GUARDRAILS:\n"
+    "  - Normal carotid ultrasound: keep concise. 'No significant carotid\n"
+    "    stenosis on either side' is sufficient.\n"
+    "  - <50%% stenosis: Do NOT alarm. Mild plaque without significant\n"
+    "    narrowing is very common — found in ~40%% of adults over 60.\n"
+    "  - 50-69%% stenosis: significant finding but NOT an emergency.\n"
+    "    Frame as 'moderate narrowing that we'll want to\n"
+    "    monitor and manage.'\n"
+    "  - >=70%% stenosis: important finding. Communicate clearly but\n"
+    "    do NOT catastrophize. Frame as 'significant narrowing that\n"
+    "    we'll want to discuss treatment options for.'\n"
+    "  - Asymmetric findings: note which side is worse.\n"
+    "  - Do NOT restate clinical indications at the end.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
+
 class CarotidDopplerHandler(BaseTestType):
 
     @property
@@ -169,13 +247,8 @@ class CarotidDopplerHandler(BaseTestType):
             "test_type": "carotid_doppler",
             "category": "vascular",
             "guidelines": "SRU Consensus Criteria for Carotid Stenosis",
-            "explanation_style": (
-                "Explain the degree of carotid stenosis (if any) in plain language. "
-                "Interpret flow velocities (PSV/EDV) and ICA/CCA ratios, explaining "
-                "what they mean for stroke risk. Describe plaque characteristics if "
-                "noted. Compare right and left sides. Explain whether findings are "
-                "hemodynamically significant. Avoid jargon."
-            ),
+            "explanation_style": _CAROTID_DOPPLER_STYLE,
+            "interpretation_rules": _CAROTID_DOPPLER_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:

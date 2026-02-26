@@ -10,6 +10,77 @@ from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
 
+# ---------------------------------------------------------------------------
+# Venous Duplex prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_VENOUS_DUPLEX_STYLE = (
+    "This is a lower extremity venous duplex ultrasound.\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by system "
+    "(DVT assessment -> reflux/insufficiency -> vein mapping -> bilateral "
+    "comparison).\n"
+    "At Grade 12 literacy: explain what each finding means in context. Define "
+    "terms before using them (e.g., 'deep vein thrombosis, which is a blood "
+    "clot in the deep veins of the leg...').\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very "
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: DVT assessment is the headline finding. If no DVT and no "
+    "significant reflux, say so clearly and concisely up front."
+)
+
+_VENOUS_DUPLEX_RULES = (
+    "VENOUS DUPLEX — DECISION TREE:\n\n"
+    "STEP 1 — DVT ASSESSMENT (always first — most urgent finding):\n"
+    "  - Primary criterion: compressibility. Non-compressible vein = DVT.\n"
+    "  - Acute DVT: distended vein, hypoechoic (dark) thrombus,\n"
+    "    non-compressible.\n"
+    "  - Chronic DVT: echogenic (bright) thrombus, thickened vein walls,\n"
+    "    collateral vessels may be present.\n"
+    "  - Proximal DVT (popliteal vein and above — CFV, femoral vein,\n"
+    "    popliteal): HIGH risk of pulmonary embolism.\n"
+    "  - Distal DVT (calf veins below popliteal — peroneal, tibial,\n"
+    "    gastrocnemius, soleal): lower PE risk but may propagate.\n"
+    "  - Superficial thrombosis within 3 cm of the saphenofemoral\n"
+    "    junction (SFJ) = risk of extension into the deep system.\n"
+    "  - No DVT: state clearly and move on.\n\n"
+    "STEP 2 — REFLUX / INSUFFICIENCY:\n"
+    "  - Abnormal reflux: >0.5 seconds in superficial veins, >1.0 seconds\n"
+    "    in deep veins.\n"
+    "  - GSV (great saphenous vein) diameter >5-6 mm = dilated.\n"
+    "  - Note which segments have reflux and the reflux duration.\n"
+    "  - If no reflux testing was performed, skip this step.\n\n"
+    "STEP 3 — VEIN MAPPING (if performed):\n"
+    "  - GSV diameters at key points (SFJ, thigh, knee, calf).\n"
+    "  - SFJ and SPJ (saphenopopliteal junction) competence.\n"
+    "  - Perforator veins: note if incompetent.\n"
+    "  - If no mapping data, skip this step.\n\n"
+    "STEP 4 — BILATERAL COMPARISON:\n"
+    "  - Compare findings between right and left legs.\n"
+    "  - Note if disease is unilateral or bilateral.\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Leg swelling → DVT assessment is primary.\n"
+    "  - Leg pain → DVT if acute; reflux/insufficiency if chronic.\n"
+    "  - Varicose veins → reflux pattern and GSV diameter.\n"
+    "  - Post-thrombotic → chronic DVT changes, collaterals.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "GUARDRAILS:\n"
+    "  - No DVT + no reflux: keep concise. 'No blood clots and normal\n"
+    "    venous flow in both legs' is sufficient.\n"
+    "  - Mild GSV reflux: Do NOT alarm. Mild saphenous reflux is found\n"
+    "    in ~20%% of adults and is very common.\n"
+    "  - Acute DVT: frame clearly and seriously but without panic.\n"
+    "    'A blood clot was found — we'll discuss treatment\n"
+    "    options with you.'\n"
+    "  - Chronic DVT: distinguish from acute. 'Evidence of a previous\n"
+    "    blood clot that has organized over time.'\n"
+    "  - Do NOT restate clinical indications at the end.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
+
 class VenousDopplerHandler(BaseTestType):
 
     @property
@@ -163,13 +234,8 @@ class VenousDopplerHandler(BaseTestType):
             "test_type": "venous_duplex",
             "category": "vascular",
             "guidelines": "SVS/AVF Clinical Practice Guidelines",
-            "explanation_style": (
-                "Explain whether any blood clots (DVT) were found. "
-                "Interpret the reflux times and vein diameters, explaining "
-                "what they mean for venous health. Discuss compressibility "
-                "and flow patterns. Compare right and left legs. "
-                "Explain findings in plain language. Avoid jargon."
-            ),
+            "explanation_style": _VENOUS_DUPLEX_STYLE,
+            "interpretation_rules": _VENOUS_DUPLEX_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:

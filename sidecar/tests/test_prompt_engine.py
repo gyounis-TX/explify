@@ -118,11 +118,11 @@ class TestDomainKnowledgeSelection:
         result = _select_domain_knowledge(context)
         assert "obstructive" in result.lower() or "fev1" in result.lower()
 
-    def test_default_to_cardiac(self):
-        """Test unknown category defaults to cardiac."""
+    def test_default_to_imaging(self):
+        """Test unknown category defaults to imaging (safe fallback)."""
         context = {"category": "unknown"}
         result = _select_domain_knowledge(context)
-        assert "hypertrophic cardiomyopathy" in result.lower() or "hcm" in result.lower()
+        assert "imaging" in result.lower()
 
     def test_interpretation_rules_appended(self):
         """Test handler interpretation rules are appended."""

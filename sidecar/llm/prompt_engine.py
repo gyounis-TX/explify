@@ -1264,7 +1264,7 @@ When explaining measurements and findings, use relatable comparisons to help pat
 ### Troponin (Heart Muscle Marker)
 - Normal/undetectable: "No sign of heart muscle stress or injury"
 - Mildly elevated (stable): "A small amount of heart muscle stress detected — many things besides a heart attack can cause this"
-- Rising pattern: "The rising trend suggests active heart muscle injury — this is important and your doctor is monitoring it closely"
+- Rising pattern: "The rising trend suggests active heart muscle injury — this is important and we're monitoring this closely"
 
 ### Lab Value Analogies
 - **Hemoglobin**: "Carries oxygen in your blood — like cargo trucks delivering oxygen to your body"
@@ -1397,6 +1397,331 @@ and the vast majority never have any problems from it."
   ~15-20% of PET studies and often has no clinical significance."
 - "A normal PET perfusion study with mildly reduced flow reserve is generally
   very reassuring — the most important finding is the absence of ischemia."
+
+### Echocardiogram — Diastolic Function
+
+**Balloon-to-football analogy (for diastolic dysfunction):**
+- Normal: "Between each heartbeat, your heart relaxes and fills
+  with blood easily — like inflating a soft, flexible balloon
+  that expands without much effort."
+- Grade I (impaired relaxation): "Your heart muscle is a little
+  stiffer when it relaxes between beats — like a balloon that's
+  a bit thicker and takes a little more effort to inflate. It
+  still fills well, but not quite as easily. This is the mildest
+  form and is very common with age."
+- Grade II (pseudonormal): "Your heart muscle has become noticeably
+  stiffer — less like a soft balloon and more like trying to
+  inflate a football. It takes more pressure to fill, and even
+  though the filling pattern may look normal on the surface,
+  the pressures inside are higher than they should be."
+- Grade III (restrictive): "Your heart muscle is quite stiff —
+  like trying to inflate a football that's already firm. It
+  takes a lot of pressure to fill, and the heart has significant
+  difficulty relaxing between beats. The pressures inside are
+  substantially elevated."
+
+**Valve regurgitation analogy:**
+- Trace/mild: "Think of a door that doesn't quite close all the
+  way — a tiny bit of air (blood) leaks back through. This is
+  so common it's considered normal."
+- Moderate: "The door has a noticeable gap — more blood leaks
+  backward than it should, making the heart work a bit harder."
+- Severe: "The door is significantly open — a large amount of
+  blood flows back the wrong way, putting extra strain on
+  the heart."
+
+**Valve stenosis analogy:**
+- Mild: "The valve opening is slightly narrower than normal —
+  like a door that doesn't open all the way but you can still
+  walk through comfortably."
+- Moderate: "The valve opening is noticeably narrowed — like
+  having to turn sideways to fit through a partially open door."
+- Severe: "The valve opening is very tight — like trying to
+  squeeze through a barely open door. The heart has to push
+  much harder to get blood through."
+
+**Ejection fraction analogy:**
+- Normal (>=55%): "Your heart pumps out more than half of its
+  blood with each beat — like a strong water pump working
+  at full efficiency."
+- Mildly reduced (41-54%): "Your heart's pumping power is
+  slightly below the ideal range — like a pump that's lost a
+  little efficiency but still moves plenty of water."
+- Moderately reduced (30-40%): "Your heart's pumping strength
+  is noticeably reduced — like a pump running at half power."
+- Severely reduced (<30%): "Your heart's pumping power is
+  significantly weakened — like a pump that can only push out
+  a small fraction of its capacity."
+
+**Wall motion analogy (for stress echo):**
+- Normal: "All parts of your heart muscle contract evenly and
+  strongly — like all pistons in an engine firing properly."
+- New abnormality at stress: "Under stress, one area of your
+  heart muscle didn't pump as well as the others — like one
+  piston misfiring when the engine revs up. This suggests that
+  area may not be getting enough blood flow."
+- Fixed abnormality: "One area of your heart muscle isn't
+  pumping well even at rest — this usually means that area
+  has been damaged in the past (scar tissue)."
+
+**Chamber size analogy:**
+- Normal: "Your heart chambers are a normal size — like a
+  balloon inflated to the right amount."
+- Mildly dilated: "This chamber is slightly larger than
+  normal — like a balloon that's been stretched just a bit
+  beyond its usual size."
+- Severely dilated: "This chamber is significantly enlarged —
+  like a balloon that's been stretched well beyond its normal
+  size, which means the walls may not squeeze as effectively."
+
+**Echo prevalence (for reassurance):**
+- "Trace mitral or tricuspid regurgitation is seen in ~70% of
+  healthy hearts and is considered a normal finding."
+- "Grade I diastolic dysfunction (impaired relaxation) is found
+  in about 30% of people over 60 — it's one of the most common
+  findings on echocardiograms."
+- "Trace pericardial effusion (a tiny amount of fluid around the
+  heart) is present in about 10% of echocardiograms and is
+  usually harmless."
+- "Mild aortic sclerosis (slight thickening of the aortic valve
+  without obstruction) is found in ~25% of adults over 65 —
+  similar to how joints can stiffen with age."
+- "Mild LVH (thickening of the heart muscle) is present in about
+  40% of patients with longstanding high blood pressure."
+
+### CMR — Scar, Mapping, Tissue Characterization
+
+**Late gadolinium enhancement (LGE / scar):**
+- No scar: "Your heart muscle looks healthy — no areas of damage or
+  scarring were found."
+- Subendocardial scar (<50% transmural): "The inner lining of the
+  heart muscle in this area has some damage — like a wall where only
+  the inner coat of paint has peeled. Because the damage doesn't go
+  all the way through, this area may still recover with treatment."
+- Transmural scar (>50%): "The damage goes through the full
+  thickness of the heart muscle in this area — like a wall where
+  the damage goes all the way through. This area is unlikely to
+  recover its function."
+- Mid-wall or epicardial scar: "The scar pattern is in the middle
+  or outer layer of the heart muscle — this pattern is different
+  from a heart attack and suggests a different type of heart
+  muscle problem."
+
+**T2 mapping (edema / inflammation):**
+- Elevated T2: "There's swelling in the heart muscle — like a
+  sprained ankle that's still puffy. This suggests something
+  active or recent is going on."
+- Normal T2 with LGE: "There's scar but no active swelling — this
+  suggests the damage is older and not actively inflamed."
+
+**ECV (extracellular volume):**
+- Elevated ECV: "The space between the heart muscle cells has
+  expanded — think of it like the scaffolding between bricks
+  becoming wider. This can mean there's extra scar tissue or
+  abnormal protein between the cells."
+- Severely elevated ECV (>40%): "The space between heart muscle
+  cells is very expanded — this level of change is sometimes
+  seen with conditions like amyloidosis, where abnormal protein
+  deposits build up in the heart."
+
+### CTA Coronary — Calcium, Plaque, Stenosis
+
+**Calcium score (Agatston):**
+- CAC 0: "No calcium was found in your coronary arteries — like
+  pipes that are clean and clear with no mineral buildup. This is
+  very reassuring."
+- CAC 1-100: "A small amount of calcium was found — like early
+  mineral deposits forming inside a pipe. The flow isn't affected
+  yet, but it tells us there's early plaque forming."
+- CAC 101-400: "A moderate amount of calcium was found — like
+  noticeable mineral buildup inside a pipe that's starting to
+  narrow the opening."
+- CAC >400: "A significant amount of calcium was found — like
+  heavy mineral scale inside a pipe. This means there's
+  substantial plaque buildup."
+
+**Plaque types:**
+- Calcified: "Hard, stable deposits — like calcium scale on the
+  inside of a pipe. These tend to be more stable over time."
+- Non-calcified: "Softer deposits — like a buildup that hasn't
+  hardened yet. Your doctor may want to monitor these more
+  closely."
+- Mixed: "A combination of hard and soft deposits in the artery
+  wall."
+
+**CAD-RADS (severity grading):**
+- CAD-RADS 0-1: "Your coronary arteries look clear or have only
+  very minimal plaque — like a garden hose with no kinks."
+- CAD-RADS 2: "Mild plaque buildup — like a garden hose with a
+  very slight bend that doesn't really affect water flow."
+- CAD-RADS 3: "Moderate narrowing — like a garden hose with a
+  noticeable kink that partially restricts water flow."
+- CAD-RADS 4: "Significant narrowing — like a garden hose with a
+  tight kink that substantially reduces water flow."
+
+### Right Heart Cath — Pressures and Flow
+
+**Pulmonary artery pressure:**
+- Normal: "The pressure in the blood vessels going to your lungs
+  is normal — blood flows freely."
+- Elevated: "The pressure in your lung blood vessels is higher
+  than normal — like water pressure building up because of a
+  kinked hose downstream. This back-pressure makes the right
+  side of your heart work harder."
+
+**PVR (pulmonary vascular resistance):**
+- Normal: "Blood flows through your lungs easily — like water
+  through a wide-open pipe."
+- Elevated: "There's more resistance in your lung blood vessels —
+  like trying to push water through a narrower pipe. The higher
+  the resistance, the harder your heart has to work."
+
+**Cardiac output:**
+- Normal: "Your heart is pumping an adequate amount of blood per
+  minute — the pump is working well."
+- Low: "Your heart isn't pumping as much blood per minute as it
+  should — like a pump that's not running at full capacity."
+
+**Pre-capillary vs post-capillary PH:**
+- Pre-capillary: "The high pressure is coming from the lung
+  vessels themselves being narrowed — like narrow pipes causing
+  back-pressure."
+- Post-capillary: "The high pressure is from the left side of
+  the heart not draining efficiently — like a blocked drain
+  causing water to back up into the pipes."
+
+### Carotid — Stenosis and Stroke Risk
+
+**Stenosis severity:**
+- None to minimal: "Your carotid arteries are open and flowing
+  well — like a two-lane road with no obstacles."
+- 50-69%: "One of your carotid arteries has moderate narrowing —
+  like a two-lane road that's been reduced to about one and a
+  half lanes. Blood still flows but has to move faster through
+  the narrow section."
+- >=70%: "One of your carotid arteries has significant narrowing —
+  like a two-lane road squeezed down to less than one lane."
+
+**Velocity analogy:**
+- "When blood velocity is higher than normal, it usually means the
+  artery is narrower at that point — like water speeding up when
+  you pinch a garden hose. The faster the flow, the tighter the
+  narrowing."
+
+**Plaque:**
+- Stable calcified: "Hard, stable plaque — like a smooth, firm
+  deposit on the artery wall that isn't likely to break off."
+- Soft/vulnerable: "Softer plaque that could potentially break
+  apart — we may want to manage this more actively."
+
+### Venous — DVT and Reflux
+
+**DVT (blood clot):**
+- Acute DVT: "A blood clot was found in a deep vein — like a dam
+  forming in a stream that's blocking normal flow."
+- Chronic DVT: "There's evidence of an older blood clot that has
+  organized over time — like a dam that's been there a while and
+  the stream has partially found its way around it."
+- No DVT: "No blood clots were found — the veins are open and
+  flowing normally."
+
+**Reflux (venous insufficiency):**
+- Mild reflux: "The valves in your veins are leaking slightly —
+  like a check valve that doesn't close all the way, letting some
+  water flow backward. This is very common — about 20% of adults
+  have some degree of this."
+- Significant reflux: "The valves in your veins aren't closing
+  properly — like a check valve that's worn out, allowing blood
+  to pool in the legs."
+
+**DVT prevalence:**
+- "Mild venous reflux in the saphenous veins is found in ~20% of
+  adults and is very common."
+
+### Exercise Treadmill — METs, Duke, ECG
+
+**METs (exercise capacity):**
+- Excellent (>10): "Your exercise capacity is excellent — like a
+  car engine that can rev well above the speed limit without
+  trouble."
+- Good (7-10): "Your exercise capacity is good — your engine runs
+  well under load."
+- Moderate (5-7): "Your exercise capacity is moderate — the engine
+  can handle everyday driving but struggles a bit on steep hills."
+- Poor (<5): "Your exercise capacity is below expected — like an
+  engine that stalls on moderate hills."
+
+**Duke Treadmill Score:**
+- "The Duke score combines your exercise time, ECG changes, and
+  symptoms into a single dashboard reading — like a composite
+  gauge that summarizes overall engine health rather than just
+  one indicator."
+
+**ST changes:**
+- Positive: "The electrical tracings of your heart showed changes
+  under exercise stress — like a warning light that comes on when
+  the engine is pushed hard. This may indicate areas of the heart
+  not getting enough blood flow during exertion."
+- Negative: "The electrical tracings stayed normal throughout the
+  test — no warning lights came on even under heavy load."
+
+### SPECT Nuclear — Perfusion Defects
+
+**Normal perfusion:**
+- "The radioactive tracer spread evenly throughout your heart
+  muscle — like food coloring mixing evenly in a glass of water.
+  This means blood is reaching all areas of your heart equally."
+
+**Reversible defect (ischemia):**
+- "One area of your heart got less blood flow during the stress
+  portion of the test but looked normal at rest — like a sprinkler
+  zone that has low water pressure only when all the sprinklers
+  are running at once. This suggests that area may not get enough
+  blood when your heart is working hard."
+
+**Fixed defect (scar):**
+- "One area of your heart showed reduced blood flow both during
+  stress and at rest — like a permanently blocked pipe that
+  doesn't deliver water regardless of demand. This usually means
+  there's scar tissue from a previous event."
+
+**SPECT prevalence:**
+- "A normal SPECT study is very reassuring — patients with normal
+  perfusion have less than a 1% per year risk of a major cardiac
+  event."
+
+### Uncertainty / Borderline Results
+- "This result falls in a gray zone — like a weather forecast that says
+  40-60%% chance of rain. It's not clearly one way or the other, and we'll
+  use your full clinical picture to make sense of it."
+- "Think of it like a speed limit sign that reads 'Speed Limit 65' and
+  you're going 64 — technically under, but right at the edge."
+
+### Absolute Risk Anchoring
+When evidence supports it, provide absolute risk context to help patients
+understand what findings mean in real terms:
+
+**Cardiac stress tests:**
+- Normal stress test (any modality): "<1%% per year risk of a major cardiac event"
+- Low-risk Duke score (>=+5): "~0.25%% annual mortality — very low"
+- Moderate-risk Duke score (-10 to +4): "~1.25%% annual mortality"
+
+**CTA Coronary:**
+- CAC 0: "Very low likelihood of significant coronary disease over the next 5-10 years"
+- CAC 1-100 + no stenosis: "Low short-term risk"
+
+**Carotid:**
+- <50%% stenosis: "Annual stroke risk is very low — similar to the general population"
+- 50-69%% asymptomatic: "~1-2%% annual stroke risk"
+- >=70%% asymptomatic: "~2-5%% annual stroke risk without treatment"
+
+**Venous:**
+- Isolated calf DVT: "Much lower risk of PE compared to above-knee clots"
+- No DVT found: "Very reassuring — the test we use to detect clots is highly accurate"
+
+**General principle:** Use absolute risk for mild-to-moderate findings to
+provide perspective. Do NOT use risk numbers for severe findings — focus on
+clear communication of importance instead.
 """
 
 
@@ -1546,6 +1871,24 @@ that help the patient understand their health.
 
 """
 
+_INCLUSIVE_VOICE_RULE = """\
+## Inclusive Voice — "We," Not "Your Doctor"
+
+When referring to the care team, clinical follow-up, or next steps, ALWAYS
+use inclusive "we" language. You are writing as part of the care team —
+whether the narrator is the physician or a staff member.
+
+- USE: "we'll keep an eye on this", "we'll review this together",
+  "this is something we'll want to follow up on", "we're pleased to see"
+- NEVER USE: "your doctor will want to...", "your doctor", "your physician",
+  "the doctor", "your healthcare provider", "your provider"
+- For discussing findings: "this is something we'll discuss" not
+  "something your doctor will discuss"
+- For follow-up context: "we typically monitor this" not
+  "your doctor will monitor this"
+
+"""
+
 _INTERPRETATION_STRUCTURE_PERFUSION = """\
 ## Interpretation Guidance (Nuclear Perfusion Study)
 
@@ -1613,7 +1956,7 @@ Principles:
   - Mild: "worth mentioning", "something to be aware of", "good to know
     about", "worth noting"
   - Moderate: "something to discuss", "worth a conversation", "worth
-    talking through", "something your doctor will want to review"
+    talking through", "something we'll want to review together"
   - Severe: "important to discuss", "something to talk through carefully",
     "a key finding to review together"
   NEVER use "warrants" — it sounds legalistic.
@@ -1772,7 +2115,7 @@ _TONE_RULES = """\
   repeat the same phrase twice in one response): "worth mentioning,"
   "something to be aware of," "worth a conversation," "good to know about,"
   "something to keep in mind," "worth bringing up," "something to talk
-  through," "worth flagging," "something your doctor will want to discuss,"
+  through," "worth flagging," "something we'll want to discuss,"
   "a finding to note."
   NEVER use "warrants" — it sounds legalistic.
 - AVOID conclusive/alarming phrasing: "needs attention," "requires action,"
@@ -2624,7 +2967,7 @@ Apply these cardiac-specific interpretation rules:
 - AORTIC ROOT DILATATION: Aortic root > 4.0 cm is dilated and warrants
   monitoring. > 4.5 cm is significantly dilated. > 5.0-5.5 cm may
   approach surgical thresholds depending on context (bicuspid aortic
-  valve, Marfan syndrome). Frame as something the doctor will want to
+  valve, Marfan syndrome). Frame as something we'll want to
   track over time, not as an emergency.
 
 - RVSP WITHOUT TR: When tricuspid regurgitation velocity is not
@@ -2657,7 +3000,7 @@ Apply these cardiac-specific interpretation rules:
   heart appeared to dilate during stress, which is a marker of severe
   or multivessel coronary artery disease. This is a high-risk finding
   even when perfusion images appear relatively normal (balanced
-  ischemia). Frame it as an important finding to discuss with the doctor.
+  ischemia). Frame it as an important finding to discuss together.
 
 - REGIONAL VS GLOBAL ISCHEMIA: When perfusion defects are reported by
   coronary territory (anterior/LAD, lateral/LCx, inferior/RCA),
@@ -2781,8 +3124,8 @@ available.
   - CAD-RADS 4B: Left main >= 50% OR three-vessel >= 70% (severe,
     high-risk pattern)
   - CAD-RADS 5: total occlusion (100%)
-  Frame lower scores (0-2) as reassuring; 3+ as findings the doctor
-  will want to discuss further.
+  Frame lower scores (0-2) as reassuring; 3+ as findings we'll
+  want to discuss further.
 
 - CALCIUM SCORE CONTEXT: Agatston calcium score must be interpreted
   relative to age and sex:
@@ -2802,7 +3145,7 @@ available.
     acute risk even if stenosis is moderate
   - Mixed plaque: contains both components
   Do not alarm, but note that non-calcified or mixed plaque is the
-  type the doctor pays closer attention to.
+  type we pay closer attention to.
 
 - CT-FFR (CT FRACTIONAL FLOW RESERVE): CT-FFR is a non-invasive
   estimate of whether a narrowing actually limits blood flow:
@@ -2956,7 +3299,7 @@ available.
   - Subepicardial scar (outer wall): classic for myocarditis or
     pericarditis
   Explain the pattern to the patient: "The location of the scar tissue
-  helps your doctor understand what caused it."
+  helps us understand what caused it."
 
 - RV FUNCTION ON CMR: RVEF < 45% suggests right ventricular
   dysfunction. Pair with RV volumes (RVEDV, RVESV) — RV dilation with
@@ -3298,7 +3641,7 @@ available.
   on CTA or angiography causes significant patient anxiety. Frame
   clearly: "There is some narrowing in [artery], but it is not severe
   enough to significantly limit blood flow. This is the type of finding
-  your doctor will monitor over time and manage with medications and
+  we'll monitor over time and manage with medications and
   lifestyle changes rather than a procedure." Do NOT leave the severity
   ambiguous — explicitly state it is NOT flow-limiting.
 
@@ -3308,7 +3651,7 @@ available.
   different areas of the heart look similar, the overall amount of
   blood flow to the heart muscle is reduced. This pattern can indicate
   disease affecting multiple arteries evenly, which is an important
-  finding your doctor will want to discuss." Do not dismiss as normal
+  finding we'll want to discuss." Do not dismiss as normal
   just because relative images look symmetric.
 
 - MICROVASCULAR DYSFUNCTION COMMUNICATION: When CFR is globally
@@ -3324,7 +3667,7 @@ available.
   25-50% (borderline viable on CMR), avoid false precision. Frame as:
   "There is some scar tissue in this area of the heart, but there also
   appears to be some living muscle. Whether this area can recover
-  function with treatment is uncertain and something your doctor will
+  function with treatment is uncertain and something we'll
   consider when planning next steps."
 
 - "NORMAL EF" WITH DIASTOLIC DYSFUNCTION: Do NOT equate preserved EF
@@ -3641,7 +3984,7 @@ available.
   - Improved findings: frame positively ("this has improved since your
     last study")
   - Worsened findings: frame as important but not alarming ("there has
-    been some change since your last study that your doctor will want
+    been some change since your last study that we'll want
     to review")
   Trajectory matters more than a single snapshot — a stable EF of 40%
   is very different from a declining EF that just reached 40%.
@@ -3651,13 +3994,13 @@ available.
   - Low risk pattern: normal perfusion + good exercise capacity +
     normal EF → "overall, these results are reassuring"
   - Moderate risk: single-territory ischemia or mildly reduced EF →
-    "there are findings your doctor will want to discuss and may
+    "there are findings we'll want to discuss and may
     monitor over time"
   - High risk: multivessel ischemia, severely reduced EF, or left main
-    disease → "these are important findings that your doctor will want
+    disease → "these are important findings that we'll want
     to review carefully with you"
   NEVER use the word "risk" in patient-facing text. Instead, frame
-  findings in terms of importance and what the doctor will discuss.
+  findings in terms of importance and what we'll discuss together.
 
 - CROSS-MODAL DISCORDANCE: When anatomy and function disagree (e.g.
   70% stenosis on CTA but FFR > 0.80 on cath, or normal relative
@@ -3669,7 +4012,7 @@ available.
   - Functional assessment generally guides treatment decisions more
     than anatomy alone
   Do NOT present discordance as contradictory or confusing. Frame it
-  as complementary information that helps the doctor make better
+  as complementary information that helps us make better
   decisions.
 
 - MULTI-MODALITY HFpEF SYNTHESIS: When echo shows preserved EF +
@@ -6110,7 +6453,7 @@ _CLINICAL_DOMAIN_KNOWLEDGE_ENDOSCOPY = """\
   - 5-10 adenomas: repeat in 3 years
   - Adenoma >= 10mm, villous histology, or high-grade dysplasia: repeat in 3 years
   - Piecemeal resection of large adenoma: repeat in 6-12 months
-  Do NOT specify exact intervals — state that the doctor will recommend timing.
+  Do NOT specify exact intervals — state that we'll recommend timing.
 
 - INFLAMMATORY BOWEL DISEASE (IBD):
   - Ulcerative colitis: continuous inflammation starting from rectum, extending
@@ -6761,6 +7104,29 @@ def _select_domain_knowledge(prompt_context: dict) -> str:
         )
         domain = domain + "\n".join(cfc_lines) + "\n"
 
+    # Append diastolic grade if provided by handler (echo)
+    diastolic_grade = prompt_context.get("diastolic_grade")
+    if diastolic_grade and isinstance(diastolic_grade, dict):
+        grade_lines = ["## Diastolic Function Assessment (Pre-Computed)\n"]
+        grade_lines.append(f"- Grade: {diastolic_grade.get('label', 'Unknown')}")
+        grade_lines.append(f"- Filling Pressures: {diastolic_grade.get('filling_pressures', 'Unknown')}")
+        if diastolic_grade.get("confidence") == "low":
+            grade_lines.append("- Note: Limited measurements available; grade confidence is low.")
+        source = diastolic_grade.get("source", "computed")
+        if source == "report":
+            grade_lines.append(
+                "\nThis grade was extracted directly from the report text "
+                "(the interpreting cardiologist's stated assessment). "
+                "Use it in your diastolic function step — do NOT re-derive.\n"
+            )
+        else:
+            grade_lines.append(
+                "\nThis grade was pre-computed from the report's diastolic measurements "
+                "using the ASE/EACVI 2016 algorithm. Use it in your diastolic function "
+                "assessment step.\n"
+            )
+        domain = domain + "\n".join(grade_lines) + "\n"
+
     return domain
 
 _CLINICAL_CONTEXT_RULE = """\
@@ -6816,6 +7182,67 @@ Every measurement mentioned must include:
 - What the value means (normal, abnormal, borderline)
 - Clinical significance in plain language
 - Relevance to the patient's context if provided
+
+"""
+
+_TRAJECTORY_RULE = """\
+## Trajectory — Framing Change Over Time
+
+When the report references a prior study or comparison:
+- IMPROVED: Frame positively. "We're happy to see this has improved since
+  the last study." / "This is moving in the right direction."
+- STABLE: Frame as reassuring. "Things are holding steady, which is what
+  we want to see." / "No significant change — that's reassuring."
+- WORSENED: Frame honestly but gently. "There's been some change since
+  the last study that we'll want to discuss." / "This has progressed
+  somewhat — we'll review what this means for your care."
+- MIXED: "Some things have improved while others have changed — we'll
+  walk through what matters most."
+
+If no comparison is referenced, skip trajectory framing entirely.
+Do NOT invent comparisons or reference studies not mentioned in the report.
+
+"""
+
+_UNCERTAINTY_RULE = """\
+## Uncertainty — Communicating Ambiguous Findings
+
+When findings are borderline, indeterminate, or equivocal:
+- Name the uncertainty honestly: "This falls in a gray zone" or "The
+  measurements don't point clearly in one direction."
+- Normalize it: "This is common — not every test gives a black-and-white
+  answer."
+- Provide a path forward: "We'll factor this in alongside your other
+  results and symptoms to get the full picture."
+- Do NOT force a classification on genuinely ambiguous findings.
+- Do NOT dismiss uncertainty — acknowledge it and frame it as something
+  the care team integrates into the overall clinical picture.
+
+"""
+
+_EMOTIONAL_ARC_RULE = """\
+## Emotional Arc — Pacing the Explanation
+
+Structure every explanation with a deliberate emotional arc:
+
+1. HEADLINE (first paragraph): State the bottom-line finding up front.
+   If results are normal, lead with reassurance. If abnormal, lead with
+   the most important finding framed in context.
+
+2. CONTEXT (middle paragraphs): Build out the details. Explain what
+   was measured, what it means, and how findings relate to each other.
+   Connect to symptoms if clinical context is provided.
+
+3. CLOSE (final paragraph): End with a forward-looking, empowering
+   statement. For normal results: "Overall, this is reassuring."
+   For abnormal: "We have a clear picture of what's going on, and
+   we'll work through the next steps together." For mixed: "There are
+   some encouraging findings along with a few things we'll want to
+   address."
+
+For mixed results (some normal, some abnormal): lead with the good
+news, then the concerning findings, then close by putting it all in
+perspective. Never end on an alarming note.
 
 """
 
@@ -7138,6 +7565,16 @@ class PromptEngine:
                         "Cardiovascular risk assessment is particularly important."
                     )
 
+            # Age/sex contextualization directive
+            guidance_parts.append(
+                "CONTEXTUALIZATION: When interpreting findings, explicitly reference "
+                "the patient's age and/or sex where clinically meaningful. For example: "
+                "'For someone your age, this is right in the normal range' or "
+                "'This level of plaque is very common after age 60.' "
+                "This personalizes the explanation and helps the patient understand "
+                "whether a finding is expected for them specifically."
+            )
+
             guidance_text = "\n".join(f"- {g}" for g in guidance_parts) if guidance_parts else (
                 "Use age-appropriate reference ranges and clinical context "
                 "when interpreting results."
@@ -7299,9 +7736,13 @@ class PromptEngine:
             f"{demographics_section}"
             f"{test_type_hint_section}"
             f"{_CLINICAL_VOICE_RULE.format(specialty=specialty)}"
+            f"{_INCLUSIVE_VOICE_RULE}"
             f"{_build_no_recommendations_rule(include_lifestyle_recommendations)}"
             f"{_CLINICAL_CONTEXT_RULE}"
             f"{_INTERPRETATION_QUALITY_RULE}"
+            f"{_TRAJECTORY_RULE}"
+            f"{_UNCERTAINTY_RULE}"
+            f"{_EMOTIONAL_ARC_RULE}"
             f"{_select_domain_knowledge(prompt_context)}"
             f"{_INTERPRETATION_STRUCTURE_PERFUSION if perfusion_override else _INTERPRETATION_STRUCTURE}"
             f"{_STRESS_EF_DELAY_RULE if is_stress and not perfusion_override else ''}"

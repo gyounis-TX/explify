@@ -10,6 +10,91 @@ from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
 
+# ---------------------------------------------------------------------------
+# RHC prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_RHC_STYLE = (
+    "This is a right heart catheterization (RHC) study.\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by system "
+    "(PH screening -> PH classification -> PVR -> cardiac output -> RA pressure "
+    "-> additional).\n"
+    "At Grade 12 literacy: explain what each pressure measurement means in "
+    "context. Define terms before using them (e.g., 'pulmonary vascular "
+    "resistance, which measures how hard it is for blood to flow through "
+    "the lungs...').\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very "
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: Lead with the most clinically significant finding. If all "
+    "pressures are normal, say so clearly and concisely up front."
+)
+
+_RHC_RULES = (
+    "RIGHT HEART CATHETERIZATION — DECISION TREE:\n\n"
+    "STEP 1 — PH SCREENING (always first):\n"
+    "  - mPAP <20 mmHg = normal. Headline: 'No pulmonary hypertension.'\n"
+    "  - mPAP 21-24 mmHg = borderline elevation. Note but do NOT diagnose PH.\n"
+    "  - mPAP >=25 mmHg = pulmonary hypertension present.\n"
+    "  - Note: ESC/ERS 2022 uses >20 mmHg threshold, but many labs still\n"
+    "    report using >=25 mmHg. Acknowledge both if borderline.\n"
+    "  - If mPAP is normal, keep the rest of the explanation concise.\n\n"
+    "STEP 2 — PH CLASSIFICATION (only if PH present):\n"
+    "  - PCWP <=15 + PVR >2 WU = pre-capillary PH (WHO Group 1, 3, 4, 5).\n"
+    "  - PCWP >15 + PVR <=2 WU = isolated post-capillary PH (WHO Group 2).\n"
+    "  - PCWP >15 + PVR >2 WU = combined pre- and post-capillary PH.\n"
+    "  - TPG (mPAP - PCWP): <12 = passive, >=12 = reactive component.\n"
+    "  - DPG (diastolic PA - PCWP): <7 = passive, >=7 = pulmonary\n"
+    "    vascular disease component.\n"
+    "  - Explain the classification in plain language: pre-capillary =\n"
+    "    problem in the lung vessels themselves; post-capillary = back-pressure\n"
+    "    from the left heart.\n\n"
+    "STEP 3 — PVR (pulmonary vascular resistance):\n"
+    "  - <2 WU = normal.\n"
+    "  - 2-3 WU = mildly elevated.\n"
+    "  - 3-5 WU = moderately elevated.\n"
+    "  - >5 WU = severely elevated.\n"
+    "  - Explain as the 'resistance' blood encounters flowing through the\n"
+    "    lungs — like water flowing through pipes of different widths.\n\n"
+    "STEP 4 — CARDIAC OUTPUT / INDEX:\n"
+    "  - CI >=2.5 L/min/m² = normal.\n"
+    "  - CI 2.0-2.5 = mildly reduced.\n"
+    "  - CI <2.0 = low output state — significant.\n"
+    "  - Note method (Fick vs thermodilution) if both are reported.\n"
+    "  - Explain as how much blood the heart pumps per minute.\n\n"
+    "STEP 5 — RA PRESSURE:\n"
+    "  - 0-5 mmHg = normal.\n"
+    "  - 6-10 mmHg = mildly elevated.\n"
+    "  - >10 mmHg = significantly elevated (RV failure or volume overload).\n"
+    "  - Elevated RA pressure = right heart struggling. Correlate with\n"
+    "    clinical signs (edema, JVD).\n\n"
+    "STEP 6 — ADDITIONAL FINDINGS:\n"
+    "  - O2 saturations (step-up may suggest intracardiac shunt).\n"
+    "  - Vasodilator challenge results (if performed for PAH evaluation).\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Dyspnea → elevated mPAP, elevated PCWP, reduced CI.\n"
+    "  - Edema / ascites → elevated RA pressure, RV failure.\n"
+    "  - Exercise intolerance → reduced CI, elevated PVR.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "RISK CONTEXT:\n"
+    "  - Normal RHC: very reassuring — excludes pulmonary hypertension.\n"
+    "  - Borderline mPAP 21-24: clinical significance uncertain — contextualize.\n\n"
+    "GUARDRAILS:\n"
+    "  - Normal RHC: keep concise. 'Normal right heart pressures and\n"
+    "    cardiac output' is sufficient.\n"
+    "  - Borderline mPAP (21-24): Do NOT diagnose pulmonary hypertension.\n"
+    "    Say 'borderline elevation' and suggest clinical correlation.\n"
+    "  - Elevated PCWP with normal mPAP: this is NOT pulmonary hypertension.\n"
+    "    This is elevated left-sided filling pressure.\n"
+    "  - Fick vs thermodilution discrepancy: note the difference but do NOT\n"
+    "    pick a winner. Both methods have limitations.\n"
+    "  - Do NOT restate clinical indications at the end.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
+
 class RightHeartCathHandler(BaseTestType):
 
     @property
@@ -211,17 +296,8 @@ class RightHeartCathHandler(BaseTestType):
             "test_type": "right_heart_catheterization",
             "category": "cardiac",
             "guidelines": "ESC/ERS 2022 Pulmonary Hypertension Guidelines",
-            "explanation_style": (
-                "Explain each measurement in plain language. "
-                "Compare to normal ranges. Highlight any abnormalities. "
-                "Avoid medical jargon where possible."
-            ),
-            "interpretation_rules": (
-                "Report RA pressure first, then PA pressures "
-                "(systolic/diastolic/mean), then PCWP, then cardiac "
-                "output/index, then PVR. Classify pulmonary hypertension "
-                "if mPAP > 20 mmHg."
-            ),
+            "explanation_style": _RHC_STYLE,
+            "interpretation_rules": _RHC_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:

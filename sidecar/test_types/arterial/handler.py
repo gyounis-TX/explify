@@ -10,6 +10,82 @@ from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
 
+# ---------------------------------------------------------------------------
+# Arterial Doppler prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_ARTERIAL_DOPPLER_STYLE = (
+    "This is a lower extremity arterial Doppler ultrasound.\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by system "
+    "(ABI -> waveform analysis -> vessel-by-vessel -> clinical correlation).\n"
+    "At Grade 12 literacy: explain what each finding means in context. Define "
+    "terms before using them (e.g., 'ankle-brachial index, which compares "
+    "blood pressure in your ankle to your arm...').\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very "
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: Lead with the most clinically significant finding. If ABI is "
+    "normal and waveforms are triphasic, say so clearly and concisely."
+)
+
+_ARTERIAL_DOPPLER_RULES = (
+    "LOWER EXTREMITY ARTERIAL DOPPLER — DECISION TREE:\n\n"
+    "STEP 1 — ABI (Ankle-Brachial Index):\n"
+    "  - >1.3 = non-compressible arteries (often diabetes or CKD). Cannot\n"
+    "    rely on ABI alone — need TBI (toe-brachial index) for assessment.\n"
+    "    Do NOT report >1.3 as 'normal.'\n"
+    "  - 1.0-1.3 = normal.\n"
+    "  - 0.91-0.99 = borderline. Do NOT diagnose PAD — say 'borderline'\n"
+    "    and suggest clinical correlation.\n"
+    "  - 0.70-0.90 = mild PAD.\n"
+    "  - 0.40-0.69 = moderate PAD.\n"
+    "  - <0.40 = severe / critical limb ischemia.\n"
+    "  - Asymmetry: ABI difference >0.15 between legs suggests unilateral\n"
+    "    disease — note which side is lower.\n\n"
+    "STEP 2 — WAVEFORM ANALYSIS:\n"
+    "  - Triphasic = normal arterial flow (forward-reverse-forward).\n"
+    "  - Biphasic = mild arterial disease (loss of reverse component).\n"
+    "  - Monophasic = significant arterial disease (continuous low-resistance\n"
+    "    flow).\n"
+    "  - The transition point from triphasic to monophasic helps localize\n"
+    "    the level of disease.\n\n"
+    "STEP 3 — VESSEL-BY-VESSEL:\n"
+    "  - CFA (common femoral), SFA (superficial femoral), popliteal, tibial\n"
+    "    vessels (ATA, PTA, peroneal).\n"
+    "  - PSV ratio >2.0 across a lesion = >=50%% stenosis.\n"
+    "  - Bypass graft patency if applicable (graft velocities, waveform\n"
+    "    quality).\n"
+    "  - Note occluded segments if present.\n\n"
+    "STEP 4 — CLINICAL CORRELATION:\n"
+    "  - Calf pain / claudication = SFA or popliteal disease.\n"
+    "  - Thigh or buttock claudication = aortoiliac disease.\n"
+    "  - Rest pain or tissue loss = critical limb ischemia.\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Claudication (calf) → SFA / popliteal disease.\n"
+    "  - Claudication (thigh/buttock) → aortoiliac disease.\n"
+    "  - Rest pain → critical limb ischemia (ABI <0.40).\n"
+    "  - Non-healing wound → distal perfusion assessment.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "RISK CONTEXT:\n"
+    "  - Normal ABI + triphasic: very reassuring — no significant PAD.\n"
+    "  - Mild PAD (ABI 0.70-0.90): commonly managed with exercise, risk factor\n"
+    "    control, and monitoring.\n\n"
+    "GUARDRAILS:\n"
+    "  - Normal ABI + triphasic waveforms: keep concise. 'Normal arterial\n"
+    "    blood flow to both legs' is sufficient.\n"
+    "  - Borderline ABI (0.91-0.99): Do NOT diagnose PAD. 'Borderline'\n"
+    "    with clinical correlation recommended.\n"
+    "  - Non-compressible ABI (>1.3): Do NOT report as normal. Explain\n"
+    "    that the arteries are calcified and ABI may underestimate disease.\n"
+    "  - Mild PAD without symptoms: contextualize. Many patients with\n"
+    "    mild PAD are asymptomatic and managed with risk factor control.\n"
+    "  - Do NOT restate clinical indications at the end.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
+
 class ArterialDopplerHandler(BaseTestType):
 
     @property
@@ -166,12 +242,8 @@ class ArterialDopplerHandler(BaseTestType):
             "test_type": "lower_extremity_arterial",
             "category": "vascular",
             "guidelines": "ACC/AHA 2016 PAD Guidelines",
-            "explanation_style": (
-                "Explain the arterial blood flow in each leg in plain language. "
-                "Interpret the waveform types (triphasic/biphasic/monophasic) and "
-                "what they mean. Explain the Ankle-Brachial Index and whether it is "
-                "normal. Discuss any stenosis or blockage found. Avoid jargon."
-            ),
+            "explanation_style": _ARTERIAL_DOPPLER_STYLE,
+            "interpretation_rules": _ARTERIAL_DOPPLER_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:

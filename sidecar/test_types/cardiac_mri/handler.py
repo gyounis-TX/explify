@@ -10,6 +10,85 @@ from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
 
+# ---------------------------------------------------------------------------
+# CMR prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_CMR_STYLE = (
+    "This is a cardiac MRI (CMR) study.\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by system "
+    "(scar/LGE -> biventricular function -> tissue mapping -> perfusion -> additional).\n"
+    "At Grade 12 literacy: explain what each finding means in context. Define "
+    "terms before using them (e.g., 'late gadolinium enhancement, which highlights "
+    "areas of scar tissue in the heart muscle...').\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very "
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: Lead with the most clinically significant finding. Scar pattern "
+    "and extent are the headline findings on CMR."
+)
+
+_CMR_RULES = (
+    "CARDIAC MRI — DECISION TREE:\n\n"
+    "STEP 1 — LGE / SCAR (always first — most important CMR finding):\n"
+    "  - Pattern is critical:\n"
+    "    * Ischemic = subendocardial or transmural in a coronary territory.\n"
+    "    * Non-ischemic = mid-wall, epicardial, or patchy (not following a\n"
+    "      coronary distribution).\n"
+    "    * Myocarditis = subepicardial, typically inferolateral.\n"
+    "    * Amyloid = diffuse subendocardial enhancement.\n"
+    "  - Scar burden: >15%% of LV mass is extensive.\n"
+    "  - Transmurality: <50%% = viable myocardium (may recover with\n"
+    "    revascularization); >50%% = non-viable (unlikely to recover).\n"
+    "  - No LGE = no scar. State clearly and move on.\n\n"
+    "STEP 2 — BIVENTRICULAR FUNCTION:\n"
+    "  - LVEF: normal >=57%% male, >=61%% female by CMR (higher than echo\n"
+    "    norms). Report with severity classification.\n"
+    "  - LV volumes (EDV, ESV) and LV mass: note if dilated or hypertrophied.\n"
+    "  - RVEF: >=45%% normal. RV volumes.\n"
+    "  - Wall motion abnormalities: correlate with scar distribution from Step 1.\n\n"
+    "STEP 3 — TISSUE MAPPING:\n"
+    "  - T2: elevated = active edema/inflammation (acute process vs chronic).\n"
+    "    Helps distinguish acute myocarditis or infarction from chronic scar.\n"
+    "  - T1: elevated = fibrosis or infiltration; low = Fabry disease or iron\n"
+    "    overload.\n"
+    "  - ECV: normal ~25-30%%. Elevated = diffuse fibrosis. >40%% suggests\n"
+    "    amyloidosis. Provides information about tissue between cells.\n"
+    "  - If no mapping data in report, skip this step.\n\n"
+    "STEP 4 — PERFUSION (stress CMR only):\n"
+    "  - Reversible perfusion defect = ischemia. State territory and extent.\n"
+    "  - Fixed perfusion defect = scar (correlate with LGE).\n"
+    "  - If no stress perfusion was performed, skip this step.\n\n"
+    "STEP 5 — ADDITIONAL FINDINGS:\n"
+    "  - LA size, valvular function, pericardium, extracardiac findings.\n"
+    "  - Note only if abnormal or clinically relevant.\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Chest pain → scar pattern (ischemic vs non-ischemic), perfusion defects.\n"
+    "  - Heart failure / dyspnea → reduced EF, elevated ECV, scar burden.\n"
+    "  - Palpitations / arrhythmia → scar substrate (mid-wall fibrosis).\n"
+    "  - Myocarditis symptoms → T2 edema + subepicardial LGE pattern.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "RISK CONTEXT:\n"
+    "  - No scar + normal function: very reassuring.\n"
+    "  - Ischemic scar <50%% transmural: viable — may benefit from treatment.\n"
+    "  - RV insertion point LGE alone: benign in ~10%% of normal CMRs.\n\n"
+    "GUARDRAILS:\n"
+    "  - RV insertion point LGE alone is a common, benign finding — do NOT\n"
+    "    alarm. It is seen at the junction of the RV and LV and is usually\n"
+    "    of no clinical significance.\n"
+    "  - LVEF above normal range: Do NOT flag. CMR EF norms are higher than\n"
+    "    echo norms. An EF of 65-75%% is normal on CMR.\n"
+    "  - Mild T1 elevation without LGE or T2 changes: do NOT over-interpret.\n"
+    "    Isolated mild T1 changes can be non-specific.\n"
+    "  - Normal CMR: keep concise. 'No scar, normal heart function, and\n"
+    "    normal tissue characterization' is sufficient.\n"
+    "  - Do NOT restate clinical indications at the end.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
+
 class CardiacMRIHandler(BaseTestType):
 
     @property
@@ -204,18 +283,8 @@ class CardiacMRIHandler(BaseTestType):
             "test_type": "cardiac_mri",
             "category": "cardiac",
             "guidelines": "SCMR 2020 Standardized CMR Protocols",
-            "explanation_style": (
-                "Explain each measurement in plain language. "
-                "Focus on tissue characterization findings (scar, fibrosis, edema), "
-                "scar quantification (LGE pattern and extent), and volumetric analysis "
-                "(chamber sizes and function). Compare to normal ranges. "
-                "Highlight any abnormalities. Avoid medical jargon where possible."
-            ),
-            "interpretation_rules": (
-                "Report LVEF and volumes first, then tissue characterization "
-                "(LGE pattern and extent), then T1/T2 mapping if available, "
-                "then perfusion findings, then any additional findings."
-            ),
+            "explanation_style": _CMR_STYLE,
+            "interpretation_rules": _CMR_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:

@@ -9,6 +9,76 @@ from .glossary import TEE_GLOSSARY
 from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
+# ---------------------------------------------------------------------------
+# TEE prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_TEE_STYLE = (
+    "This is a transesophageal echocardiogram (TEE).\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by indication,\n"
+    "then LAA, septum, valves, aorta, other findings.\n"
+    "At Grade 12 literacy: explain what each finding means in context. Define\n"
+    "terms before using them.\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very\n"
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: Lead with findings relevant to the indication."
+)
+
+_TEE_RULES = (
+    "TRANSESOPHAGEAL ECHOCARDIOGRAM — DECISION TREE:\n\n"
+    "STEP 1 — INDICATION-DRIVEN PRIMARY ASSESSMENT:\n"
+    "  - Identify the indication (pre-op, stroke workup, endocarditis,\n"
+    "    valve assessment, AF/cardioversion) and LEAD with findings relevant\n"
+    "    to that indication.\n"
+    "  - Stroke workup -> PFO/ASD and LAA thrombus are the headline findings.\n"
+    "  - Endocarditis -> vegetation presence/absence is the headline.\n"
+    "  - Pre-op valve -> valve anatomy and severity are the headline.\n"
+    "  - AF/cardioversion -> LAA thrombus and SEC (smoke) are the headline.\n\n"
+    "STEP 2 — LEFT ATRIAL APPENDAGE (LAA):\n"
+    "  - Thrombus: present or absent. If absent, state clearly.\n"
+    "  - Emptying velocity: >=40 cm/s normal, <40 cm/s sluggish flow\n"
+    "    (increased thrombus risk).\n"
+    "  - Spontaneous echo contrast (SEC/'smoke'): if present, note as\n"
+    "    marker of sluggish flow.\n\n"
+    "STEP 3 — INTERATRIAL SEPTUM:\n"
+    "  - PFO: if bubble study performed, state result (positive/negative\n"
+    "    for right-to-left shunt).\n"
+    "  - ASD: if present, note type and size.\n"
+    "  - Intact septum: state clearly.\n\n"
+    "STEP 4 — VALVE ASSESSMENT:\n"
+    "  - Detailed valve morphology (TEE provides superior views).\n"
+    "  - Regurgitation severity with mechanism if visible.\n"
+    "  - Prosthetic valve function if applicable (paravalvular leak,\n"
+    "    gradient, effective orifice area).\n\n"
+    "STEP 5 — AORTA:\n"
+    "  - Atheroma: grade (I-V) if present. Grade IV-V (mobile/protruding\n"
+    "    components) is significant for stroke risk.\n"
+    "  - Ascending aorta size.\n\n"
+    "STEP 6 — OTHER FINDINGS:\n"
+    "  - Pericardial effusion, masses, other incidental findings.\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Stroke/TIA → LAA thrombus, PFO, aortic atheroma grade IV-V.\n"
+    "  - AF/cardioversion → LAA thrombus, SEC/smoke.\n"
+    "  - Murmur evaluation → detailed valve morphology, regurgitation severity.\n"
+    "  - Endocarditis → vegetation presence/absence, abscess, fistula.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "GUARDRAILS:\n"
+    "  - TEE is semi-invasive — patients may be anxious. Acknowledge\n"
+    "    normal findings with clear reassurance.\n"
+    "  - Negative stroke workup (no PFO, no thrombus, no significant\n"
+    "    atheroma): frame as clearly reassuring.\n"
+    "  - Do NOT restate indications or mention who read the study.\n"
+    "  - LVEF above normal range: Do NOT flag, caution, or comment on an EF\n"
+    "    above the upper limit of normal. An EF of 65-75%% is not clinically\n"
+    "    concerning and should simply be stated as normal. Do NOT use terms\n"
+    "    like 'above normal', 'supranormal', or 'hyperdynamic' UNLESS the\n"
+    "    report specifically raises concern for HCM.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
 
 class TEEHandler(BaseTestType):
 
@@ -206,18 +276,8 @@ class TEEHandler(BaseTestType):
             "test_type": "transesophageal echocardiogram",
             "category": "cardiac",
             "guidelines": "ASE/SCA 2013 TEE Guidelines",
-            "explanation_style": (
-                "Explain each measurement in plain language. "
-                "Compare to normal ranges. Highlight any abnormalities. "
-                "Avoid medical jargon where possible."
-            ),
-            "interpretation_rules": (
-                "Report indication first (e.g., pre-operative, stroke workup, "
-                "endocarditis evaluation), then valve assessment, then LAA "
-                "evaluation (thrombus, velocities), then interatrial septum "
-                "(PFO/ASD with bubble study results), then aortic atheroma, "
-                "then other findings."
-            ),
+            "explanation_style": _TEE_STYLE,
+            "interpretation_rules": _TEE_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:

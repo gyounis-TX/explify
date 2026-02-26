@@ -116,7 +116,7 @@ CTA_GLOSSARY: dict[str, str] = {
     "Contrast": (
         "A special dye (usually iodine-based) injected into a vein through an IV during "
         "the CT scan. The contrast dye makes the blood vessels show up brightly on the "
-        "images, allowing the doctor to see blockages or narrowing."
+        "images, allowing us to see blockages or narrowing."
     ),
     "Coronary Anomaly": (
         "An unusual pattern in how the coronary arteries are shaped or where they "

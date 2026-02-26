@@ -29,7 +29,7 @@ LAB_GLOSSARY: dict[str, str] = {
 
     # --- CMP / Chemistry ---
     "Comprehensive Metabolic Panel": (
-        "A group of 14 blood tests that gives your doctor important information "
+        "A group of 14 blood tests that gives us important information "
         "about your body's chemical balance, blood sugar, and how well your "
         "kidneys and liver are working. It is often abbreviated as CMP."
     ),
@@ -167,7 +167,7 @@ LAB_GLOSSARY: dict[str, str] = {
     ),
     "MPV": (
         "Mean Platelet Volume -- the average size of your platelets. Larger "
-        "platelets are usually younger and more active. MPV can help your doctor "
+        "platelets are usually younger and more active. MPV can help us "
         "understand the cause of a high or low platelet count."
     ),
 

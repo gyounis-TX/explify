@@ -10,6 +10,87 @@ from .measurements import extract_measurements
 from .reference_ranges import REFERENCE_RANGES, classify_measurement
 
 
+# ---------------------------------------------------------------------------
+# CTA Coronary prompt rule constants — decision tree style
+# ---------------------------------------------------------------------------
+
+_CTA_CORONARY_STYLE = (
+    "This is a coronary CT angiography (CTA) study.\n"
+    "Follow the DECISION TREE in the interpretation rules strictly.\n\n"
+    "At Clinical literacy: structured impression format organized by system "
+    "(calcium score -> vessel-by-vessel stenosis -> CAD-RADS -> CT-FFR -> secondary).\n"
+    "At Grade 12 literacy: explain what each finding means in context. Define "
+    "terms before using them (e.g., 'calcium score, which measures mineral "
+    "buildup in the coronary arteries...').\n"
+    "At Grade 4-8 literacy: use analogies from the analogy library. Very "
+    "simple language. Avoid all abbreviations.\n\n"
+    "ALWAYS: Lead with the most clinically significant finding. If calcium "
+    "score is zero and no stenosis, say so clearly and concisely up front."
+)
+
+_CTA_CORONARY_RULES = (
+    "CTA CORONARY — DECISION TREE:\n\n"
+    "STEP 1 — CALCIUM SCORE:\n"
+    "  - Agatston score + age/sex percentile if available.\n"
+    "  - Categories: 0 = no coronary calcium (very reassuring); 1-10 = minimal;\n"
+    "    11-100 = mild; 101-400 = moderate; >400 = severe.\n"
+    "  - Percentile contextualizes by age and sex (e.g., a score of 150 at\n"
+    "    age 45 is more significant than at age 75).\n"
+    "  - CAC 0: extremely reassuring. Do NOT pad with caveats.\n\n"
+    "STEP 2 — VESSEL-BY-VESSEL STENOSIS:\n"
+    "  - Evaluate: Left Main (LM), LAD, LCx, RCA (and branches if reported).\n"
+    "  - Severity: none / minimal (1-24%%) / mild (25-49%%) / moderate\n"
+    "    (50-69%%) / severe (70-99%%) / occluded (100%%).\n"
+    "  - Plaque type: calcified (stable) / non-calcified (softer) / mixed.\n"
+    "  - High-risk plaque features: positive remodeling, low-attenuation\n"
+    "    plaque, napkin-ring sign, spotty calcification.\n"
+    "  - LM >=50%% is ALWAYS hemodynamically significant.\n\n"
+    "STEP 3 — CAD-RADS CLASSIFICATION:\n"
+    "  - CAD-RADS 0: no plaque or stenosis.\n"
+    "  - CAD-RADS 1: 1-24%% minimal stenosis or plaque.\n"
+    "  - CAD-RADS 2: 25-49%% mild stenosis.\n"
+    "  - CAD-RADS 3: 50-69%% moderate stenosis.\n"
+    "  - CAD-RADS 4A: 70-99%% severe stenosis (one or two vessels).\n"
+    "  - CAD-RADS 4B: left main >=50%% or three-vessel >=70%%.\n"
+    "  - CAD-RADS 5: total occlusion.\n"
+    "  - Modifiers: /S = stent present, /G = graft present.\n"
+    "  - Explain the CAD-RADS grade in patient-friendly language.\n\n"
+    "STEP 4 — CT-FFR (if available):\n"
+    "  - CT-FFR >0.80 = not hemodynamically significant.\n"
+    "  - CT-FFR <=0.80 = hemodynamically significant stenosis.\n"
+    "  - Explain as a 'virtual stress test' that estimates whether a\n"
+    "    narrowing is actually affecting blood flow.\n"
+    "  - If no CT-FFR data, skip this step.\n\n"
+    "STEP 5 — SECONDARY FINDINGS:\n"
+    "  - LVEF from gated CT (if available).\n"
+    "  - Extracardiac findings (lung nodules, pleural effusions, etc.).\n"
+    "  - Aortic or valvular calcification.\n"
+    "  - Note only if abnormal or clinically relevant.\n\n"
+    "SYMPTOM BRIDGING:\n"
+    "  - Chest pain → stenosis severity, plaque characteristics.\n"
+    "  - Dyspnea → LV function on gated CT, significant stenosis.\n"
+    "  - Risk factor screening → calcium score percentile for age/sex.\n"
+    "  When the indication includes a symptom, explicitly connect the findings.\n\n"
+    "RISK CONTEXT:\n"
+    "  - CAC 0: <1%% chance of significant stenosis.\n"
+    "  - CAD-RADS 0-1: very low risk — routine follow-up.\n"
+    "  - CAD-RADS 2: low risk — risk factor management.\n\n"
+    "GUARDRAILS:\n"
+    "  - CAC 0: Do NOT pad with unnecessary caveats. A zero calcium score\n"
+    "    is very reassuring and should be communicated as such.\n"
+    "  - CAD-RADS 1-2: Do NOT alarm. Minimal-to-mild plaque is common\n"
+    "    and does not require intervention.\n"
+    "  - Non-calcified plaque: Do NOT catastrophize. Note it is 'softer'\n"
+    "    plaque but avoid implying imminent danger.\n"
+    "  - High CAC in elderly patients: contextualize with age. A score of\n"
+    "    300 at age 80 is less alarming than at age 50.\n"
+    "  - Do NOT restate clinical indications at the end.\n"
+    "  - Do NOT mention who interpreted/read/signed the study.\n"
+    "  - Do NOT state whether prior studies are or are not available\n"
+    "    for comparison."
+)
+
+
 class CTACoronaryHandler(BaseTestType):
 
     @property
@@ -209,17 +290,8 @@ class CTACoronaryHandler(BaseTestType):
             "test_type": "cta_coronary",
             "category": "cardiac",
             "guidelines": "SCCT 2022 Guidelines for Coronary CTA",
-            "explanation_style": (
-                "Explain each measurement in plain language. "
-                "Compare to normal ranges. Highlight any abnormalities. "
-                "Avoid medical jargon where possible."
-            ),
-            "interpretation_rules": (
-                "Report calcium score (Agatston) and percentile first, "
-                "then each vessel (left main, LAD, LCx, RCA) with stenosis "
-                "severity and plaque type (calcified, non-calcified, mixed). "
-                "Classify stenosis per CAD-RADS."
-            ),
+            "explanation_style": _CTA_CORONARY_STYLE,
+            "interpretation_rules": _CTA_CORONARY_RULES,
         }
 
     def _extract_sections(self, text: str) -> list[ReportSection]:
