@@ -78,7 +78,6 @@ class ExplainRequest(BaseModel):
     avoid_openings: Optional[list[str]] = None
     batch_prior_summaries: Optional[list[dict]] = None
     quick_normal: Optional[bool] = None
-    pet_rules_v2: Optional[bool] = None
 
 
 class InterpretRequest(BaseModel):

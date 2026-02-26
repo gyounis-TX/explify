@@ -81,74 +81,7 @@ _ECHO_KEYWORDS = [
 # PET prompt rule constants — V1 (current) and V2 (enhanced)
 # ---------------------------------------------------------------------------
 
-_PET_PHARMA_STYLE_V1 = (
-    "This is a pharmacologic cardiac PET/PET-CT perfusion study. "
-    "The PRIMARY focus is the presence or absence of ISCHEMIA "
-    "(reversible perfusion defects). ALWAYS discuss ischemia and "
-    "perfusion findings FIRST, BEFORE mentioning ejection fraction "
-    "or pump strength. Ejection fraction should be mentioned as a "
-    "secondary data point later in the explanation — do not celebrate "
-    "or emphasize a normal EF, simply note it.\n"
-    "For coronary flow reserve (CFR) and myocardial flow reserve "
-    "(MFR): do NOT state 'we may make adjustments based on mild "
-    "reductions in flow reserve.' Instead, only mention CFR/MFR "
-    "if there are significant defects (CFR < 1.5 in a territory) "
-    "that support or corroborate perfusion defect findings. Mildly "
-    "reduced CFR (1.5-2.0) in the absence of perfusion defects "
-    "should be noted briefly without alarm.\n"
-    "IMPORTANT pharmacological stress rules:\n"
-    "- Do NOT mention heart rate response to stress AT ALL. "
-    "Heart rate response to exercise is invalid with pharmacological "
-    "stress. Do NOT comment on target heart rate, predicted maximum "
-    "heart rate, or % of max predicted heart rate.\n"
-    "- Do NOT state that the heart rate response may limit "
-    "interpretation of the EKG stress test."
-)
-
-_PET_PHARMA_RULES_V1 = (
-    "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
-    "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
-    "ischemia / perfusion findings BEFORE any mention of ejection "
-    "fraction or pump strength. Do NOT lead with EF. If there is "
-    "no ischemia, say so first, then mention EF afterward.\n"
-    "1. ISCHEMIA is the primary focus. State clearly whether "
-    "ischemia is present or absent. Describe the location, extent, "
-    "and severity of any perfusion defects.\n"
-    "2. Ejection fraction is secondary — mention it AFTER perfusion "
-    "findings. Do not emphasize or celebrate a normal EF. Do not "
-    "make EF the headline of the explanation.\n"
-    "3. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
-    "   - Do NOT say 'we may need to make adjustments based on "
-    "mild reductions in flow reserve'\n"
-    "   - If CFR is significantly reduced (< 1.5) in a territory "
-    "AND there are corresponding perfusion defects, mention that "
-    "the reduced flow reserve supports/corroborates the perfusion "
-    "findings\n"
-    "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
-    "defects, note it briefly as a finding without alarm (e.g., "
-    "'flow reserve was mildly reduced in this territory')\n"
-    "   - Globally reduced CFR without focal perfusion defects "
-    "may suggest microvascular disease\n"
-    "4. Wall motion abnormalities during stress (stunning) are "
-    "significant markers of ischemia.\n\n"
-    "CONTEXTUALIZATION:\n"
-    "- When CFR/MFR is mildly reduced diffusely, contextualize it: "
-    "commonly seen with age, hypertension, diabetes, and other cardiac "
-    "risk factors. Do NOT use vague phrases like 'something to be aware "
-    "of' — explain WHY it's seen.\n"
-    "- Do NOT restate clinical indications at the end. The patient knows "
-    "why they had the test. Instead, weave relevant correlations into "
-    "the findings themselves.\n\n"
-    "ADMINISTRATIVE METADATA — DO NOT INCLUDE:\n"
-    "- Do NOT mention who interpreted/read/signed the study.\n"
-    "- Do NOT mention the interpreting physician's name or signature.\n"
-    "- Do NOT state whether prior studies are or are not available "
-    "for comparison. If the report references a prior study, you may "
-    "reference the comparison findings, but do NOT editorialize about "
-    "the availability of prior studies."
-)
-
-_PET_PHARMA_STYLE_V2 = (
+_PET_PHARMA_STYLE = (
     "This is a pharmacologic cardiac PET/PET-CT perfusion study. "
     "Follow the DECISION TREE in the interpretation rules strictly.\n"
     "At Clinical literacy: structured impression format. Use CFC "
@@ -166,7 +99,7 @@ _PET_PHARMA_STYLE_V2 = (
     "interpretation of the EKG stress test."
 )
 
-_PET_PHARMA_RULES_V2 = (
+_PET_PHARMA_RULES = (
     "CARDIAC PET/PET-CT INTERPRETATION — DECISION TREE:\n\n"
     "STEP 1 — ISCHEMIA CHECK (always first):\n"
     "  - Examine SSS, SDS, and perfusion images.\n"
@@ -221,68 +154,7 @@ _PET_PHARMA_RULES_V2 = (
     "the availability of prior studies"
 )
 
-_PET_EXERCISE_STYLE_V1 = (
-    "This is an exercise cardiac PET/PET-CT perfusion study. "
-    "The PRIMARY focus is the presence or absence of ISCHEMIA "
-    "(reversible perfusion defects). ALWAYS discuss ischemia and "
-    "perfusion findings FIRST, BEFORE mentioning ejection fraction "
-    "or pump strength. Also comment on exercise capacity (METs) "
-    "and heart rate response. Ejection fraction should be mentioned "
-    "as a secondary data point later in the explanation — do not "
-    "celebrate or emphasize a normal EF, simply note it.\n"
-    "For coronary flow reserve (CFR) and myocardial flow reserve "
-    "(MFR): do NOT state 'we may make adjustments based on mild "
-    "reductions in flow reserve.' Instead, only mention CFR/MFR "
-    "if there are significant defects (CFR < 1.5 in a territory) "
-    "that support or corroborate perfusion defect findings. Mildly "
-    "reduced CFR (1.5-2.0) in the absence of perfusion defects "
-    "should be noted briefly without alarm."
-)
-
-_PET_EXERCISE_RULES_V1 = (
-    "CARDIAC PET/PET-CT INTERPRETATION PRIORITIES:\n"
-    "STRUCTURAL ORDERING RULE: The explanation MUST discuss "
-    "ischemia / perfusion findings BEFORE any mention of ejection "
-    "fraction or pump strength. Do NOT lead with EF. If there is "
-    "no ischemia, say so first, then mention EF afterward.\n"
-    "1. ISCHEMIA is the primary focus. State clearly whether "
-    "ischemia is present or absent. Describe the location, extent, "
-    "and severity of any perfusion defects.\n"
-    "2. Exercise capacity and heart rate response provide context "
-    "for the adequacy of the test.\n"
-    "3. Ejection fraction is secondary — mention it AFTER perfusion "
-    "findings. Do not emphasize or celebrate a normal EF.\n"
-    "4. Coronary Flow Reserve (CFR) / Myocardial Flow Reserve (MFR):\n"
-    "   - Do NOT say 'we may need to make adjustments based on "
-    "mild reductions in flow reserve'\n"
-    "   - If CFR is significantly reduced (< 1.5) in a territory "
-    "AND there are corresponding perfusion defects, mention that "
-    "the reduced flow reserve supports/corroborates the perfusion "
-    "findings\n"
-    "   - If CFR is mildly reduced (1.5-2.0) without perfusion "
-    "defects, note it briefly without alarm\n"
-    "   - Globally reduced CFR without focal perfusion defects "
-    "may suggest microvascular disease\n"
-    "5. Wall motion abnormalities during stress (stunning) are "
-    "significant markers of ischemia.\n\n"
-    "CONTEXTUALIZATION:\n"
-    "- When CFR/MFR is mildly reduced diffusely, contextualize it: "
-    "commonly seen with age, hypertension, diabetes, and other cardiac "
-    "risk factors. Do NOT use vague phrases like 'something to be aware "
-    "of' — explain WHY it's seen.\n"
-    "- Do NOT restate clinical indications at the end. The patient knows "
-    "why they had the test. Instead, weave relevant correlations into "
-    "the findings themselves.\n\n"
-    "ADMINISTRATIVE METADATA — DO NOT INCLUDE:\n"
-    "- Do NOT mention who interpreted/read/signed the study.\n"
-    "- Do NOT mention the interpreting physician's name or signature.\n"
-    "- Do NOT state whether prior studies are or are not available "
-    "for comparison. If the report references a prior study, you may "
-    "reference the comparison findings, but do NOT editorialize about "
-    "the availability of prior studies."
-)
-
-_PET_EXERCISE_STYLE_V2 = (
+_PET_EXERCISE_STYLE = (
     "This is an exercise cardiac PET/PET-CT perfusion study. "
     "Follow the DECISION TREE in the interpretation rules strictly.\n"
     "Also comment on exercise capacity (METs) and heart rate response.\n"
@@ -294,7 +166,7 @@ _PET_EXERCISE_STYLE_V2 = (
     "ALWAYS: ischemia first, exercise capacity second, EF last."
 )
 
-_PET_EXERCISE_RULES_V2 = (
+_PET_EXERCISE_RULES = (
     "CARDIAC PET/PET-CT INTERPRETATION — DECISION TREE:\n\n"
     "STEP 1 — ISCHEMIA CHECK (always first):\n"
     "  - Examine SSS, SDS, and perfusion images.\n"
@@ -657,7 +529,6 @@ class StressTestHandler(BaseTestType):
     def get_prompt_context(
         self,
         extraction_result: ExtractionResult | None = None,
-        pet_rules_v2: bool = False,
     ) -> dict:
         text = extraction_result.full_text if extraction_result else ""
         subtype_id, _ = self._classify_subtype(text)
@@ -761,25 +632,16 @@ class StressTestHandler(BaseTestType):
         elif subtype_id == "pharma_pet_stress":
             base["test_type"] = "pharma_pet_stress"
             base["guidelines"] = "ASNC 2016 PET Myocardial Perfusion Imaging Guidelines"
-            if pet_rules_v2:
-                base["explanation_style"] = _PET_PHARMA_STYLE_V2
-                base["interpretation_rules"] = _PET_PHARMA_RULES_V2
-                # Inject CFC data for the LLM
-                self._inject_cfc(base, text, extraction_result)
-            else:
-                base["explanation_style"] = _PET_PHARMA_STYLE_V1
-                base["interpretation_rules"] = _PET_PHARMA_RULES_V1
+            base["explanation_style"] = _PET_PHARMA_STYLE
+            base["interpretation_rules"] = _PET_PHARMA_RULES
+            self._inject_cfc(base, text, extraction_result)
 
         elif subtype_id == "exercise_pet_stress":
             base["test_type"] = "exercise_pet_stress"
             base["guidelines"] = "ASNC 2016 PET Myocardial Perfusion Imaging Guidelines"
-            if pet_rules_v2:
-                base["explanation_style"] = _PET_EXERCISE_STYLE_V2
-                base["interpretation_rules"] = _PET_EXERCISE_RULES_V2
-                self._inject_cfc(base, text, extraction_result)
-            else:
-                base["explanation_style"] = _PET_EXERCISE_STYLE_V1
-                base["interpretation_rules"] = _PET_EXERCISE_RULES_V1
+            base["explanation_style"] = _PET_EXERCISE_STYLE
+            base["interpretation_rules"] = _PET_EXERCISE_RULES
+            self._inject_cfc(base, text, extraction_result)
 
         elif subtype_id == "exercise_stress_echo":
             base["test_type"] = "exercise_stress_echo"

@@ -81,9 +81,6 @@ interface RefinementSidebarProps {
   setScrubbedText: (value: string | null) => void;
   isScrubbing: boolean;
   setIsScrubbing: (value: boolean) => void;
-  petRulesV2: boolean;
-  setPetRulesV2: (value: boolean) => void;
-  showPetToggle: boolean;
   /** When true, renders the simplified letter-mode sidebar */
   letterMode?: boolean;
   isRefiningLetter?: boolean;
@@ -137,9 +134,6 @@ export function RefinementSidebar({
   setScrubbedText,
   isScrubbing,
   setIsScrubbing,
-  petRulesV2,
-  setPetRulesV2,
-  showPetToggle,
   letterMode,
   isRefiningLetter,
   onRefineLetter,
@@ -297,19 +291,6 @@ export function RefinementSidebar({
                 Size comparisons and everyday examples
               </span>
             </label>
-            {showPetToggle && (
-              <label className="high-anxiety-toggle">
-                <input
-                  type="checkbox"
-                  checked={petRulesV2}
-                  onChange={(e) => setPetRulesV2(e.target.checked)}
-                />
-                <span className="high-anxiety-label">Enhanced PET Rules</span>
-                <span className="high-anxiety-hint">
-                  Decision tree + CFC + severity grading
-                </span>
-              </label>
-            )}
           </div>
           <div className="quick-slider-group">
             <label className="quick-slider-label">
