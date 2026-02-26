@@ -82,15 +82,43 @@ async function requestMeasurements(token: string): Promise<ChatMessage> {
   return res.json();
 }
 
-/** Strip markdown formatting from LLM responses so text renders cleanly. */
-function stripMarkdown(text: string): string {
+async function requestQuestions(token: string): Promise<ChatMessage> {
+  const res = await fetch(`${API_BASE}/chat/sessions/${token}/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 410) throw new Error("expired");
+  if (res.status === 429) throw new Error("limit_reached");
+  if (!res.ok) throw new Error("questions_failed");
+  return res.json();
+}
+
+/** Clean markdown: strip headings and rules but keep bold for rendering. */
+function cleanMarkdown(text: string): string {
   return text
-    .replace(/^#{1,6}\s+/gm, "")      // ### headings
-    .replace(/\*{3}(.+?)\*{3}/g, "$1") // ***bold-italic***
-    .replace(/\*{2}(.+?)\*{2}/g, "$1") // **bold**
-    .replace(/\*(.+?)\*/g, "$1")       // *italic*
+    .replace(/^#{1,6}\s+/gm, "")      // ### headings → plain text
+    .replace(/\*{3}(.+?)\*{3}/g, "**$1**") // ***bold-italic*** → bold
     .replace(/^---+$/gm, "")           // --- horizontal rules
     .replace(/\n{3,}/g, "\n\n");       // collapse excess blank lines
+}
+
+/** Render a line of text, converting **bold** to <strong> elements. */
+function renderFormattedLine(text: string, key: number): JSX.Element {
+  const parts: (string | JSX.Element)[] = [];
+  let lastIndex = 0;
+  const boldRe = /\*\*(.+?)\*\*/g;
+  let match: RegExpExecArray | null;
+  while ((match = boldRe.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    parts.push(<strong key={`b${match.index}`}>{match[1]}</strong>);
+    lastIndex = boldRe.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return <p key={key}>{parts}</p>;
 }
 
 /** Split text on any newline boundary for paragraph rendering. */
@@ -104,7 +132,7 @@ export function PatientChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [actionLoading, setActionLoading] = useState<"simplify" | "detail" | "key-findings" | "measurements" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"simplify" | "detail" | "key-findings" | "measurements" | "questions" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
   const [widthMode, setWidthMode] = useState<"default" | "wide" | "narrow">("default");
@@ -183,7 +211,7 @@ export function PatientChat() {
     }
   }, [token, input, sending, actionLoading]);
 
-  const handleAction = useCallback(async (action: "simplify" | "detail" | "key-findings" | "measurements") => {
+  const handleAction = useCallback(async (action: "simplify" | "detail" | "key-findings" | "measurements" | "questions") => {
     if (!token || sending || actionLoading) return;
     setActionLoading(action);
 
@@ -193,6 +221,7 @@ export function PatientChat() {
       detail: "Can you give me a more detailed explanation of all my results?",
       "key-findings": "Can you explain my key findings?",
       measurements: "Can you walk me through my measurements?",
+      questions: "What questions should I ask my doctor?",
     };
     const patientMsg: ChatMessage = {
       role: "patient",
@@ -207,6 +236,7 @@ export function PatientChat() {
         detail: requestDetail,
         "key-findings": requestKeyFindings,
         measurements: requestMeasurements,
+        questions: requestQuestions,
       };
       const msg = await fnMap[action](token);
       setMessages((prev) => [...prev, msg]);
@@ -337,9 +367,9 @@ export function PatientChat() {
             </button>
             {showSummary && (
               <div className="chat-summary-content">
-                {splitParagraphs(stripMarkdown(session.explanation_summary)).map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
+                {splitParagraphs(cleanMarkdown(session.explanation_summary)).map((p, i) =>
+                  renderFormattedLine(p, i)
+                )}
                 <div className="chat-action-buttons">
                   <button
                     className="chat-action-btn"
@@ -369,6 +399,13 @@ export function PatientChat() {
                   >
                     {actionLoading === "measurements" ? "Loading..." : "Measurements"}
                   </button>
+                  <button
+                    className="chat-action-btn"
+                    onClick={() => handleAction("questions")}
+                    disabled={isLoading}
+                  >
+                    {actionLoading === "questions" ? "Loading..." : "Questions to Ask"}
+                  </button>
                 </div>
               </div>
             )}
@@ -391,10 +428,10 @@ export function PatientChat() {
               >
                 <div className="chat-message-bubble">
                   {splitParagraphs(
-                    msg.role === "assistant" ? stripMarkdown(msg.content) : msg.content
-                  ).map((p, j) => (
-                    <p key={j}>{p}</p>
-                  ))}
+                    msg.role === "assistant" ? cleanMarkdown(msg.content) : msg.content
+                  ).map((p, j) =>
+                    msg.role === "assistant" ? renderFormattedLine(p, j) : <p key={j}>{p}</p>
+                  )}
                 </div>
               </div>
             ))}

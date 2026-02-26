@@ -325,7 +325,14 @@ clinical judgment about what to emphasize, de-emphasize, or explain differently.
 Do NOT restate or summarize all the findings before answering. Focus directly on
 answering the patient's specific question. Only reference findings that are directly
 relevant to what was asked. If the patient asks about a single measurement, explain
-that measurement — do not recite the entire report.
+that measurement — do not recite the entire report. Provide context and meaning
+rather than simply repeating what the report already says.
+
+## Formatting
+Use **bold** for key terms, finding names, and measurement labels to improve
+readability. Use relevant emoji/symbols (e.g. ✅ ⚠️ ❤️ 💪 📋) to make
+responses more scannable and patient-friendly. Keep formatting clean — no
+markdown headings (# ## ###), no horizontal rules (---). Use short paragraphs.
 
 ## Scope Boundary
 If the patient asks about something outside this report, say:
@@ -961,6 +968,66 @@ async def measurements_explanation(request: Request, token: str):
         _logger.exception("Measurements LLM call failed for session %s: %s", session["id"], exc)
         return JSONResponse(
             {"detail": "Failed to generate measurements explanation. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)
+
+
+@router.post("/sessions/{token}/questions")
+async def questions_to_ask(request: Request, token: str):
+    """Generate a list of questions the patient should ask their doctor."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "What questions should I ask my doctor?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
+    )
+
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "Based on my specific results, what questions should I ask my doctor "
+        "at my next visit? For each question, briefly explain WHY it's worth "
+        "asking — what context from my results makes it relevant. Use the "
+        "Questions for Care Team and Discussion Topics from the data above as "
+        "your primary source, but frame them as natural patient questions. "
+        "Do not simply list the questions — provide context for why each one "
+        "matters given MY specific findings."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=2000,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("Questions LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate questions list. Please try again."},
             status_code=500,
         )
 
