@@ -134,6 +134,11 @@ _PET_PHARMA_RULES = (
     "  - Do NOT over-alarm borderline values (mildly reduced CFC without other findings)\n"
     "  - Do NOT say 'we may need to make adjustments based on mild reductions'\n"
     "  - Pharmacologic stress: Do NOT mention heart rate response AT ALL\n"
+    "  - LVEF above normal range: Do NOT flag, caution, or comment on an EF "
+    "that is above the upper limit of normal. An EF of 70-80% is not clinically "
+    "concerning on a stress PET and should simply be stated as normal. Do NOT "
+    "use terms like 'above normal', 'supranormal', or 'hyperdynamic' for EF "
+    "values in the 70-80% range. Just say the EF is normal.\n"
     "  - When CFC is mildly/minimally reduced diffusely (across multiple "
     "territories or globally), contextualize it: this is commonly seen "
     "with age, hypertension, diabetes, and other cardiac risk factors. "
@@ -201,6 +206,11 @@ _PET_EXERCISE_RULES = (
     "  - Globally reduced MFR/CFR without focal defects → 'may suggest' microvascular\n"
     "  - Do NOT over-alarm borderline values (mildly reduced CFC without other findings)\n"
     "  - Do NOT say 'we may need to make adjustments based on mild reductions'\n"
+    "  - LVEF above normal range: Do NOT flag, caution, or comment on an EF "
+    "that is above the upper limit of normal. An EF of 70-80% is not clinically "
+    "concerning on a stress PET and should simply be stated as normal. Do NOT "
+    "use terms like 'above normal', 'supranormal', or 'hyperdynamic' for EF "
+    "values in the 70-80% range. Just say the EF is normal.\n"
     "  - When CFC is mildly/minimally reduced diffusely (across multiple "
     "territories or globally), contextualize it: this is commonly seen "
     "with age, hypertension, diabetes, and other cardiac risk factors. "
@@ -592,7 +602,13 @@ class StressTestHandler(BaseTestType):
                 "4. Summed stress/rest/difference scores (SSS/SRS/SDS) quantify "
                 "perfusion abnormality if present.\n"
                 "5. Wall motion abnormalities at stress (stunning) are "
-                "significant markers of ischemia."
+                "significant markers of ischemia.\n"
+                "6. LVEF above normal range: Do NOT flag, caution, or comment "
+                "on an EF that is above the upper limit of normal. An EF of "
+                "70-80% is not clinically concerning on a stress SPECT and "
+                "should simply be stated as normal. Do NOT use terms like "
+                "'above normal', 'supranormal', or 'hyperdynamic' for EF "
+                "values in the 70-80% range. Just say the EF is normal."
             )
 
         elif subtype_id == "exercise_spect_stress":
@@ -626,7 +642,13 @@ class StressTestHandler(BaseTestType):
                 "5. Summed stress/rest/difference scores (SSS/SRS/SDS) quantify "
                 "perfusion abnormality if present.\n"
                 "6. Wall motion abnormalities at stress (stunning) are "
-                "significant markers of ischemia."
+                "significant markers of ischemia.\n"
+                "7. LVEF above normal range: Do NOT flag, caution, or comment "
+                "on an EF that is above the upper limit of normal. An EF of "
+                "70-80% is not clinically concerning on a stress SPECT and "
+                "should simply be stated as normal. Do NOT use terms like "
+                "'above normal', 'supranormal', or 'hyperdynamic' for EF "
+                "values in the 70-80% range. Just say the EF is normal."
             )
 
         elif subtype_id == "pharma_pet_stress":
