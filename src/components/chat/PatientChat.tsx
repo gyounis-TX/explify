@@ -103,8 +103,8 @@ function cleanMarkdown(text: string): string {
 }
 
 /** Render a line of text, converting **bold** to <strong> elements. */
-function renderFormattedLine(text: string, key: number): JSX.Element {
-  const parts: (string | JSX.Element)[] = [];
+function renderFormattedLine(text: string, key: number): React.ReactElement {
+  const parts: (string | React.ReactElement)[] = [];
   let lastIndex = 0;
   const boldRe = /\*\*(.+?)\*\*/g;
   let match: RegExpExecArray | null;
