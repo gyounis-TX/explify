@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import type { ChatSession, ChatMessage } from "../../types/sidecar";
 import "./PatientChat.css";
 
-const API_BASE = import.meta.env.VITE_SIDECAR_URL || "";
+const API_BASE = import.meta.env.VITE_API_URL || "";
 
 async function loadChatSession(token: string): Promise<ChatSession> {
   const res = await fetch(`${API_BASE}/chat/sessions/${token}`);
