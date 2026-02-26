@@ -265,17 +265,19 @@ export function ProcessingScreen() {
             deep_analysis: deepAnalysis,
           });
 
-          sidecarApi
-            .saveHistory({
+          let historyId: string | number | null = null;
+          try {
+            const saved = await sidecarApi.saveHistory({
               test_type: response.parsed_report.test_type,
               test_type_display: response.parsed_report.test_type_display,
               filename: extractionResult.filename ?? null,
               summary: response.explanation.overall_summary.slice(0, 200),
               full_response: response,
-            })
-            .catch(() => {
-              showToast("error", "Analysis complete but failed to save to history.");
             });
+            historyId = saved.id;
+          } catch {
+            showToast("error", "Analysis complete but failed to save to history.");
+          }
 
           setCurrentStep("done");
           // If we have a prior response from Same Patient flow, pass both for comparison
@@ -285,6 +287,7 @@ export function ProcessingScreen() {
             templateId,
             clinicalContext,
             quickReasons,
+            historyId,
           };
           if (priorExplainResponse) {
             navState.batchResponses = [priorExplainResponse, response];
