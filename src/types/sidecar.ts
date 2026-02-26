@@ -479,8 +479,10 @@ export interface SharedTemplate {
 
 export interface ChatSession {
   token: string;
+  test_type?: string;
   test_type_display: string;
   explanation_summary: string;
+  full_explanation?: ExplanationResult;
   patient_label?: string;
   messages: ChatMessage[];
   expires_at: string;

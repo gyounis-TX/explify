@@ -33,37 +33,232 @@ MAX_MESSAGE_LENGTH = 500
 DEFAULT_EXPIRY_DAYS = 30
 CHATBOT_MODEL = "claude-sonnet-4-6"
 
-_CHATBOT_SYSTEM_PROMPT = """\
+
+# ---------------------------------------------------------------------------
+# System Prompt Builder
+# ---------------------------------------------------------------------------
+
+def _build_system_prompt(session: dict) -> str:
+    """Build a safety-guardrailed system prompt from stored session data."""
+    explanation_summary = session.get("explanation_summary", "")
+    test_type_display = session.get("test_type_display", "")
+    literacy_level = session.get("literacy_level", "grade_8")
+    report_context = session.get("report_context", "")
+    clinical_context = session.get("clinical_context") or ""
+    severity_score = session.get("severity_score")
+
+    # Parse stored JSON fields (may be dict or JSON string or None)
+    full_explanation = session.get("full_explanation")
+    if isinstance(full_explanation, str):
+        try:
+            full_explanation = json.loads(full_explanation)
+        except (json.JSONDecodeError, TypeError):
+            full_explanation = None
+
+    teaching_points = session.get("teaching_points")
+    if isinstance(teaching_points, str):
+        try:
+            teaching_points = json.loads(teaching_points)
+        except (json.JSONDecodeError, TypeError):
+            teaching_points = None
+
+    glossary = session.get("glossary")
+    if isinstance(glossary, str):
+        try:
+            glossary = json.loads(glossary)
+        except (json.JSONDecodeError, TypeError):
+            glossary = None
+
+    # Determine tone from severity
+    if severity_score is not None:
+        if severity_score > 0.6:
+            tone_level = "HIGH"
+            tone_instruction = (
+                "Use a calm but serious tone. Emphasize the importance of "
+                "clinician follow-up. Never minimize findings."
+            )
+        elif severity_score >= 0.3:
+            tone_level = "INTERMEDIATE"
+            tone_instruction = (
+                "Use a balanced tone. Explain significance clearly without alarm."
+            )
+        else:
+            tone_level = "LOW"
+            tone_instruction = (
+                "Use a reassuring but factual tone. Emphasize the absence of "
+                "major abnormalities where applicable."
+            )
+    else:
+        tone_level = "INTERMEDIATE"
+        tone_instruction = "Use a balanced, empathetic tone."
+
+    # Check for severe/critical findings (over-reassurance guard)
+    has_severe = False
+    if full_explanation:
+        for f in full_explanation.get("key_findings", []):
+            if f.get("severity") in ("severe", "critical"):
+                has_severe = True
+                break
+
+    # Build structured data sections
+    sections = []
+
+    sections.append(f"""## Physician's Approved Summary
+{explanation_summary}""")
+
+    # Key Findings
+    if full_explanation and full_explanation.get("key_findings"):
+        findings_lines = []
+        for f in full_explanation["key_findings"]:
+            sev = f.get("severity", "informational")
+            findings_lines.append(
+                f"- [{sev.upper()}] {f.get('finding', '')}: {f.get('explanation', '')}"
+            )
+        sections.append("## Key Findings\n" + "\n".join(findings_lines))
+
+    # Measurements
+    if full_explanation and full_explanation.get("measurements"):
+        meas_lines = []
+        for m in full_explanation["measurements"]:
+            status = m.get("status", "")
+            meas_lines.append(
+                f"- {m.get('abbreviation', '')}: {m.get('value', '')} {m.get('unit', '')} "
+                f"({status}) — {m.get('plain_language', '')}"
+            )
+        sections.append("## Measurements\n" + "\n".join(meas_lines))
+
+    # Clinical Context
+    if clinical_context:
+        sections.append(f"## Clinical Context\n{clinical_context}")
+
+    # Glossary
+    if glossary:
+        glossary_lines = [f"- **{term}**: {defn}" for term, defn in glossary.items()]
+        sections.append("## Glossary\n" + "\n".join(glossary_lines))
+
+    # Teaching Points
+    if teaching_points:
+        tp_lines = [f"- {tp.get('text', tp) if isinstance(tp, dict) else tp}" for tp in teaching_points]
+        sections.append("## Teaching Points (Physician Instructions)\n" + "\n".join(tp_lines))
+
+    # Questions for Care Team
+    if full_explanation and full_explanation.get("questions_for_care_team"):
+        q_lines = [f"- {q}" for q in full_explanation["questions_for_care_team"]]
+        sections.append("## Questions for Care Team\n" + "\n".join(q_lines))
+
+    # Discussion Topics
+    if full_explanation and full_explanation.get("discussion_topics"):
+        dt_lines = []
+        for dt in full_explanation["discussion_topics"]:
+            if isinstance(dt, dict):
+                dt_lines.append(f"- {dt.get('topic', '')}: {dt.get('context', '')}")
+            else:
+                dt_lines.append(f"- {dt}")
+        sections.append("## Discussion Topics\n" + "\n".join(dt_lines))
+
+    structured_data = "\n\n".join(sections)
+
+    over_reassurance_rule = ""
+    if has_severe:
+        over_reassurance_rule = (
+            "\n- OVER-REASSURANCE GUARD: This report contains severe/critical findings. "
+            "NEVER minimize with phrases like 'not dangerous', 'nothing to worry about', "
+            "'you'll be fine', or 'don't worry'. Maintain appropriate seriousness."
+        )
+
+    prompt = f"""\
 You are a patient-friendly medical assistant helping a patient understand
-their test results. You have access to the original report and explanation
-below. Your job is to answer follow-up questions clearly and compassionately.
-
-## Original Report Context
-{report_context}
-
-## Explanation That Was Provided
-{explanation_summary}
+their {test_type_display} results. Your responses are grounded EXCLUSIVELY
+in the physician-approved analysis data below.
 
 ## Test Type
 {test_type_display}
 
-## Rules
-- ONLY answer questions about the report and explanation above.
-- Use inclusive "we" language — "we can see from your results...", etc.
-- Match the literacy level: {literacy_level}
-- You CAN: explain findings in more detail, define medical terms, provide
-  analogies, clarify what measurements mean, and restate things differently.
-- You CANNOT: prescribe, diagnose new conditions, provide emergency advice,
-  suggest specific treatments, or discuss conditions not in the report.
-- If the patient asks about treatments or what to do next, redirect warmly:
-  "That's a great question to bring up with your care team at your next
-  visit. What I can help with is explaining what your results show."
-- If the patient asks about something outside the report scope, say:
-  "I can only help with questions about this specific report. For other
-  concerns, please reach out to your care team."
-- Keep responses concise (2-4 paragraphs max).
-- Be warm, empathetic, and encouraging.
+## Literacy Level
+{literacy_level}
+
+{structured_data}
+
+## Original Report Context
+{report_context}
+
+# SAFETY RULES — YOU MUST FOLLOW ALL OF THESE
+
+## Source of Truth (Hard Rule)
+You may ONLY use information from:
+- The Physician's Approved Summary above
+- The Key Findings, Measurements, Glossary, Clinical Context, and Teaching Points above
+- The Original Report Context above
+
+You may NOT:
+- Infer new diagnoses beyond what is stated
+- Re-grade severity of any finding
+- Recommend treatments or medications
+- Provide prognosis or survival statistics
+- Introduce findings not present in the analysis data
+
+## Primary Conclusion Lock
+The first sentence of every response must reflect the physician's overall
+impression from the Approved Summary. All explanations must be anchored to
+that conclusion. Never reinterpret or contradict it.
+
+## Tone Control — {tone_level}
+{tone_instruction}{over_reassurance_rule}
+
+## Numerical Interpretation Constraint
+When severity labels are provided in Key Findings or Measurements:
+- Use numbers only to explain what the label means
+- Do NOT independently interpret numeric thresholds
+- Do NOT declare numbers normal/abnormal unless the analysis explicitly labeled them
+- Correct: "The report labels this as moderate aortic stenosis."
+- Incorrect: "A gradient of 42 usually requires surgery."
+
+## Progressive Disclosure
+- Default: Give a SHORT, concise answer to the question (2-3 paragraphs max)
+- If the patient requests more detail: Give an EXPANDED explanation using key findings
+- If the patient asks further: Give a DEEP DIVE using measurement-by-measurement
+  explanation with only values present in the analysis. Never introduce new metrics.
+
+## Medical Advice Boundary
+For treatment, medication, or surgery questions, respond with:
+"Treatment decisions are made by your clinician based on your complete medical
+history. I can explain what the report says, but I can't recommend specific
+next steps."
+
+After two repeated attempts on the same topic, repeat the boundary and stop
+escalating detail.
+
+## Prognosis & Research Boundary
+For survival, life expectancy, or statistical risk questions, respond with:
+"Research findings vary, and individual risk depends on many factors. Your
+clinician can discuss personalized risk in more detail."
+
+Never provide percentages or survival statistics.
+
+## Symptom Escalation (Emergency Redirect)
+If the patient reports new or worsening symptoms (chest pain, shortness of
+breath, fainting, stroke-like symptoms, sudden weakness, palpitations, etc.):
+"This chat cannot evaluate urgent or new symptoms. If you are experiencing
+active or worsening symptoms, please contact your healthcare provider
+immediately or seek emergency medical care."
+Stop further interpretation after this redirect.
+
+## Emotional Intelligence
+- You may acknowledge emotion: "It's understandable to feel concerned when
+  reading medical results."
+- Never say: "You'll be fine", "Don't worry", or "There's nothing to worry about"
+
+## Teaching Points
+Teaching points from the physician are authoritative instructions for how to
+explain specific findings. Follow them closely — they represent the physician's
+clinical judgment about what to emphasize, de-emphasize, or explain differently.
+
+## Scope Boundary
+If the patient asks about something outside this report, say:
+"I can only help with questions about this specific report. For other
+concerns, please reach out to your care team."
 """
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +269,7 @@ class CreateChatSessionRequest(BaseModel):
     history_id: int | str
     patient_label: Optional[str] = None
     expires_days: int = Field(default=DEFAULT_EXPIRY_DAYS, ge=1, le=90)
+    clinical_context: Optional[str] = None
 
 
 class SendMessageRequest(BaseModel):
@@ -117,6 +313,69 @@ def _scrub_report_text(text: str) -> str:
     return result.scrubbed_text
 
 
+async def _load_teaching_points(test_type: str, user_id: str) -> list[dict]:
+    """Load teaching points for a test type + user (own + practice shared)."""
+    try:
+        from storage.pg_database import PgDatabase
+        db = PgDatabase()
+        return await db.list_all_teaching_points_for_prompt(
+            test_type=test_type, user_id=user_id,
+        )
+    except Exception:
+        _logger.exception("Failed to load teaching points for chat session")
+        return []
+
+
+def _load_glossary(test_type: str) -> dict[str, str]:
+    """Load glossary for a test type from the handler registry."""
+    try:
+        from test_types import registry
+        _resolved_id, handler = registry.resolve(test_type)
+        if handler:
+            return handler.get_glossary()
+    except Exception:
+        _logger.exception("Failed to load glossary for test type %s", test_type)
+    return {}
+
+
+def _validate_session_active(session: dict) -> JSONResponse | None:
+    """Return an error response if session is expired or at message limit, else None."""
+    if session["expires_at"] < _now():
+        return JSONResponse(
+            {"detail": "This chat link has expired."},
+            status_code=410,
+        )
+    if session["message_count"] >= MAX_MESSAGES_PER_SESSION:
+        return JSONResponse(
+            {"detail": "This chat session has reached its message limit. Please contact your care team for further questions."},
+            status_code=429,
+        )
+    return None
+
+
+async def _store_assistant_message(session: dict, content: str, input_tokens: int = 0, output_tokens: int = 0) -> dict:
+    """Store an assistant message and update session counters. Returns message dict."""
+    pool = await _get_pool()
+    assistant_time = _now()
+    await pool.execute(
+        """INSERT INTO chat_messages
+           (session_id, role, content, created_at, input_tokens, output_tokens)
+           VALUES ($1, 'assistant', $2, $3, $4, $5)""",
+        session["id"], content, assistant_time, input_tokens, output_tokens,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        assistant_time, session["id"],
+    )
+    return {
+        "role": "assistant",
+        "content": content,
+        "created_at": assistant_time.isoformat(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Authenticated Endpoints (nurse/physician)
 # ---------------------------------------------------------------------------
@@ -158,6 +417,23 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
     # Scrub PHI from the report context
     scrubbed_report = _scrub_report_text(report_text) if report_text else ""
 
+    # Extract enrichment data from full_response
+    full_explanation_json = json.dumps(explanation) if explanation else None
+    parsed_measurements = full_response.get("parsed_report", {}).get("measurements") if full_response else None
+    parsed_measurements_json = json.dumps(parsed_measurements) if parsed_measurements else None
+    severity_score = history.get("severity_score")
+
+    # Clinical context from request (already PHI-scrubbed by the physician)
+    clinical_context = body.clinical_context
+
+    # Load teaching points and glossary
+    test_type = history.get("test_type", "unknown")
+    teaching_points = await _load_teaching_points(test_type, user_id)
+    teaching_points_json = json.dumps(teaching_points) if teaching_points else None
+
+    glossary = _load_glossary(test_type)
+    glossary_json = json.dumps(glossary) if glossary else None
+
     # Generate token and create session
     token = secrets.token_urlsafe(32)
     expires_at = _now() + timedelta(days=body.expires_days)
@@ -166,17 +442,26 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
         """INSERT INTO chat_sessions
            (token, user_id, history_id, test_type, test_type_display,
             report_context, explanation_summary, patient_label,
-            literacy_level, expires_at)
-           VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)""",
+            literacy_level, expires_at,
+            full_explanation, parsed_measurements, teaching_points,
+            glossary, clinical_context, severity_score)
+           VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10,
+                   $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16)""",
         token, user_id,
         history.get("id"),
-        history.get("test_type", "unknown"),
+        test_type,
         history.get("test_type_display", "Unknown Test"),
         scrubbed_report,
         explanation_summary,
         body.patient_label,
         "grade_8",
         expires_at,
+        full_explanation_json,
+        parsed_measurements_json,
+        teaching_points_json,
+        glossary_json,
+        clinical_context,
+        severity_score,
     )
 
     return {
@@ -276,11 +561,21 @@ async def get_chat_session(request: Request, token: str):
         for r in msg_rows
     ]
 
+    # Parse full_explanation for frontend
+    full_explanation = session.get("full_explanation")
+    if isinstance(full_explanation, str):
+        try:
+            full_explanation = json.loads(full_explanation)
+        except (json.JSONDecodeError, TypeError):
+            full_explanation = None
+
     return {
         "token": session["token"],
+        "test_type": session.get("test_type"),
         "test_type_display": session["test_type_display"],
         "explanation_summary": session["explanation_summary"],
         "patient_label": session.get("patient_label"),
+        "full_explanation": full_explanation,
         "messages": messages,
         "expires_at": session["expires_at"].isoformat(),
     }
@@ -293,17 +588,9 @@ async def send_chat_message(request: Request, token: str, body: SendMessageReque
     if not session:
         return JSONResponse({"detail": "Chat session not found"}, status_code=404)
 
-    if session["expires_at"] < _now():
-        return JSONResponse(
-            {"detail": "This chat link has expired."},
-            status_code=410,
-        )
-
-    if session["message_count"] >= MAX_MESSAGES_PER_SESSION:
-        return JSONResponse(
-            {"detail": "This chat session has reached its message limit. Please contact your care team for further questions."},
-            status_code=429,
-        )
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
 
     pool = await _get_pool()
     now = _now()
@@ -315,30 +602,16 @@ async def send_chat_message(request: Request, token: str, body: SendMessageReque
         session["id"], body.content, now,
     )
 
-    # Build conversation history for LLM
-    msg_rows = await pool.fetch(
-        """SELECT role, content FROM chat_messages
-           WHERE session_id = $1
-           ORDER BY created_at ASC""",
-        session["id"],
+    # Update message count for patient message
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
     )
 
-    # Build Bedrock converse messages
-    converse_messages = []
-    for r in msg_rows:
-        role = "user" if r["role"] == "patient" else "assistant"
-        converse_messages.append({
-            "role": role,
-            "content": [{"text": r["content"]}],
-        })
-
-    # Call LLM
-    system_prompt = _CHATBOT_SYSTEM_PROMPT.format(
-        report_context=session["report_context"],
-        explanation_summary=session["explanation_summary"],
-        test_type_display=session["test_type_display"],
-        literacy_level=session["literacy_level"],
-    )
+    # Build system prompt with full analysis context
+    system_prompt = _build_system_prompt(session)
 
     try:
         client = await _get_bedrock_client()
@@ -360,25 +633,127 @@ async def send_chat_message(request: Request, token: str, body: SendMessageReque
         input_tokens = 0
         output_tokens = 0
 
-    # Store assistant message
-    assistant_time = _now()
-    await pool.execute(
-        """INSERT INTO chat_messages
-           (session_id, role, content, created_at, input_tokens, output_tokens)
-           VALUES ($1, 'assistant', $2, $3, $4, $5)""",
-        session["id"], assistant_content, assistant_time, input_tokens, output_tokens,
-    )
+    return await _store_assistant_message(session, assistant_content, input_tokens, output_tokens)
 
-    # Update session counters
+
+@router.post("/sessions/{token}/simplify")
+async def simplify_explanation(request: Request, token: str):
+    """Generate a simplified (grade 4) explanation from stored analysis data."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message so conversation history stays valid
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "Can you simplify the explanation for me?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
     await pool.execute(
         """UPDATE chat_sessions
-           SET message_count = message_count + 2, last_message_at = $1
+           SET message_count = message_count + 1, last_message_at = $1
            WHERE id = $2""",
-        assistant_time, session["id"],
+        now, session["id"],
     )
 
-    return {
-        "role": "assistant",
-        "content": assistant_content,
-        "created_at": assistant_time.isoformat(),
-    }
+    # Build context from stored data
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "Please rewrite the explanation of my results in very simple language "
+        "that a 9-year-old could understand (grade 4 reading level). "
+        "Use short sentences, simple words, and helpful comparisons. "
+        "Keep the same main conclusion from the physician's summary as your "
+        "first sentence. Explain what each finding means in everyday terms. "
+        "If something is normal, say so simply. If something needs attention, "
+        "explain it gently but honestly."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=1500,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("Simplify LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate simplified explanation. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)
+
+
+@router.post("/sessions/{token}/detail")
+async def detail_explanation(request: Request, token: str):
+    """Generate a comprehensive detailed explanation from stored analysis data."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message so conversation history stays valid
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "Can you give me a more detailed explanation of all my results?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
+    )
+
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "Please give me a comprehensive, detailed explanation of all my results. "
+        "Include:\n"
+        "1. A headline reflecting the physician's overall conclusion\n"
+        "2. Each key finding explained at a patient-friendly level with severity context\n"
+        "3. Each measurement with its value, what's considered normal, and what mine means\n"
+        "4. Questions I should bring up with my care team\n"
+        "5. Topics that may come up at my next visit\n\n"
+        "Be thorough but still use clear, accessible language. Follow the physician's "
+        "teaching points for how to explain specific findings."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=3000,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("Detail LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate detailed explanation. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)

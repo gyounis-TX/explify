@@ -905,3 +905,34 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
+
+-- Backfill: add enrichment columns to chat_sessions if table already exists
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN full_explanation JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN parsed_measurements JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN teaching_points JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN glossary JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN clinical_context TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN severity_score REAL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;

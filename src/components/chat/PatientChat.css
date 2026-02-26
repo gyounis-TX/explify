@@ -92,6 +92,37 @@
   margin-bottom: 0;
 }
 
+/* Action Buttons (Simplify / More Detail) */
+.chat-action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.chat-action-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.chat-action-btn:hover:not(:disabled) {
+  background: #e0e7ff;
+  border-color: #93a3d4;
+}
+
+.chat-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Messages */
 .chat-messages {
   flex: 1;

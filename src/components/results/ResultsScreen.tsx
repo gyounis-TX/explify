@@ -677,6 +677,7 @@ export function ResultsScreen() {
         historyId,
         sharePatientLabel.trim() || undefined,
         shareExpiry,
+        clinicalContext || undefined,
       );
       const baseUrl = window.location.origin;
       const fullUrl = `${baseUrl}/#/patient-chat/${result.token}`;
