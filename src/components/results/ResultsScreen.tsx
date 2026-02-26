@@ -1206,21 +1206,19 @@ export function ResultsScreen() {
                 <button className="refine-btn" onClick={handleRegenerate} disabled={isRegenerating}>
                   {isRegenerating ? "Regenerating\u2026" : "Regenerate"}
                 </button>
-                {commentMode === "long" && (
-                  <button
-                    className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
-                    onClick={() => setIsEditing(!isEditing)}
-                  >
-                    {isEditing ? "Stop Editing" : "Edit Text"}
-                  </button>
-                )}
-                {isDirty && commentMode === "long" && <span className="edit-indicator">Edited</span>}
+                <button
+                  className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
+                  onClick={() => setIsEditing(!isEditing)}
+                >
+                  {isEditing ? "Stop Editing" : "Edit Text"}
+                </button>
+                {isDirty && <span className="edit-indicator">Edited</span>}
               </div>
             )}
 
             <CommentPanel
               commentMode={commentMode}
-              setCommentMode={(mode) => { setCommentMode(mode); if (mode !== "long") setIsEditing(false); }}
+              setCommentMode={(mode) => setCommentMode(mode)}
               isEditing={isEditing}
               editedSummary={editedSummary}
               setEditedSummary={setEditedSummary}
