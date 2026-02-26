@@ -869,3 +869,39 @@ CREATE TABLE IF NOT EXISTS baa_acceptances (
 );
 
 CREATE INDEX IF NOT EXISTS idx_baa_acceptances_user ON baa_acceptances(user_id);
+
+-- =============================================================================
+-- Chat Sessions — patient follow-up chatbot
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    token TEXT UNIQUE NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    history_id BIGINT REFERENCES history(id) ON DELETE SET NULL,
+    test_type TEXT NOT NULL,
+    test_type_display TEXT NOT NULL,
+    report_context TEXT NOT NULL,
+    explanation_summary TEXT NOT NULL,
+    patient_label TEXT,
+    literacy_level TEXT NOT NULL DEFAULT 'grade_8',
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    message_count INTEGER NOT NULL DEFAULT 0,
+    last_message_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_token ON chat_sessions(token);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_expires ON chat_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('patient', 'assistant')),
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);

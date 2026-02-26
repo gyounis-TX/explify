@@ -155,9 +155,13 @@ async def enforce_data_retention():
             "UPDATE letters SET prompt = '[REDACTED]' "
             "WHERE created_at < NOW() - INTERVAL '12 months' AND prompt != '[REDACTED]'"
         )
+        # 5. Expired chat sessions (cascades to messages)
+        r5 = await conn.execute(
+            "DELETE FROM chat_sessions WHERE expires_at < NOW()"
+        )
     logger.info(
-        "Retention enforcement: usage=%s, audit=%s, corrections=%s, letter_prompts=%s",
-        r1, r2, r3, r4,
+        "Retention enforcement: usage=%s, audit=%s, corrections=%s, letter_prompts=%s, chat_sessions=%s",
+        r1, r2, r3, r4, r5,
     )
 
 

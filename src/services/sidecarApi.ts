@@ -392,6 +392,8 @@ class SidecarApi {
       body.quick_reasons = request.quick_reasons;
     if (request.use_analogies != null)
       body.use_analogies = request.use_analogies;
+    if (request.include_discussion_topics != null)
+      body.include_discussion_topics = request.include_discussion_topics;
     if (request.quick_normal != null)
       body.quick_normal = request.quick_normal;
 
@@ -478,6 +480,8 @@ class SidecarApi {
       body.quick_reasons = request.quick_reasons;
     if (request.use_analogies != null)
       body.use_analogies = request.use_analogies;
+    if (request.include_discussion_topics != null)
+      body.include_discussion_topics = request.include_discussion_topics;
     if (request.avoid_openings != null)
       body.avoid_openings = request.avoid_openings;
     if (request.batch_prior_summaries != null)
@@ -1650,6 +1654,59 @@ class SidecarApi {
     });
     if (!response.ok) {
       throw new Error("Failed to remove share.");
+    }
+  }
+
+  // --- Chat Session Methods (authenticated — nurse) ---
+
+  async createChatSession(
+    historyId: number | string,
+    patientLabel?: string,
+    expiresDays?: number,
+  ): Promise<{ token: string; url: string; expires_at: string }> {
+    const baseUrl = await this.ensureInitialized();
+    const body: Record<string, unknown> = { history_id: historyId };
+    if (patientLabel) body.patient_label = patientLabel;
+    if (expiresDays) body.expires_days = expiresDays;
+
+    const response = await this.fetchWithAuth(`${baseUrl}/chat/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ detail: "Failed to create chat session." }));
+      throw new Error(data.detail || "Failed to create chat session.");
+    }
+    return response.json();
+  }
+
+  async listChatSessions(): Promise<{ sessions: Array<{
+    id: string;
+    token: string;
+    test_type_display: string;
+    patient_label?: string;
+    message_count: number;
+    last_message_at?: string;
+    expires_at: string;
+    created_at: string;
+    is_expired: boolean;
+  }> }> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/chat/list`);
+    if (!response.ok) {
+      throw new Error("Failed to list chat sessions.");
+    }
+    return response.json();
+  }
+
+  async deleteChatSession(sessionId: string): Promise<void> {
+    const baseUrl = await this.ensureInitialized();
+    const response = await this.fetchWithAuth(`${baseUrl}/chat/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      throw new Error("Failed to delete chat session.");
     }
   }
 }

@@ -1108,6 +1108,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
     is_sms = bool(body.sms_summary)
     use_analogies = body.use_analogies if body.use_analogies is not None else settings.use_analogies
     include_lifestyle = body.include_lifestyle_recommendations if body.include_lifestyle_recommendations is not None else settings.include_lifestyle_recommendations
+    include_discussion = body.include_discussion_topics if body.include_discussion_topics is not None else settings.include_discussion_topics
     humanization_level = settings.humanization_level
     system_prompt = prompt_engine.build_system_prompt(
         literacy_level=literacy_level,
@@ -1129,6 +1130,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         anxiety_level=body.anxiety_level or 0,
         use_analogies=use_analogies,
         include_lifestyle_recommendations=include_lifestyle,
+        include_discussion_topics=include_discussion,
         humanization_level=humanization_level,
     )
     # 6b. Load template if specified
@@ -1660,6 +1662,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
         is_sms = bool(explain_request.sms_summary)
         use_analogies = explain_request.use_analogies if explain_request.use_analogies is not None else settings.use_analogies
         include_lifestyle = explain_request.include_lifestyle_recommendations if explain_request.include_lifestyle_recommendations is not None else settings.include_lifestyle_recommendations
+        include_discussion = explain_request.include_discussion_topics if explain_request.include_discussion_topics is not None else settings.include_discussion_topics
         humanization_level = settings.humanization_level
         scrubbed_avoid_openings = (
             [scrub_phi(ao, provider_names=providers).scrubbed_text for ao in explain_request.avoid_openings]
@@ -1686,6 +1689,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             anxiety_level=explain_request.anxiety_level or 0,
             use_analogies=use_analogies,
             include_lifestyle_recommendations=include_lifestyle,
+            include_discussion_topics=include_discussion,
             avoid_openings=scrubbed_avoid_openings,
             humanization_level=humanization_level,
         )

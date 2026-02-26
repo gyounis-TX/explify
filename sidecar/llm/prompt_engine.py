@@ -7246,6 +7246,47 @@ perspective. Never end on an alarming note.
 
 """
 
+_DISCUSSION_TOPICS_RULE = """\
+## Discussion Topics — What We May Talk About
+
+When findings are moderate or severe, you may include general CATEGORIES
+of topics the care team might discuss with the patient. These are NOT
+treatment recommendations — they are previews of the conversation.
+
+RULES:
+- Normal / mild findings: Do NOT include discussion topics. Skip entirely.
+- Moderate findings: 1-2 general topic categories.
+  Example: "Medication options we can explore together"
+  Example: "Lifestyle adjustments that may help"
+- Severe findings: 2-3 topic categories, slightly more specific.
+  Example: "Treatment approaches for significant narrowing"
+  Example: "Monitoring plan to track this going forward"
+- ALWAYS frame as "we" — "something we'll discuss", "options we can explore"
+- NEVER name specific medications, dosages, or procedures
+- NEVER present these as recommendations — they are conversation previews
+- Each topic gets a 1-2 sentence "context" explaining why it matters
+
+"""
+
+_QUESTIONS_FOR_CARE_TEAM_RULE = """\
+## Questions for Your Care Team
+
+Generate 2-4 questions the patient might want to ask at their next
+appointment. Phrase them in first person as the patient would ask them.
+
+RULES:
+- Only for mildly_abnormal or worse findings. Skip for fully normal results.
+- Calibrate to severity: mild → 2 gentle questions, severe → 3-4 focused ones.
+- Questions should help the patient participate in their own care.
+- Examples:
+  - "What does this mean for my daily activities?"
+  - "Are there things I can do on my own to help with this?"
+  - "How often should we re-check this?"
+  - "What are the next steps we should talk about?"
+- Do NOT ask questions that presume a treatment plan.
+
+"""
+
 _ZERO_EDIT_GOAL = """\
 ## OUTPUT QUALITY GOAL
 
@@ -7453,6 +7494,7 @@ class PromptEngine:
         anxiety_level: int = 0,
         use_analogies: bool = True,
         include_lifestyle_recommendations: bool = True,
+        include_discussion_topics: bool = True,
         avoid_openings: list[str] | None = None,
         humanization_level: int = 3,
     ) -> str:
@@ -7465,6 +7507,8 @@ class PromptEngine:
                 size and value comparisons.
             include_lifestyle_recommendations: If True, allows diet/exercise/lifestyle
                 suggestions in the output.
+            include_discussion_topics: If True, allows severity-tiered discussion
+                topic categories and questions for the care team.
             avoid_openings: Opening sentences used by prior reports in this batch.
                 When provided, the LLM must choose a different opening style.
             humanization_level: Anti-AI voice level (1=Clinical to 5=Very Natural).
@@ -7743,6 +7787,8 @@ class PromptEngine:
             f"{_TRAJECTORY_RULE}"
             f"{_UNCERTAINTY_RULE}"
             f"{_EMOTIONAL_ARC_RULE}"
+            f"{_DISCUSSION_TOPICS_RULE if include_discussion_topics else ''}"
+            f"{_QUESTIONS_FOR_CARE_TEAM_RULE if include_discussion_topics else ''}"
             f"{_select_domain_knowledge(prompt_context)}"
             f"{_INTERPRETATION_STRUCTURE_PERFUSION if perfusion_override else _INTERPRETATION_STRUCTURE}"
             f"{_STRESS_EF_DELAY_RULE if is_stress and not perfusion_override else ''}"
@@ -7761,8 +7807,9 @@ class PromptEngine:
             f"{specialty_voice_section}"
             f"## Validation Rule\n"
             f"If the output reads like a neutral summary, report recap, "
-            f"uses banned AI phrases, or contains treatment suggestions "
-            f"or hypothetical next steps, regenerate."
+            f"uses banned AI phrases, or contains specific treatment suggestions "
+            f"or hypothetical next steps, regenerate. "
+            f"(General discussion topic categories and questions for the care team are permitted.)"
             f"{' If ejection fraction or pumping function is mentioned before perfusion/ischemia findings, regenerate.' if perfusion_override else ''}"
             f"{' If ejection fraction or pumping function appears before stress findings, regenerate.' if is_stress and not perfusion_override else ''}\n"
         )

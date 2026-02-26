@@ -13,8 +13,10 @@ import type {
   Template,
   SharedTemplate,
   TestTypeInfo,
+  DiscussionTopic,
 } from "../../types/sidecar";
 import { sidecarApi } from "../../services/sidecarApi";
+import { IS_TAURI } from "../../services/platform";
 import { logUsage } from "../../services/usageTracker";
 import { queueUpsertAfterMutation } from "../../services/syncEngine";
 import { useToast } from "../shared/Toast";
@@ -49,6 +51,8 @@ function buildCopyText(
   includeKeyFindings: boolean,
   includeMeasurements: boolean,
   nextSteps?: string[],
+  questionsForDoctor?: string[],
+  discussionTopics?: DiscussionTopic[],
 ): string {
   const parts: string[] = [];
   parts.push(summary);
@@ -65,6 +69,20 @@ function buildCopyText(
     parts.push("MEASUREMENTS");
     for (const m of measurements) {
       parts.push(`- ${m.abbreviation}: ${m.value} ${m.unit} (${m.plain_language})`);
+    }
+  }
+  if (questionsForDoctor && questionsForDoctor.length > 0) {
+    parts.push("");
+    parts.push("QUESTIONS FOR YOUR CARE TEAM");
+    for (const q of questionsForDoctor) {
+      parts.push(`- ${q}`);
+    }
+  }
+  if (discussionTopics && discussionTopics.length > 0) {
+    parts.push("");
+    parts.push("TOPICS WE MAY DISCUSS");
+    for (const t of discussionTopics) {
+      parts.push(`- ${t.topic}: ${t.context}`);
     }
   }
   if (nextSteps && nextSteps.length > 0 && !(nextSteps.length === 1 && nextSteps[0] === "No comment")) {
@@ -180,6 +198,11 @@ export function ResultsScreen() {
   const [currentResponse, setCurrentResponse] = useState<ExplainResponse | null>(initialResponse);
   const [glossary, setGlossary] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharePatientLabel, setSharePatientLabel] = useState("");
+  const [shareExpiry, setShareExpiry] = useState(30);
+  const [shareLink, setShareLink] = useState("");
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isLiked, setIsLiked] = useState(
     locationState?.historyLiked
     ?? (hasCachedResponse ? _rc.isLiked : undefined)
@@ -643,6 +666,34 @@ export function ResultsScreen() {
     }
   }, [currentResponse, showToast]);
 
+  const handleCreateChatLink = useCallback(async () => {
+    if (!historyId) {
+      showToast("error", "Save the report to history first before sharing.");
+      return;
+    }
+    setIsCreatingShare(true);
+    try {
+      const result = await sidecarApi.createChatSession(
+        historyId,
+        sharePatientLabel.trim() || undefined,
+        shareExpiry,
+      );
+      const baseUrl = window.location.origin;
+      const fullUrl = `${baseUrl}/#/patient-chat/${result.token}`;
+      setShareLink(fullUrl);
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+        showToast("success", "Link copied to clipboard!");
+      } catch {
+        // Clipboard may be unavailable
+      }
+    } catch {
+      showToast("error", "Failed to create chat link.");
+    } finally {
+      setIsCreatingShare(false);
+    }
+  }, [historyId, sharePatientLabel, shareExpiry, showToast]);
+
   const computedFooter = (() => {
     if (!settingsLoaded) return "";
     switch (sectionSettings.footer_type) {
@@ -827,7 +878,7 @@ export function ResultsScreen() {
       finding: f.finding,
       explanation: replacePhysician(f.explanation, physician),
     }));
-    return buildCopyText(summary, findings, expl.measurements, computedFooter, sectionSettings.include_key_findings, sectionSettings.include_measurements, [...checkedNextSteps]);
+    return buildCopyText(summary, findings, expl.measurements, computedFooter, sectionSettings.include_key_findings, sectionSettings.include_measurements, [...checkedNextSteps], expl.questions_for_care_team, expl.discussion_topics);
   })();
 
   const handleCopyComment = useCallback(async () => {
@@ -1191,6 +1242,32 @@ export function ResultsScreen() {
               />
             )}
 
+            {explanation.questions_for_care_team && explanation.questions_for_care_team.length > 0 && (
+              <details className="questions-panel" open>
+                <summary className="panel-header">Questions for Your Care Team ({explanation.questions_for_care_team.length})</summary>
+                <ul className="questions-list">
+                  {explanation.questions_for_care_team.map((q, i) => (
+                    <li key={i} className="question-item">{q}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+
+            {explanation.discussion_topics && explanation.discussion_topics.length > 0 && (
+              <details className="discussion-topics-panel" open>
+                <summary className="panel-header">Topics We May Discuss ({explanation.discussion_topics.length})</summary>
+                <div className="discussion-topics-list">
+                  {explanation.discussion_topics.map((t, i) => (
+                    <div key={i} className="discussion-topic-item">
+                      <span className={`severity-badge severity-${t.severity_tier}`}>{t.severity_tier}</span>
+                      <strong>{t.topic}</strong>
+                      <p className="discussion-topic-context">{t.context}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
             {sectionSettings.include_measurements && (
               <MeasurementsTable
                 measurements={explanation.measurements}
@@ -1234,7 +1311,77 @@ export function ResultsScreen() {
             </footer>
 
             <TeachingPointsPanel {...teachingProps} />
+
+            {!IS_TAURI && historyId && (
+              <div className="share-patient-section">
+                <button
+                  className="share-patient-btn"
+                  onClick={() => { setShareLink(""); setShowShareModal(true); }}
+                >
+                  Share with Patient
+                </button>
+              </div>
+            )}
           </>
+        )}
+
+        {showShareModal && (
+          <div className="share-modal-overlay" onClick={() => setShowShareModal(false)}>
+            <div className="share-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 className="share-modal-title">Share with Patient</h3>
+              <p className="share-modal-desc">
+                Generate a link so the patient can ask follow-up questions about this report
+                via an AI chatbot.
+              </p>
+              <div className="share-modal-field">
+                <label>Patient Label (optional)</label>
+                <input
+                  type="text"
+                  value={sharePatientLabel}
+                  onChange={(e) => setSharePatientLabel(e.target.value)}
+                  placeholder="e.g. Mr. Smith"
+                  maxLength={100}
+                />
+              </div>
+              <div className="share-modal-field">
+                <label>Link Expires In</label>
+                <select value={shareExpiry} onChange={(e) => setShareExpiry(Number(e.target.value))}>
+                  <option value={7}>7 days</option>
+                  <option value={14}>14 days</option>
+                  <option value={30}>30 days</option>
+                </select>
+              </div>
+              {shareLink ? (
+                <div className="share-modal-link">
+                  <input type="text" readOnly value={shareLink} className="share-link-input" />
+                  <button
+                    className="share-copy-btn"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(shareLink);
+                        showToast("success", "Link copied!");
+                      } catch {
+                        showToast("error", "Failed to copy.");
+                      }
+                    }}
+                  >
+                    Copy
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="share-generate-btn"
+                  onClick={handleCreateChatLink}
+                  disabled={isCreatingShare}
+                >
+                  {isCreatingShare ? "Generating..." : "Generate Link"}
+                </button>
+              )}
+              <button className="share-modal-close" onClick={() => setShowShareModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="results-nav-buttons">

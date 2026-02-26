@@ -172,6 +172,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.state.user_id = None
             return await call_next(request)
 
+        # Token-based auth for patient chat endpoints (no JWT required)
+        if request.url.path.startswith("/chat/sessions/") and request.method in ("GET", "POST"):
+            path_parts = request.url.path.split("/")
+            if len(path_parts) >= 4:
+                request.state.user_id = None
+                request.state.chat_token = path_parts[3]
+                return await call_next(request)
+
         # Extract and verify JWT
         auth_header = request.headers.get("authorization", "")
         if not auth_header.startswith("Bearer "):

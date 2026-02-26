@@ -400,7 +400,7 @@ class TestPromptEngine:
 
         result, issues = parse_and_validate_response(tool_result, report)
         assert isinstance(result, ExplanationResult)
-        assert result.questions_for_doctor == []
+        assert result.questions_for_care_team == []
         assert result.disclaimer == ""
 
 
@@ -432,7 +432,7 @@ class TestResponseParser:
                     "explanation": "Everything looks good.",
                 }
             ],
-            "questions_for_doctor": ["Any lifestyle changes?"],
+            "questions_for_care_team": ["Any lifestyle changes?"],
             "disclaimer": "This is AI-generated, not medical advice.",
         }
 
@@ -466,7 +466,7 @@ class TestResponseParser:
                 },
             ],
             "key_findings": [],
-            "questions_for_doctor": [],
+            "questions_for_care_team": [],
             "disclaimer": "Disclaimer.",
         }
 
@@ -491,7 +491,7 @@ class TestResponseParser:
                 },
             ],
             "key_findings": [],
-            "questions_for_doctor": [],
+            "questions_for_care_team": [],
             "disclaimer": "Disclaimer.",
         }
 
@@ -515,7 +515,7 @@ class TestResponseParser:
                 },
             ],
             "key_findings": [],
-            "questions_for_doctor": [],
+            "questions_for_care_team": [],
             "disclaimer": "Disclaimer.",
         }
 
@@ -546,7 +546,7 @@ class TestResponseParser:
                 # LVIDd is missing — that's fine
             ],
             "key_findings": [],
-            "questions_for_doctor": [],
+            "questions_for_care_team": [],
             "disclaimer": "Disclaimer.",
         }
 

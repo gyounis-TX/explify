@@ -92,6 +92,7 @@ export function SettingsScreen() {
   const [customFooterText, setCustomFooterText] = useState("");
   const [useAnalogies, setUseAnalogies] = useState(true);
   const [includeLifestyleRecommendations, setIncludeLifestyleRecommendations] = useState(true);
+  const [includeDiscussionTopics, setIncludeDiscussionTopics] = useState(true);
   const [defaultCommentMode, setDefaultCommentMode] = useState<"short" | "long" | "sms">("short");
   const [severityAdaptiveTone, setSeverityAdaptiveTone] = useState(true);
 
@@ -125,6 +126,7 @@ export function SettingsScreen() {
         setCustomFooterText(s.custom_footer_text ?? "");
         setUseAnalogies(s.use_analogies ?? true);
         setIncludeLifestyleRecommendations(s.include_lifestyle_recommendations ?? true);
+        setIncludeDiscussionTopics(s.include_discussion_topics ?? true);
         setDefaultCommentMode(s.default_comment_mode ?? "short");
         setSeverityAdaptiveTone(s.severity_adaptive_tone ?? true);
       } catch (err) {
@@ -169,6 +171,7 @@ export function SettingsScreen() {
         custom_footer_text: customFooterText.trim() || null,
         use_analogies: useAnalogies,
         include_lifestyle_recommendations: includeLifestyleRecommendations,
+        include_discussion_topics: includeDiscussionTopics,
         default_comment_mode: defaultCommentMode,
         severity_adaptive_tone: severityAdaptiveTone,
       };
@@ -192,7 +195,7 @@ export function SettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, defaultCommentMode, severityAdaptiveTone, showToast]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, includeDiscussionTopics, defaultCommentMode, severityAdaptiveTone, showToast]);
 
   // Auto-save: debounce 800ms after any setting changes
   const handleSaveRef = useRef(handleSave);
@@ -206,7 +209,7 @@ export function SettingsScreen() {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, defaultCommentMode, severityAdaptiveTone]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, includeDiscussionTopics, defaultCommentMode, severityAdaptiveTone]);
 
 
   if (loading) {
@@ -382,6 +385,21 @@ export function SettingsScreen() {
                   Lifestyle Recommendations
                   <span className="checkbox-label-hint">
                     Include diet, exercise, and lifestyle suggestions relevant to the findings
+                  </span>
+                </span>
+              </label>
+            </div>
+            <div className="form-group">
+              <label className="form-label checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={includeDiscussionTopics}
+                  onChange={(e) => setIncludeDiscussionTopics(e.target.checked)}
+                />
+                <span className="checkbox-label-text">
+                  Discussion Topics & Patient Questions
+                  <span className="checkbox-label-hint">
+                    Include general discussion topic categories and suggested questions for the care team when findings are abnormal
                   </span>
                 </span>
               </label>

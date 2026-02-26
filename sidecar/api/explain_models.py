@@ -75,6 +75,7 @@ class ExplainRequest(BaseModel):
     quick_reasons: Optional[list[str]] = None
     use_analogies: Optional[bool] = None
     include_lifestyle_recommendations: Optional[bool] = None
+    include_discussion_topics: Optional[bool] = None
     avoid_openings: Optional[list[str]] = None
     batch_prior_summaries: Optional[list[dict]] = None
     quick_normal: Optional[bool] = None
@@ -115,11 +116,18 @@ class FindingExplanation(BaseModel):
     explanation: str
 
 
+class DiscussionTopic(BaseModel):
+    topic: str          # e.g. "Medication options for blood pressure"
+    context: str        # 1-2 sentence "we" framing
+    severity_tier: str  # "moderate" or "severe"
+
+
 class ExplanationResult(BaseModel):
     overall_summary: str
     measurements: list[MeasurementExplanation] = Field(default_factory=list)
     key_findings: list[FindingExplanation] = Field(default_factory=list)
-    questions_for_doctor: list[str] = Field(default_factory=list)
+    questions_for_care_team: list[str] = Field(default_factory=list)
+    discussion_topics: list[DiscussionTopic] = Field(default_factory=list)
     disclaimer: str = ""
 
 
@@ -183,6 +191,7 @@ class AppSettings(BaseModel):
     custom_footer_text: Optional[str] = None
     use_analogies: bool = True
     include_lifestyle_recommendations: bool = True
+    include_discussion_topics: bool = True
     custom_phrases: list[str] = Field(default_factory=list)
     severity_adaptive_tone: bool = True
     humanization_level: int = Field(default=3, ge=1, le=5)
@@ -221,6 +230,7 @@ class SettingsUpdate(BaseModel):
     custom_footer_text: Optional[str] = None
     use_analogies: Optional[bool] = None
     include_lifestyle_recommendations: Optional[bool] = None
+    include_discussion_topics: Optional[bool] = None
     custom_phrases: Optional[list[str]] = None
     severity_adaptive_tone: Optional[bool] = None
     humanization_level: Optional[int] = Field(default=None, ge=1, le=5)

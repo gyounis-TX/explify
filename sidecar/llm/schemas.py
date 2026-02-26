@@ -108,5 +108,41 @@ EXPLANATION_TOOL_SCHEMA: dict = {
                 },
             },
         },
+        "questions_for_care_team": {
+            "type": "array",
+            "description": (
+                "2-4 questions the patient could bring to their next appointment, "
+                "phrased in first person. Only include if findings are mildly "
+                "abnormal or worse. For fully normal results, omit or return empty."
+            ),
+            "items": {"type": "string"},
+        },
+        "discussion_topics": {
+            "type": "array",
+            "description": (
+                "General categories of topics the care team may discuss with the "
+                "patient, tied to the severity of findings. NOT specific treatment "
+                "plans. 1-3 items for moderate findings, 2-4 for severe. "
+                "Omit for normal/mild findings."
+            ),
+            "items": {
+                "type": "object",
+                "required": ["topic", "context", "severity_tier"],
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "General category, e.g. 'Medication options'",
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "1-2 sentence 'we' framing of why this matters",
+                    },
+                    "severity_tier": {
+                        "type": "string",
+                        "enum": ["moderate", "severe"],
+                    },
+                },
+            },
+        },
     },
 }

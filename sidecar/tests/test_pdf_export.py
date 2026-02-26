@@ -34,7 +34,7 @@ SAMPLE_EXPLAIN_RESPONSE = {
                 "explanation": "The heart is pumping blood effectively.",
             },
         ],
-        "questions_for_doctor": [
+        "questions_for_care_team": [
             "When should I have my next echocardiogram?",
         ],
         "disclaimer": "This is not a medical diagnosis.",

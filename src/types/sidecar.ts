@@ -149,11 +149,18 @@ export interface FindingExplanation {
   explanation: string;
 }
 
+export interface DiscussionTopic {
+  topic: string;
+  context: string;
+  severity_tier: string;
+}
+
 export interface ExplanationResult {
   overall_summary: string;
   measurements: MeasurementExplanation[];
   key_findings: FindingExplanation[];
-  questions_for_doctor: string[];
+  questions_for_care_team: string[];
+  discussion_topics: DiscussionTopic[];
   disclaimer: string;
 }
 
@@ -185,6 +192,7 @@ export interface ExplainRequest {
   quick_reasons?: string[];
   use_analogies?: boolean;
   include_lifestyle_recommendations?: boolean;
+  include_discussion_topics?: boolean;
   avoid_openings?: string[];
   batch_prior_summaries?: Array<{ label: string; test_type_display: string; measurements_summary: string }>;
   quick_normal?: boolean;
@@ -247,6 +255,7 @@ export interface AppSettings {
   custom_footer_text: string | null;
   use_analogies: boolean;
   include_lifestyle_recommendations: boolean;
+  include_discussion_topics: boolean;
   custom_phrases: string[];
   severity_adaptive_tone: boolean;
   humanization_level: number;
@@ -283,6 +292,7 @@ export interface SettingsUpdate {
   custom_footer_text?: string | null;
   use_analogies?: boolean;
   include_lifestyle_recommendations?: boolean;
+  include_discussion_topics?: boolean;
   custom_phrases?: string[];
   severity_adaptive_tone?: boolean;
   humanization_level?: number;
@@ -463,4 +473,21 @@ export interface SharedTemplate {
   sharer_email: string;
   created_at: string;
   updated_at: string;
+}
+
+// --- Patient Chat Types ---
+
+export interface ChatSession {
+  token: string;
+  test_type_display: string;
+  explanation_summary: string;
+  patient_label?: string;
+  messages: ChatMessage[];
+  expires_at: string;
+}
+
+export interface ChatMessage {
+  role: "patient" | "assistant";
+  content: string;
+  created_at: string;
 }

@@ -17,7 +17,7 @@ REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "").lower() == "true"
 _USE_PG = bool(os.getenv("DATABASE_URL", ""))
 
 # Non-secret settings stored in DB
-_DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "default_comment_mode", "footer_type", "custom_footer_text", "aws_region", "severity_adaptive_tone", "humanization_level", "custom_phrases")
+_DB_KEYS = ("llm_provider", "claude_model", "openai_model", "literacy_level", "specialty", "practice_name", "include_key_findings", "include_measurements", "tone_preference", "detail_preference", "quick_reasons", "next_steps_options", "explanation_voice", "name_drop", "physician_name_source", "custom_physician_name", "practice_providers", "short_comment_char_limit", "sms_summary_enabled", "sms_summary_char_limit", "default_comment_mode", "footer_type", "custom_footer_text", "aws_region", "severity_adaptive_tone", "humanization_level", "custom_phrases", "use_analogies", "include_lifestyle_recommendations", "include_discussion_topics")
 # Keys that store JSON-encoded lists
 _JSON_LIST_KEYS = {"quick_reasons", "next_steps_options", "practice_providers", "custom_phrases"}
 # Secret keys stored in OS keychain
@@ -143,6 +143,9 @@ async def get_settings(user_id: str | None = None) -> AppSettings:
         if "humanization_level" in all_db
         else 3,
         custom_phrases=_load_json_list("custom_phrases"),
+        use_analogies=all_db.get("use_analogies", "true") != "false",
+        include_lifestyle_recommendations=all_db.get("include_lifestyle_recommendations", "true") != "false",
+        include_discussion_topics=all_db.get("include_discussion_topics", "true") != "false",
     )
 
 
