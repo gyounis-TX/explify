@@ -60,6 +60,39 @@ async function requestDetail(token: string): Promise<ChatMessage> {
   return res.json();
 }
 
+async function requestKeyFindings(token: string): Promise<ChatMessage> {
+  const res = await fetch(`${API_BASE}/chat/sessions/${token}/key-findings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 410) throw new Error("expired");
+  if (res.status === 429) throw new Error("limit_reached");
+  if (!res.ok) throw new Error("key_findings_failed");
+  return res.json();
+}
+
+async function requestMeasurements(token: string): Promise<ChatMessage> {
+  const res = await fetch(`${API_BASE}/chat/sessions/${token}/measurements`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 410) throw new Error("expired");
+  if (res.status === 429) throw new Error("limit_reached");
+  if (!res.ok) throw new Error("measurements_failed");
+  return res.json();
+}
+
+/** Strip markdown formatting from LLM responses so text renders cleanly. */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")      // ### headings
+    .replace(/\*{3}(.+?)\*{3}/g, "$1") // ***bold-italic***
+    .replace(/\*{2}(.+?)\*{2}/g, "$1") // **bold**
+    .replace(/\*(.+?)\*/g, "$1")       // *italic*
+    .replace(/^---+$/gm, "")           // --- horizontal rules
+    .replace(/\n{3,}/g, "\n\n");       // collapse excess blank lines
+}
+
 /** Split text on any newline boundary for paragraph rendering. */
 function splitParagraphs(text: string): string[] {
   return text.split(/\n{1,}/).filter(Boolean);
@@ -71,9 +104,10 @@ export function PatientChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [actionLoading, setActionLoading] = useState<"simplify" | "detail" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"simplify" | "detail" | "key-findings" | "measurements" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
+  const [widthMode, setWidthMode] = useState<"default" | "wide" | "narrow">("default");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -149,24 +183,32 @@ export function PatientChat() {
     }
   }, [token, input, sending, actionLoading]);
 
-  const handleAction = useCallback(async (action: "simplify" | "detail") => {
+  const handleAction = useCallback(async (action: "simplify" | "detail" | "key-findings" | "measurements") => {
     if (!token || sending || actionLoading) return;
     setActionLoading(action);
 
     // Show synthetic patient message matching what the backend stores
-    const patientText = action === "simplify"
-      ? "Can you simplify the explanation for me?"
-      : "Can you give me a more detailed explanation of all my results?";
+    const patientTextMap: Record<string, string> = {
+      simplify: "Can you simplify the explanation for me?",
+      detail: "Can you give me a more detailed explanation of all my results?",
+      "key-findings": "Can you explain my key findings?",
+      measurements: "Can you walk me through my measurements?",
+    };
     const patientMsg: ChatMessage = {
       role: "patient",
-      content: patientText,
+      content: patientTextMap[action],
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, patientMsg]);
 
     try {
-      const fn = action === "simplify" ? requestSimplify : requestDetail;
-      const msg = await fn(token);
+      const fnMap: Record<string, (t: string) => Promise<ChatMessage>> = {
+        simplify: requestSimplify,
+        detail: requestDetail,
+        "key-findings": requestKeyFindings,
+        measurements: requestMeasurements,
+      };
+      const msg = await fnMap[action](token);
       setMessages((prev) => [...prev, msg]);
     } catch (e) {
       const err = e as Error;
@@ -267,10 +309,19 @@ export function PatientChat() {
 
   return (
     <div className="patient-chat-page">
-      <div className="patient-chat-container">
+      <div className={`patient-chat-container${widthMode === "wide" ? " chat-wide" : widthMode === "narrow" ? " chat-narrow" : ""}`}>
         <div className="chat-header">
           <h1 className="chat-title">Explify</h1>
           <span className="chat-test-type">{session.test_type_display}</span>
+          <span className="chat-header-spacer" />
+          <button
+            className="chat-width-toggle"
+            onClick={() => setWidthMode((m) => m === "default" ? "wide" : m === "wide" ? "narrow" : "default")}
+            title={widthMode === "default" ? "Expand" : widthMode === "wide" ? "Compact" : "Default width"}
+            aria-label="Toggle chat width"
+          >
+            {widthMode === "wide" ? "\u2194" : widthMode === "narrow" ? "\u2195" : "\u21D4"}
+          </button>
         </div>
 
         <div className="chat-body">
@@ -286,7 +337,7 @@ export function PatientChat() {
             </button>
             {showSummary && (
               <div className="chat-summary-content">
-                {splitParagraphs(session.explanation_summary).map((p, i) => (
+                {splitParagraphs(stripMarkdown(session.explanation_summary)).map((p, i) => (
                   <p key={i}>{p}</p>
                 ))}
                 <div className="chat-action-buttons">
@@ -303,6 +354,20 @@ export function PatientChat() {
                     disabled={isLoading}
                   >
                     {actionLoading === "detail" ? "Generating..." : "More Detail"}
+                  </button>
+                  <button
+                    className="chat-action-btn"
+                    onClick={() => handleAction("key-findings")}
+                    disabled={isLoading}
+                  >
+                    {actionLoading === "key-findings" ? "Loading..." : "Key Findings"}
+                  </button>
+                  <button
+                    className="chat-action-btn"
+                    onClick={() => handleAction("measurements")}
+                    disabled={isLoading}
+                  >
+                    {actionLoading === "measurements" ? "Loading..." : "Measurements"}
                   </button>
                 </div>
               </div>
@@ -325,7 +390,9 @@ export function PatientChat() {
                 className={`chat-message chat-message--${msg.role}`}
               >
                 <div className="chat-message-bubble">
-                  {splitParagraphs(msg.content).map((p, j) => (
+                  {splitParagraphs(
+                    msg.role === "assistant" ? stripMarkdown(msg.content) : msg.content
+                  ).map((p, j) => (
                     <p key={j}>{p}</p>
                   ))}
                 </div>

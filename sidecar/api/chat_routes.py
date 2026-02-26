@@ -156,6 +156,74 @@ def _build_system_prompt(session: dict) -> str:
                 dt_lines.append(f"- {dt}")
         sections.append("## Discussion Topics\n" + "\n".join(dt_lines))
 
+    # --- Conditional analogy enforcement ---
+    test_type = session.get("test_type", "")
+    _ECHO_TYPES = {"echo", "exercise_stress_echo", "pharma_stress_echo", "tee"}
+    _PET_SPECT_TYPES = {
+        "pharma_pet_stress", "exercise_pet_stress",
+        "pharma_spect_stress", "exercise_spect_stress",
+    }
+
+    analogy_section = ""
+    if test_type in _ECHO_TYPES:
+        analogy_section = """
+## Required Analogies
+You MUST use these analogies when explaining the corresponding findings. Always include the relevant analogy — do not skip it.
+
+**Diastolic function (balloon-to-football):**
+- Normal: "Between each heartbeat, your heart relaxes and fills with blood easily — like inflating a soft, flexible balloon that expands without much effort."
+- Grade I (impaired relaxation): "Your heart muscle is a little stiffer when it relaxes between beats — like a balloon that's a bit thicker and takes a little more effort to inflate. It still fills well, but not quite as easily. This is the mildest form and is very common with age."
+- Grade II (pseudonormal): "Your heart muscle has become noticeably stiffer — less like a soft balloon and more like trying to inflate a football. It takes more pressure to fill, and even though the filling pattern may look normal on the surface, the pressures inside are higher than they should be."
+- Grade III (restrictive): "Your heart muscle is quite stiff — like trying to inflate a football that's already firm. It takes a lot of pressure to fill, and the heart has significant difficulty relaxing between beats."
+
+**Valve regurgitation (door analogy):**
+- Trace/mild: "Think of a door that doesn't quite close all the way — a tiny bit of blood leaks back through. This is so common it's considered normal."
+- Moderate: "The door has a noticeable gap — more blood leaks backward than it should, making the heart work a bit harder."
+- Severe: "The door is significantly open — a large amount of blood flows back the wrong way, putting extra strain on the heart."
+
+**Valve stenosis (door opening):**
+- Mild: "The valve opening is slightly narrower than normal — like a door that doesn't open all the way but you can still walk through comfortably."
+- Moderate: "The valve opening is noticeably narrowed — like having to turn sideways to fit through a partially open door."
+- Severe: "The valve opening is very tight — like trying to squeeze through a barely open door. The heart has to push much harder to get blood through."
+
+**Ejection fraction (water pump):**
+- Normal (>=55%): "Your heart pumps out more than half of its blood with each beat — like a strong water pump working at full efficiency."
+- Mildly reduced (41-54%): "Your heart's pumping power is slightly below the ideal range — like a pump that's lost a little efficiency but still moves plenty of water."
+- Moderately reduced (30-40%): "Your heart's pumping strength is noticeably reduced — like a pump running at half power."
+- Severely reduced (<30%): "Your heart's pumping power is significantly weakened — like a pump that can only push out a small fraction of its capacity."
+
+**Chamber size (balloon inflation):**
+- Normal: "Your heart chambers are a normal size — like a balloon inflated to the right amount."
+- Mildly dilated: "This chamber is slightly larger than normal — like a balloon that's been stretched just a bit beyond its usual size."
+- Severely dilated: "This chamber is significantly enlarged — like a balloon stretched well beyond its normal size, which means the walls may not squeeze as effectively."
+"""
+    elif test_type in _PET_SPECT_TYPES:
+        analogy_section = """
+## Required Analogies
+You MUST use these analogies when explaining the corresponding findings. Always include the relevant analogy — do not skip it.
+
+**Coronary Flow Capacity — freeway analogy:**
+- Normal CFC: "Think of your coronary arteries like a freeway with no traffic — blood flows freely even during rush hour (stress)."
+- Mildly reduced CFC: "Like a freeway with some congestion during rush hour — traffic still moves but a bit slower than ideal."
+- Moderately reduced CFC: "Like a freeway with significant traffic backup — blood flow is noticeably restricted when your heart needs it most."
+- Severely reduced CFC: "Like a freeway with a major bottleneck — blood flow is significantly restricted during stress."
+
+**Stress MBF — water pipe analogy:**
+- Normal stress MBF (>= 2.0): "Your heart's blood vessels can deliver plenty of blood when demand increases — like a water pipe with strong pressure."
+- Mildly reduced (1.5-2.0): "The pipe still delivers water but the pressure drops a little when multiple faucets are running."
+- Moderately reduced (1.0-1.5): "The pipe delivers noticeably less water under high demand — like low water pressure when everyone's showering."
+- Severely reduced (< 1.0): "The pipe can barely keep up with demand — very limited flow even when the heart needs it most."
+
+**MFR/CFR — flow reserve:**
+- Normal (>= 2.0): "Your heart can at least double its blood flow when needed — like having plenty of reserve fuel in the tank."
+- Mildly reduced (1.5-2.0): "Your heart can increase blood flow but not quite as much as expected — the reserve tank is a little lower than ideal."
+- Moderately reduced (1.0-1.5): "Your heart has limited ability to increase blood flow under stress."
+- Severely reduced (< 1.0): "Your heart can barely increase blood flow at all when it needs to — the reserve is very limited."
+"""
+
+    if analogy_section:
+        sections.append(analogy_section.strip())
+
     structured_data = "\n\n".join(sections)
 
     over_reassurance_rule = ""
@@ -252,6 +320,12 @@ Stop further interpretation after this redirect.
 Teaching points from the physician are authoritative instructions for how to
 explain specific findings. Follow them closely — they represent the physician's
 clinical judgment about what to emphasize, de-emphasize, or explain differently.
+
+## Response Focus
+Do NOT restate or summarize all the findings before answering. Focus directly on
+answering the patient's specific question. Only reference findings that are directly
+relevant to what was asked. If the patient asks about a single measurement, explain
+that measurement — do not recite the entire report.
 
 ## Scope Boundary
 If the patient asks about something outside this report, say:
@@ -742,11 +816,16 @@ async def detail_explanation(request: Request, token: str):
     system_prompt = _build_system_prompt(session)
 
     user_prompt = (
-        "Please give me a comprehensive, detailed explanation of all my results. "
+        "Please give me a very comprehensive, detailed explanation of all my results. "
+        "Be very comprehensive. Provide detailed explanations with full clinical context "
+        "for every finding. Include background on what each measurement means and why it "
+        "matters. Use 5-8 sentences per section.\n\n"
         "Include:\n"
         "1. A headline reflecting the physician's overall conclusion\n"
-        "2. Each key finding explained at a patient-friendly level with severity context\n"
-        "3. Each measurement with its value, what's considered normal, and what mine means\n"
+        "2. Each key finding explained at a patient-friendly level with full severity "
+        "context, background on what each finding means, and why it matters\n"
+        "3. Each measurement with its value, what's considered normal, what mine means, "
+        "and why it's clinically relevant\n"
         "4. Questions I should bring up with my care team\n"
         "5. Topics that may come up at my next visit\n\n"
         "Be thorough but still use clear, accessible language. Follow the physician's "
@@ -768,6 +847,120 @@ async def detail_explanation(request: Request, token: str):
         _logger.exception("Detail LLM call failed for session %s: %s", session["id"], exc)
         return JSONResponse(
             {"detail": "Failed to generate detailed explanation. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)
+
+
+@router.post("/sessions/{token}/key-findings")
+async def key_findings_explanation(request: Request, token: str):
+    """Generate a focused explanation of the patient's key findings."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "Can you explain my key findings?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
+    )
+
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "Please explain each of my key findings in patient-friendly language. "
+        "For each finding, explain what it means, its severity, and why it matters. "
+        "Focus only on the key findings listed in the data above."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=2000,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("Key findings LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate key findings explanation. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)
+
+
+@router.post("/sessions/{token}/measurements")
+async def measurements_explanation(request: Request, token: str):
+    """Generate a focused explanation of the patient's measurements."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "Can you walk me through my measurements?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
+    )
+
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "Please explain each of my measurements in patient-friendly language. "
+        "For each measurement, tell me what was measured, what the value means, "
+        "and whether it's normal or abnormal based on the analysis labels. "
+        "Use the physician-provided severity labels — do not independently "
+        "interpret numeric thresholds."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=2500,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("Measurements LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate measurements explanation. Please try again."},
             status_code=500,
         )
 

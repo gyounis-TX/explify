@@ -8,12 +8,20 @@
 
 .patient-chat-container {
   width: 100%;
-  max-width: 640px;
+  max-width: 800px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: #fff;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+}
+
+.patient-chat-container.chat-wide {
+  max-width: 960px;
+}
+
+.patient-chat-container.chat-narrow {
+  max-width: 640px;
 }
 
 /* Header */
@@ -39,6 +47,31 @@
   background: #f3f4f6;
   padding: 3px 10px;
   border-radius: 12px;
+}
+
+.chat-header-spacer {
+  flex: 1;
+}
+
+.chat-width-toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.chat-width-toggle:hover {
+  background: #e0e7ff;
+  border-color: #93a3d4;
 }
 
 /* Body */
@@ -92,9 +125,10 @@
   margin-bottom: 0;
 }
 
-/* Action Buttons (Simplify / More Detail) */
+/* Action Buttons */
 .chat-action-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
@@ -342,8 +376,13 @@
 }
 
 /* Mobile */
-@media (max-width: 640px) {
-  .patient-chat-container {
+@media (max-width: 960px) {
+  .patient-chat-container,
+  .patient-chat-container.chat-wide {
     max-width: 100%;
+  }
+
+  .chat-width-toggle {
+    display: none;
   }
 }
