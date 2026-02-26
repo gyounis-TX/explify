@@ -32,7 +32,8 @@ async function sendChatMessage(
     throw new Error("limit_reached");
   }
   if (!res.ok) {
-    throw new Error("send_failed");
+    const errBody = await res.json().catch(() => ({ detail: "send_failed" }));
+    throw new Error(errBody.detail || "send_failed");
   }
   return res.json();
 }
@@ -109,7 +110,7 @@ export function PatientChat() {
           {
             role: "assistant",
             content:
-              "I'm having trouble responding right now. Please try again in a moment.",
+              `I'm having trouble responding right now. [Debug: ${err.message}]`,
             created_at: new Date().toISOString(),
           },
         ]);
