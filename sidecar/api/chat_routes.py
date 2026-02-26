@@ -31,7 +31,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 MAX_MESSAGES_PER_SESSION = 50
 MAX_MESSAGE_LENGTH = 500
 DEFAULT_EXPIRY_DAYS = 30
-CHATBOT_MODEL = "claude-haiku-4-5-20251001"
+CHATBOT_MODEL = "claude-sonnet-4-6"
 
 _CHATBOT_SYSTEM_PROMPT = """\
 You are a patient-friendly medical assistant helping a patient understand
@@ -352,13 +352,13 @@ async def send_chat_message(request: Request, token: str, body: SendMessageReque
         input_tokens = response.input_tokens
         output_tokens = response.output_tokens
     except Exception as exc:
-        err_detail = f"{type(exc).__name__}: {exc}"
-        _logger.exception("Chat LLM call failed for session %s: %s", session["id"], err_detail)
-        # Return error detail for debugging — remove once resolved
-        return JSONResponse(
-            {"detail": f"Chat AI error: {err_detail}"},
-            status_code=502,
+        _logger.exception("Chat LLM call failed for session %s: %s", session["id"], exc)
+        assistant_content = (
+            "I'm sorry, I'm having trouble responding right now. "
+            "Please try again in a moment, or contact your care team directly."
         )
+        input_tokens = 0
+        output_tokens = 0
 
     # Store assistant message
     assistant_time = _now()

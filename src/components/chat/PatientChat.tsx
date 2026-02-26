@@ -110,7 +110,7 @@ export function PatientChat() {
           {
             role: "assistant",
             content:
-              `I'm having trouble responding right now. [Debug: ${err.message}]`,
+              "I'm having trouble responding right now. Please try again in a moment.",
             created_at: new Date().toISOString(),
           },
         ]);
