@@ -270,6 +270,11 @@ class CreateChatSessionRequest(BaseModel):
     patient_label: Optional[str] = None
     expires_days: int = Field(default=DEFAULT_EXPIRY_DAYS, ge=1, le=90)
     clinical_context: Optional[str] = None
+    # Optional overrides: when provided, these take precedence over what's
+    # stored in the history table, ensuring the chat reflects the physician's
+    # latest edits, regenerations, and slider adjustments.
+    current_full_response: Optional[dict] = None
+    edited_summary: Optional[str] = None
 
 
 class SendMessageRequest(BaseModel):
@@ -398,9 +403,15 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
         return JSONResponse({"detail": "History entry not found"}, status_code=404)
 
     history = dict(row)
-    full_response = history.get("full_response")
-    if isinstance(full_response, str):
-        full_response = json.loads(full_response)
+
+    # Use the frontend-provided current_full_response if available (reflects
+    # regenerations, slider changes, long comment, etc.), otherwise fall back
+    # to the history DB row which may be stale.
+    full_response = body.current_full_response
+    if full_response is None:
+        full_response = history.get("full_response")
+        if isinstance(full_response, str):
+            full_response = json.loads(full_response)
 
     # Extract report text and explanation summary
     report_text = ""
@@ -413,6 +424,10 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
 
     explanation = full_response.get("explanation", {}) if full_response else {}
     explanation_summary = explanation.get("overall_summary", history.get("summary", ""))
+
+    # If the physician edited the summary text, use that instead
+    if body.edited_summary:
+        explanation_summary = body.edited_summary
 
     # Scrub PHI from the report context
     scrubbed_report = _scrub_report_text(report_text) if report_text else ""

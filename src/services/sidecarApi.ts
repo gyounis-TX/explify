@@ -1664,12 +1664,16 @@ class SidecarApi {
     patientLabel?: string,
     expiresDays?: number,
     clinicalContext?: string,
+    currentFullResponse?: ExplainResponse,
+    editedSummary?: string,
   ): Promise<{ token: string; url: string; expires_at: string }> {
     const baseUrl = await this.ensureInitialized();
     const body: Record<string, unknown> = { history_id: historyId };
     if (patientLabel) body.patient_label = patientLabel;
     if (expiresDays) body.expires_days = expiresDays;
     if (clinicalContext) body.clinical_context = clinicalContext;
+    if (currentFullResponse) body.current_full_response = currentFullResponse;
+    if (editedSummary) body.edited_summary = editedSummary;
 
     const response = await this.fetchWithAuth(`${baseUrl}/chat/create`, {
       method: "POST",

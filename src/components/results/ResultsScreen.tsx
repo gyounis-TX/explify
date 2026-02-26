@@ -673,11 +673,17 @@ export function ResultsScreen() {
     }
     setIsCreatingShare(true);
     try {
+      // Pass the current response state so the chat session reflects the
+      // latest regeneration, slider adjustments, long comment, etc. — not
+      // the potentially stale version saved in history.
+      const latestResponse = longExplanationResponse ?? currentResponse ?? undefined;
       const result = await sidecarApi.createChatSession(
         historyId,
         sharePatientLabel.trim() || undefined,
         shareExpiry,
         clinicalContext || undefined,
+        latestResponse,
+        isDirty ? editedSummary : undefined,
       );
       const baseUrl = window.location.origin;
       const fullUrl = `${baseUrl}/#/patient-chat/${result.token}`;
@@ -693,7 +699,7 @@ export function ResultsScreen() {
     } finally {
       setIsCreatingShare(false);
     }
-  }, [historyId, sharePatientLabel, shareExpiry, showToast]);
+  }, [historyId, sharePatientLabel, shareExpiry, clinicalContext, currentResponse, longExplanationResponse, isDirty, editedSummary, showToast]);
 
   const computedFooter = (() => {
     if (!settingsLoaded) return "";
@@ -1200,19 +1206,21 @@ export function ResultsScreen() {
                 <button className="refine-btn" onClick={handleRegenerate} disabled={isRegenerating}>
                   {isRegenerating ? "Regenerating\u2026" : "Regenerate"}
                 </button>
-                <button
-                  className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
-                  onClick={() => setIsEditing(!isEditing)}
-                >
-                  {isEditing ? "Stop Editing" : "Edit Text"}
-                </button>
-                {isDirty && <span className="edit-indicator">Edited</span>}
+                {commentMode === "long" && (
+                  <button
+                    className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
+                    onClick={() => setIsEditing(!isEditing)}
+                  >
+                    {isEditing ? "Stop Editing" : "Edit Text"}
+                  </button>
+                )}
+                {isDirty && commentMode === "long" && <span className="edit-indicator">Edited</span>}
               </div>
             )}
 
             <CommentPanel
               commentMode={commentMode}
-              setCommentMode={setCommentMode}
+              setCommentMode={(mode) => { setCommentMode(mode); if (mode !== "long") setIsEditing(false); }}
               isEditing={isEditing}
               editedSummary={editedSummary}
               setEditedSummary={setEditedSummary}
