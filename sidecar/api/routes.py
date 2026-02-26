@@ -1966,7 +1966,8 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
 
     except Exception as e:
         _logger.exception("Unexpected error in explain stream")
-        yield _sse_event({"stage": "error", "message": "An unexpected error occurred. Please try again."})
+        err_detail = f"{type(e).__name__}: {str(e)[:300]}"
+        yield _sse_event({"stage": "error", "message": f"An unexpected error occurred: {err_detail}"})
 
 
 @router.post("/analyze/interpret", response_model=InterpretResponse)
