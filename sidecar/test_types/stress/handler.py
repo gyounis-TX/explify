@@ -130,7 +130,14 @@ _PET_PHARMA_RULES_V1 = (
     "   - Globally reduced CFR without focal perfusion defects "
     "may suggest microvascular disease\n"
     "4. Wall motion abnormalities during stress (stunning) are "
-    "significant markers of ischemia."
+    "significant markers of ischemia.\n\n"
+    "ADMINISTRATIVE METADATA — DO NOT INCLUDE:\n"
+    "- Do NOT mention who interpreted/read/signed the study.\n"
+    "- Do NOT mention the interpreting physician's name or signature.\n"
+    "- Do NOT state whether prior studies are or are not available "
+    "for comparison. If the report references a prior study, you may "
+    "reference the comparison findings, but do NOT editorialize about "
+    "the availability of prior studies."
 )
 
 _PET_PHARMA_STYLE_V2 = (
@@ -185,7 +192,14 @@ _PET_PHARMA_RULES_V2 = (
     "  - Globally reduced MFR/CFR without focal defects → 'may suggest' microvascular\n"
     "  - Do NOT over-alarm borderline values (mildly reduced CFC without other findings)\n"
     "  - Do NOT say 'we may need to make adjustments based on mild reductions'\n"
-    "  - Pharmacologic stress: Do NOT mention heart rate response AT ALL"
+    "  - Pharmacologic stress: Do NOT mention heart rate response AT ALL\n\n"
+    "ADMINISTRATIVE METADATA — DO NOT INCLUDE:\n"
+    "  - Do NOT mention who interpreted/read/signed the study\n"
+    "  - Do NOT mention the interpreting physician's name or signature\n"
+    "  - Do NOT state whether prior studies are or are not available "
+    "for comparison. If the report references a prior study, you may "
+    "reference the comparison findings, but do NOT editorialize about "
+    "the availability of prior studies"
 )
 
 _PET_EXERCISE_STYLE_V1 = (
@@ -231,7 +245,14 @@ _PET_EXERCISE_RULES_V1 = (
     "   - Globally reduced CFR without focal perfusion defects "
     "may suggest microvascular disease\n"
     "5. Wall motion abnormalities during stress (stunning) are "
-    "significant markers of ischemia."
+    "significant markers of ischemia.\n\n"
+    "ADMINISTRATIVE METADATA — DO NOT INCLUDE:\n"
+    "- Do NOT mention who interpreted/read/signed the study.\n"
+    "- Do NOT mention the interpreting physician's name or signature.\n"
+    "- Do NOT state whether prior studies are or are not available "
+    "for comparison. If the report references a prior study, you may "
+    "reference the comparison findings, but do NOT editorialize about "
+    "the availability of prior studies."
 )
 
 _PET_EXERCISE_STYLE_V2 = (
@@ -280,7 +301,14 @@ _PET_EXERCISE_RULES_V2 = (
     "  - Low MFR/CFR + perfusion defect = epicardial disease, not microvascular\n"
     "  - Globally reduced MFR/CFR without focal defects → 'may suggest' microvascular\n"
     "  - Do NOT over-alarm borderline values (mildly reduced CFC without other findings)\n"
-    "  - Do NOT say 'we may need to make adjustments based on mild reductions'"
+    "  - Do NOT say 'we may need to make adjustments based on mild reductions'\n\n"
+    "ADMINISTRATIVE METADATA — DO NOT INCLUDE:\n"
+    "  - Do NOT mention who interpreted/read/signed the study\n"
+    "  - Do NOT mention the interpreting physician's name or signature\n"
+    "  - Do NOT state whether prior studies are or are not available "
+    "for comparison. If the report references a prior study, you may "
+    "reference the comparison findings, but do NOT editorialize about "
+    "the availability of prior studies"
 )
 
 

@@ -1859,6 +1859,14 @@ def _build_safety_rules(include_lifestyle: bool = True) -> str:
    cannot be classified without more context.
 5. Do NOT mention the patient by name or include any PHI.
 6. Do NOT introduce diagnoses not supported by the source report.
+6a. Do NOT mention who interpreted, read, or signed the study. Do NOT
+   include the interpreting physician's name, signature, or credentials.
+   This is administrative metadata, not clinical content.
+6b. Do NOT state whether prior studies are or are not available for
+   comparison. If the report references a prior study with comparison
+   findings, you may reference those findings. But do NOT editorialize
+   about the existence or absence of prior studies (e.g., do NOT say
+   "there are no prior studies available for comparison").
 {rule7}
 8. Call the explain_report tool with your response. Do not produce any
    output outside of this tool call.
