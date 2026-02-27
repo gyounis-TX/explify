@@ -559,8 +559,8 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
     glossary = _load_glossary(test_type)
     glossary_json = json.dumps(glossary) if glossary else None
 
-    # Generate token and create session
-    token = secrets.token_urlsafe(32)
+    # Generate short token (8 bytes → 11 URL-safe chars) and create session
+    token = secrets.token_urlsafe(8)
     expires_at = _now() + timedelta(days=body.expires_days)
 
     await pool.execute(
@@ -592,7 +592,7 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
 
     return {
         "token": token,
-        "url": f"/patient-chat/{token}",
+        "url": f"/c/{token}",
         "expires_at": expires_at.isoformat(),
     }
 

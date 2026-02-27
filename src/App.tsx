@@ -68,6 +68,7 @@ function App() {
         <Route path="/terms" element={<LegalPage title="Terms of Service" markdownPath="/legal/terms.md" />} />
         <Route path="/privacy" element={<LegalPage title="Privacy Policy" markdownPath="/legal/privacy.md" />} />
         <Route path="/baa" element={<LegalPage title="Business Associate Agreement" markdownPath="/legal/baa.md" />} />
+        <Route path="/c/:token" element={<PatientChat />} />
         <Route path="/patient-chat/:token" element={<PatientChat />} />
 
         {/* Web mode: landing page at / for unauthenticated users */}

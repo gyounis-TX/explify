@@ -686,7 +686,7 @@ export function ResultsScreen() {
         isDirty ? editedSummary : undefined,
       );
       const baseUrl = window.location.origin;
-      const fullUrl = `${baseUrl}/#/patient-chat/${result.token}`;
+      const fullUrl = `${baseUrl}/#/c/${result.token}`;
       setShareLink(fullUrl);
       try {
         await navigator.clipboard.writeText(fullUrl);
