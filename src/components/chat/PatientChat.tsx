@@ -136,6 +136,8 @@ export function PatientChat() {
   const [error, setError] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
   const [widthMode, setWidthMode] = useState<"default" | "wide" | "narrow">("default");
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -354,7 +356,34 @@ export function PatientChat() {
           </button>
         </div>
 
-        <div className="chat-body">
+        {!consentGiven ? (
+          <div className="chat-consent">
+            <h2 className="chat-consent-title">Before You Begin</h2>
+            <ul className="chat-consent-list">
+              <li>This is an AI-powered educational tool, not a medical provider</li>
+              <li>This conversation is not viewed or monitored by your care team</li>
+              <li>No medical advice, diagnoses, or treatment recommendations are provided</li>
+              <li>If you have questions about symptoms or your treatment, contact your care team directly</li>
+              <li>Information discussed here is not stored in your medical record</li>
+            </ul>
+            <label className="chat-consent-check">
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+              />
+              I understand and would like to continue
+            </label>
+            <button
+              className="chat-consent-btn"
+              disabled={!consentChecked}
+              onClick={() => setConsentGiven(true)}
+            >
+              Continue
+            </button>
+          </div>
+        ) : (
+        <><div className="chat-body">
           {/* Collapsible explanation summary */}
           <div className="chat-summary-section">
             <button
@@ -480,6 +509,7 @@ export function PatientChat() {
             care team directly.
           </p>
         </footer>
+        </>)}
       </div>
     </div>
   );
