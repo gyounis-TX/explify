@@ -234,6 +234,22 @@ You MUST use these analogies when explaining the corresponding findings. Always 
             "'you'll be fine', or 'don't worry'. Maintain appropriate seriousness."
         )
 
+    # Physician name personalization
+    physician_name = session.get("physician_name") or ""
+    if physician_name:
+        doctor_ref = physician_name
+        doctor_instruction = (
+            f"\n## Physician Name\n"
+            f"The patient's doctor is **{physician_name}**. When referring to their "
+            f"doctor, use \"{physician_name}\" instead of generic phrases like "
+            f"\"your doctor\", \"your physician\", or \"your care team\". "
+            f"For example: \"You should discuss this with {physician_name}\" or "
+            f"\"{physician_name} can explain this further at your next visit.\""
+        )
+    else:
+        doctor_ref = "your doctor"
+        doctor_instruction = ""
+
     prompt = f"""\
 You are a patient-friendly medical assistant helping a patient understand
 their {test_type_display} results. Your responses are grounded EXCLUSIVELY
@@ -244,6 +260,7 @@ in the physician-approved analysis data below.
 
 ## Literacy Level
 {literacy_level}
+{doctor_instruction}
 
 {structured_data}
 
@@ -289,7 +306,7 @@ When severity labels are provided in Key Findings or Measurements:
 
 ## Medical Advice Boundary
 For treatment, medication, or surgery questions, respond with:
-"Treatment decisions are made by your clinician based on your complete medical
+"Treatment decisions are made by {doctor_ref} based on your complete medical
 history. I can explain what the report says, but I can't recommend specific
 next steps."
 
@@ -298,8 +315,8 @@ escalating detail.
 
 ## Prognosis & Research Boundary
 For survival, life expectancy, or statistical risk questions, respond with:
-"Research findings vary, and individual risk depends on many factors. Your
-clinician can discuss personalized risk in more detail."
+"Research findings vary, and individual risk depends on many factors.
+{doctor_ref} can discuss personalized risk in more detail."
 
 Never provide percentages or survival statistics.
 
@@ -337,7 +354,7 @@ markdown headings (# ## ###), no horizontal rules (---). Use short paragraphs.
 ## Scope Boundary
 If the patient asks about something outside this report, say:
 "I can only help with questions about this specific report. For other
-concerns, please reach out to your care team."
+concerns, please reach out to {doctor_ref}."
 """
     return prompt
 
@@ -519,6 +536,18 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
     parsed_measurements_json = json.dumps(parsed_measurements) if parsed_measurements else None
     severity_score = history.get("severity_score")
 
+    # Extract physician name from the full response or report text
+    physician_name = None
+    if full_response:
+        physician_name = full_response.get("physician_name")
+    if not physician_name:
+        # Try extracting from the report text as fallback
+        try:
+            from extraction.physician_extractor import extract_physician_name
+            physician_name = extract_physician_name(report_text)
+        except Exception:
+            pass
+
     # Clinical context from request (already PHI-scrubbed by the physician)
     clinical_context = body.clinical_context
 
@@ -540,9 +569,9 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
             report_context, explanation_summary, patient_label,
             literacy_level, expires_at,
             full_explanation, parsed_measurements, teaching_points,
-            glossary, clinical_context, severity_score)
+            glossary, clinical_context, severity_score, physician_name)
            VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10,
-                   $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16)""",
+                   $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16, $17)""",
         token, user_id,
         history.get("id"),
         test_type,
@@ -558,6 +587,7 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
         glossary_json,
         clinical_context,
         severity_score,
+        physician_name,
     )
 
     return {
@@ -825,16 +855,15 @@ async def detail_explanation(request: Request, token: str):
     user_prompt = (
         "Please give me a very comprehensive, detailed explanation of all my results. "
         "Be very comprehensive. Provide detailed explanations with full clinical context "
-        "for every finding. Include background on what each measurement means and why it "
+        "for every finding. Include background on what each finding means and why it "
         "matters. Use 5-8 sentences per section.\n\n"
         "Include:\n"
         "1. A headline reflecting the physician's overall conclusion\n"
         "2. Each key finding explained at a patient-friendly level with full severity "
         "context, background on what each finding means, and why it matters\n"
-        "3. Each measurement with its value, what's considered normal, what mine means, "
-        "and why it's clinically relevant\n"
-        "4. Questions I should bring up with my care team\n"
-        "5. Topics that may come up at my next visit\n\n"
+        "3. Topics that may come up at my next visit\n\n"
+        "Do NOT include a measurements breakdown or a list of questions to ask — "
+        "those are available separately. Focus on explaining the key findings in depth.\n\n"
         "Be thorough but still use clear, accessible language. Follow the physician's "
         "teaching points for how to explain specific findings."
     )

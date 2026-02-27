@@ -936,3 +936,8 @@ DO $$ BEGIN
     ALTER TABLE chat_sessions ADD COLUMN severity_score REAL;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+DO $$ BEGIN
+    ALTER TABLE chat_sessions ADD COLUMN physician_name TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
