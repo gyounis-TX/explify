@@ -1208,9 +1208,18 @@ export function ResultsScreen() {
                 </button>
                 <button
                   className={`edit-toggle-btn ${isEditing ? "edit-toggle-btn--active" : ""}`}
-                  onClick={() => setIsEditing(!isEditing)}
+                  onClick={() => {
+                    if (isEditing && isDirty && historyId) {
+                      sidecarApi.saveEditedText(historyId, editedSummary).then(() => {
+                        showToast("success", "Edits saved.");
+                      }).catch(() => {
+                        showToast("error", "Failed to save edits.");
+                      });
+                    }
+                    setIsEditing(!isEditing);
+                  }}
                 >
-                  {isEditing ? "Stop Editing" : "Edit Text"}
+                  {isEditing ? "Save" : "Edit Text"}
                 </button>
                 {isDirty && <span className="edit-indicator">Edited</span>}
               </div>
