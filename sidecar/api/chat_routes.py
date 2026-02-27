@@ -671,17 +671,14 @@ async def create_chat_session(request: Request, body: CreateChatSessionRequest):
     parsed_measurements_json = json.dumps(parsed_measurements) if parsed_measurements else None
     severity_score = history.get("severity_score")
 
-    # Extract physician name from the full response or report text
+    # Use the practice-validated physician name from the explain response.
+    # The explain route already resolves this against practice_providers,
+    # so only practice physicians will appear here — never outside referring
+    # doctors.  No fallback extraction: if the explain response has no name,
+    # the chat will use generic phrasing ("your doctor").
     physician_name = None
     if full_response:
         physician_name = full_response.get("physician_name")
-    if not physician_name:
-        # Try extracting from the report text as fallback
-        try:
-            from extraction.physician_extractor import extract_physician_name
-            physician_name = extract_physician_name(report_text)
-        except Exception:
-            pass
 
     # Clinical context from request (already PHI-scrubbed by the physician)
     clinical_context = body.clinical_context

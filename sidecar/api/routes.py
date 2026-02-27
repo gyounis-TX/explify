@@ -81,6 +81,43 @@ def _secure_delete(path: str) -> None:
         except OSError:
             pass
 
+def _match_practice_physician(
+    extracted: str | None,
+    providers: list[str] | None,
+) -> str | None:
+    """Return the extracted name only if it matches a practice provider.
+
+    The extractor pulls the *referring/ordering* physician from report text,
+    which is often an outside doctor (e.g. a PCP who ordered the study).
+    Narrations like "Dr. X has reviewed your results" must only reference
+    physicians who are actually part of the practice.  If the extracted name
+    does not match any entry in ``providers``, return ``None`` so the
+    explanation falls back to generic phrasing ("your doctor").
+    """
+    if not extracted or not providers:
+        return None
+
+    # extracted is "Dr. LastName"; providers are user-entered strings
+    # like "Dr. Khan", "Khan", "Dr. Bruce-Williams", etc.
+    ext_norm = extracted.replace("Dr.", "").strip().lower()
+    if not ext_norm:
+        return None
+
+    for p in providers:
+        p_norm = p.replace("Dr.", "").strip().lower()
+        if not p_norm:
+            continue
+        # Exact last-name match (handles "Khan" == "Khan")
+        if ext_norm == p_norm:
+            return extracted
+        # Substring match for multi-token entries
+        # e.g. extracted "Dr. Khan" → ext_norm "khan",
+        #      provider "Amir Khan" → p_norm "amir khan" → "khan" in "amir khan"
+        if ext_norm in p_norm or p_norm in ext_norm:
+            return extracted
+    return None
+
+
 router = APIRouter()
 
 pipeline = ExtractionPipeline()
@@ -917,11 +954,13 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
                 detail=f"No API key configured for provider '{provider_str}'.",
             )
 
-        # Resolve physician name
+        # Resolve physician name — only practice physicians may be narrated
         extracted_physician = extract_physician_name(extraction_result.full_text)
         source = settings.physician_name_source.value
         if source == "auto_extract":
-            active_physician = extracted_physician
+            active_physician = _match_practice_physician(
+                extracted_physician, list(settings.practice_providers) if settings.practice_providers else None
+            )
         elif source == "custom":
             active_physician = settings.custom_physician_name
         else:
@@ -993,7 +1032,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
             parsed_report=parsed_report,
             validation_warnings=[issue.message for issue in issues],
             phi_categories_found=[],
-            physician_name=extracted_physician,
+            physician_name=active_physician,
             model_used=llm_response.model,
             input_tokens=llm_response.input_tokens,
             output_tokens=llm_response.output_tokens,
@@ -1058,6 +1097,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
     extracted_physician = extract_physician_name(extraction_result.full_text)
 
     # Resolve which physician name to use in the LLM prompt
+    # Only practice physicians may be narrated — outside referring doctors must not appear.
     if body.physician_name_override is not None:
         active_physician = (
             scrub_phi(body.physician_name_override, provider_names=providers).scrubbed_text
@@ -1066,7 +1106,9 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
     else:
         source = settings.physician_name_source.value
         if source == "auto_extract":
-            active_physician = extracted_physician
+            active_physician = _match_practice_physician(
+                extracted_physician, list(settings.practice_providers) if settings.practice_providers else None
+            )
         elif source == "custom":
             active_physician = settings.custom_physician_name
         else:
@@ -1401,7 +1443,7 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         parsed_report=parsed_report,
         validation_warnings=[issue.message for issue in issues],
         phi_categories_found=scrub_result.phi_found,
-        physician_name=extracted_physician,
+        physician_name=active_physician,
         model_used=llm_response.model,
         input_tokens=llm_response.input_tokens,
         output_tokens=llm_response.output_tokens,
@@ -1624,7 +1666,9 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
         else:
             source = settings.physician_name_source.value
             if source == "auto_extract":
-                active_physician = extracted_physician
+                active_physician = _match_practice_physician(
+                    extracted_physician, list(settings.practice_providers) if settings.practice_providers else None
+                )
             elif source == "custom":
                 active_physician = settings.custom_physician_name
             else:
@@ -1953,7 +1997,7 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             parsed_report=parsed_report,
             validation_warnings=[issue.message for issue in issues],
             phi_categories_found=scrub_result.phi_found,
-            physician_name=extracted_physician,
+            physician_name=active_physician,
             model_used=llm_response.model,
             input_tokens=llm_response.input_tokens,
             output_tokens=llm_response.output_tokens,
