@@ -259,7 +259,6 @@ export interface AppSettings {
   custom_phrases: string[];
   severity_adaptive_tone: boolean;
   humanization_level: number;
-  rules: string[];
 }
 
 export interface SettingsUpdate {
@@ -297,7 +296,6 @@ export interface SettingsUpdate {
   custom_phrases?: string[];
   severity_adaptive_tone?: boolean;
   humanization_level?: number;
-  rules?: string[];
 }
 
 // --- Template Types ---

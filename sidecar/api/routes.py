@@ -992,13 +992,6 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
             humanization_level=settings.humanization_level,
             custom_phrases=list(settings.custom_phrases) if settings.custom_phrases else None,
         )
-        if settings.rules:
-            rules_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(settings.rules))
-            system_prompt += (
-                "\n\nPHYSICIAN RULES (set by the requesting physician — "
-                "these OVERRIDE any conflicting instructions above):\n"
-                + rules_lines
-            )
         user_prompt = prompt_engine.build_quick_normal_user_prompt(
             parsed_report=parsed_report,
             clinical_context=scrubbed_clinical,
@@ -1182,13 +1175,6 @@ async def explain_report(request: Request, body: ExplainRequest = Body(...)):
         include_discussion_topics=include_discussion,
         humanization_level=humanization_level,
     )
-    if settings.rules:
-        rules_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(settings.rules))
-        system_prompt += (
-            "\n\nPHYSICIAN RULES (set by the requesting physician — "
-            "these OVERRIDE any conflicting instructions above):\n"
-            + rules_lines
-        )
     # 6b. Load template if specified
     template_tone = None
     template_instructions = None
@@ -1751,13 +1737,6 @@ async def _explain_stream_gen(explain_request: ExplainRequest, user_id: str | No
             avoid_openings=scrubbed_avoid_openings,
             humanization_level=humanization_level,
         )
-        if settings.rules:
-            rules_lines = "\n".join(f"{i+1}. {r}" for i, r in enumerate(settings.rules))
-            system_prompt += (
-                "\n\nPHYSICIAN RULES (set by the requesting physician — "
-                "these OVERRIDE any conflicting instructions above):\n"
-                + rules_lines
-            )
 
         template_tone = None
         template_instructions = None
