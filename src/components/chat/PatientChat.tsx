@@ -93,6 +93,28 @@ async function requestQuestions(token: string): Promise<ChatMessage> {
   return res.json();
 }
 
+async function requestWhatsNormal(token: string): Promise<ChatMessage> {
+  const res = await fetch(`${API_BASE}/chat/sessions/${token}/whats-normal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 410) throw new Error("expired");
+  if (res.status === 429) throw new Error("limit_reached");
+  if (!res.ok) throw new Error("whats_normal_failed");
+  return res.json();
+}
+
+async function requestNextSteps(token: string): Promise<ChatMessage> {
+  const res = await fetch(`${API_BASE}/chat/sessions/${token}/next-steps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 410) throw new Error("expired");
+  if (res.status === 429) throw new Error("limit_reached");
+  if (!res.ok) throw new Error("next_steps_failed");
+  return res.json();
+}
+
 /** Clean markdown: strip headings and rules but keep bold for rendering. */
 function cleanMarkdown(text: string): string {
   return text
@@ -132,7 +154,7 @@ export function PatientChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [actionLoading, setActionLoading] = useState<"simplify" | "detail" | "key-findings" | "measurements" | "questions" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"simplify" | "detail" | "key-findings" | "measurements" | "questions" | "whats-normal" | "next-steps" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
   const [widthMode, setWidthMode] = useState<"default" | "wide" | "narrow">("default");
@@ -213,7 +235,7 @@ export function PatientChat() {
     }
   }, [token, input, sending, actionLoading]);
 
-  const handleAction = useCallback(async (action: "simplify" | "detail" | "key-findings" | "measurements" | "questions") => {
+  const handleAction = useCallback(async (action: "simplify" | "detail" | "key-findings" | "measurements" | "questions" | "whats-normal" | "next-steps") => {
     if (!token || sending || actionLoading) return;
     setActionLoading(action);
 
@@ -224,6 +246,8 @@ export function PatientChat() {
       "key-findings": "Can you explain my key findings?",
       measurements: "Can you walk me through my measurements?",
       questions: "What questions should I be asking?",
+      "whats-normal": "Are my results normal?",
+      "next-steps": "What are my next steps?",
     };
     const patientMsg: ChatMessage = {
       role: "patient",
@@ -239,6 +263,8 @@ export function PatientChat() {
         "key-findings": requestKeyFindings,
         measurements: requestMeasurements,
         questions: requestQuestions,
+        "whats-normal": requestWhatsNormal,
+        "next-steps": requestNextSteps,
       };
       const msg = await fnMap[action](token);
       setMessages((prev) => [...prev, msg]);
@@ -434,6 +460,20 @@ export function PatientChat() {
                     disabled={isLoading}
                   >
                     {actionLoading === "questions" ? "Loading..." : "Questions"}
+                  </button>
+                  <button
+                    className="chat-action-btn"
+                    onClick={() => handleAction("whats-normal")}
+                    disabled={isLoading}
+                  >
+                    {actionLoading === "whats-normal" ? "Loading..." : "What's Normal?"}
+                  </button>
+                  <button
+                    className="chat-action-btn"
+                    onClick={() => handleAction("next-steps")}
+                    disabled={isLoading}
+                  >
+                    {actionLoading === "next-steps" ? "Loading..." : "Next Steps"}
                   </button>
                 </div>
               </div>

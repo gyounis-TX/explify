@@ -1206,3 +1206,131 @@ async def questions_to_ask(request: Request, token: str):
         )
 
     return await _store_assistant_message(session, content, input_tokens, output_tokens)
+
+
+# ---------------------------------------------------------------------------
+# POST /sessions/{token}/whats-normal — "What's Normal?" action
+# ---------------------------------------------------------------------------
+
+@router.post("/sessions/{token}/whats-normal")
+async def whats_normal(request: Request, token: str):
+    """Compare the patient's results against normal/expected ranges."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "Are my results normal?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
+    )
+
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "For each key finding and measurement in my results, explain whether "
+        "it falls within the normal or expected range. Factor in my age, sex, "
+        "and any relevant clinical context when determining what 'normal' means "
+        "for me specifically — not just generic textbook ranges. For values that "
+        "are outside the expected range, explain by how much and what that means "
+        "clinically. Use a clear format: state the finding, whether it's normal "
+        "or not, and a brief plain-language explanation of what that means for me."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=2500,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("What's Normal LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate normal-range comparison. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)
+
+
+# ---------------------------------------------------------------------------
+# POST /sessions/{token}/next-steps — "Next Steps" action
+# ---------------------------------------------------------------------------
+
+@router.post("/sessions/{token}/next-steps")
+async def next_steps(request: Request, token: str):
+    """Explain what the patient can expect going forward based on results."""
+    session = await _get_session_by_token(token)
+    if not session:
+        return JSONResponse({"detail": "Chat session not found"}, status_code=404)
+
+    error_resp = _validate_session_active(session)
+    if error_resp:
+        return error_resp
+
+    # Store a synthetic patient message
+    pool = await _get_pool()
+    now = _now()
+    patient_text = "What are my next steps?"
+    await pool.execute(
+        """INSERT INTO chat_messages (session_id, role, content, created_at)
+           VALUES ($1, 'patient', $2, $3)""",
+        session["id"], patient_text, now,
+    )
+    await pool.execute(
+        """UPDATE chat_sessions
+           SET message_count = message_count + 1, last_message_at = $1
+           WHERE id = $2""",
+        now, session["id"],
+    )
+
+    system_prompt = _build_system_prompt(session)
+
+    user_prompt = (
+        "Based on my specific results, explain what I can generally expect "
+        "going forward. What kinds of follow-up tests or monitoring are "
+        "typical for findings like mine? What lifestyle factors are relevant? "
+        "What will my care team likely want to discuss at my next visit? "
+        "Frame everything as 'your care team may recommend' or 'we typically "
+        "follow up with' — never prescribe specific treatments or medications. "
+        "Focus on setting expectations so I feel prepared for my next appointment."
+    )
+
+    try:
+        client = await _get_bedrock_client()
+        response = await client.call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=2000,
+            temperature=0.3,
+        )
+        content = response.raw_content
+        input_tokens = response.input_tokens
+        output_tokens = response.output_tokens
+    except Exception as exc:
+        _logger.exception("Next Steps LLM call failed for session %s: %s", session["id"], exc)
+        return JSONResponse(
+            {"detail": "Failed to generate next steps. Please try again."},
+            status_code=500,
+        )
+
+    return await _store_assistant_message(session, content, input_tokens, output_tokens)
