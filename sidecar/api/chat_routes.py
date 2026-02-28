@@ -982,7 +982,7 @@ async def detail_explanation(request: Request, token: str):
     # Store a synthetic patient message so conversation history stays valid
     pool = await _get_pool()
     now = _now()
-    patient_text = "Can you give me a more detailed explanation of all my results?"
+    patient_text = "Can you give me a more detailed explanation of my results?"
     await pool.execute(
         """INSERT INTO chat_messages (session_id, role, content, created_at)
            VALUES ($1, 'patient', $2, $3)""",
@@ -1162,7 +1162,7 @@ async def questions_to_ask(request: Request, token: str):
     # Store a synthetic patient message
     pool = await _get_pool()
     now = _now()
-    patient_text = "What questions should I ask my doctor?"
+    patient_text = "What questions should I be asking?"
     await pool.execute(
         """INSERT INTO chat_messages (session_id, role, content, created_at)
            VALUES ($1, 'patient', $2, $3)""",

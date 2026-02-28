@@ -220,10 +220,10 @@ export function PatientChat() {
     // Show synthetic patient message matching what the backend stores
     const patientTextMap: Record<string, string> = {
       simplify: "Can you simplify the explanation for me?",
-      detail: "Can you give me a more detailed explanation of all my results?",
+      detail: "Can you give me a more detailed explanation of my results?",
       "key-findings": "Can you explain my key findings?",
       measurements: "Can you walk me through my measurements?",
-      questions: "What questions should I ask my doctor?",
+      questions: "What questions should I be asking?",
     };
     const patientMsg: ChatMessage = {
       role: "patient",
@@ -433,7 +433,7 @@ export function PatientChat() {
                     onClick={() => handleAction("questions")}
                     disabled={isLoading}
                   >
-                    {actionLoading === "questions" ? "Loading..." : "Questions to Ask"}
+                    {actionLoading === "questions" ? "Loading..." : "Questions"}
                   </button>
                 </div>
               </div>
