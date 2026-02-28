@@ -95,6 +95,8 @@ export function SettingsScreen() {
   const [includeDiscussionTopics, setIncludeDiscussionTopics] = useState(true);
   const [defaultCommentMode, setDefaultCommentMode] = useState<"short" | "long" | "sms">("short");
   const [severityAdaptiveTone, setSeverityAdaptiveTone] = useState(true);
+  const [rules, setRules] = useState<string[]>([]);
+  const [newRule, setNewRule] = useState("");
 
 
   useEffect(() => {
@@ -129,6 +131,7 @@ export function SettingsScreen() {
         setIncludeDiscussionTopics(s.include_discussion_topics ?? true);
         setDefaultCommentMode(s.default_comment_mode ?? "short");
         setSeverityAdaptiveTone(s.severity_adaptive_tone ?? true);
+        setRules(s.rules ?? []);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to load settings";
         setError(msg);
@@ -174,6 +177,7 @@ export function SettingsScreen() {
         include_discussion_topics: includeDiscussionTopics,
         default_comment_mode: defaultCommentMode,
         severity_adaptive_tone: severityAdaptiveTone,
+        rules,
       };
 
       await sidecarApi.updateSettings(update);
@@ -195,7 +199,7 @@ export function SettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, includeDiscussionTopics, defaultCommentMode, severityAdaptiveTone, showToast]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, includeDiscussionTopics, defaultCommentMode, severityAdaptiveTone, rules, showToast]);
 
   // Auto-save: debounce 800ms after any setting changes
   const handleSaveRef = useRef(handleSave);
@@ -209,7 +213,7 @@ export function SettingsScreen() {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, includeDiscussionTopics, defaultCommentMode, severityAdaptiveTone]);
+  }, [literacyLevel, specialty, practiceName, includeKeyFindings, includeMeasurements, tonePreference, detailPreference, humanizationLevel, quickReasons, customPhrases, nextStepsOptions, explanationVoice, nameDrop, physicianNameSource, customPhysicianName, practiceProviders, shortCommentCharLimit, smsEnabled, smsCharLimit, footerType, customFooterText, useAnalogies, includeLifestyleRecommendations, includeDiscussionTopics, defaultCommentMode, severityAdaptiveTone, rules]);
 
 
   if (loading) {
@@ -870,6 +874,58 @@ export function SettingsScreen() {
                 }}
               >
                 Add
+              </button>
+            </div>
+          </section>
+
+          {/* Your Rules */}
+          <section className="settings-section">
+            <h3 className="settings-section-title">Your Rules</h3>
+            <p className="settings-description">
+              Custom instructions that override default note generation behavior.
+              Rules are injected into every note you generate.
+            </p>
+            {rules.length > 0 && (
+              <ul className="list-items">
+                {rules.map((rule, i) => (
+                  <li key={i} className="list-item">
+                    <span className="list-item-text">{rule}</span>
+                    <button
+                      className="list-remove-btn"
+                      onClick={() => setRules(rules.filter((_, idx) => idx !== i))}
+                      title="Remove rule"
+                    >
+                      &times;
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="list-add-row">
+              <input
+                type="text"
+                className="form-input"
+                placeholder='e.g. "Never abbreviate coronary artery disease as CAD"'
+                value={newRule}
+                onChange={(e) => setNewRule(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newRule.trim() && !rules.includes(newRule.trim())) {
+                    setRules([...rules, newRule.trim()]);
+                    setNewRule("");
+                  }
+                }}
+              />
+              <button
+                className="list-add-btn"
+                disabled={!newRule.trim() || rules.includes(newRule.trim())}
+                onClick={() => {
+                  if (newRule.trim() && !rules.includes(newRule.trim())) {
+                    setRules([...rules, newRule.trim()]);
+                    setNewRule("");
+                  }
+                }}
+              >
+                Add Rule
               </button>
             </div>
           </section>

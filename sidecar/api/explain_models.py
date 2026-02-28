@@ -195,6 +195,7 @@ class AppSettings(BaseModel):
     custom_phrases: list[str] = Field(default_factory=list)
     severity_adaptive_tone: bool = True
     humanization_level: int = Field(default=3, ge=1, le=5)
+    rules: list[str] = Field(default_factory=list)
 
 
 class SettingsUpdate(BaseModel):
@@ -234,3 +235,4 @@ class SettingsUpdate(BaseModel):
     custom_phrases: Optional[list[str]] = None
     severity_adaptive_tone: Optional[bool] = None
     humanization_level: Optional[int] = Field(default=None, ge=1, le=5)
+    rules: Optional[list[str]] = None
