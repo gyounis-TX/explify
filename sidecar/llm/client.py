@@ -29,7 +29,7 @@ _BAA_PROVIDERS: set[str] = set(
 )
 _REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "").lower() == "true"
 
-CLAUDE_DEEP_MODEL = "claude-opus-4-20250514"
+CLAUDE_DEEP_MODEL = "claude-opus-4-6-20250620"
 
 # Mapping from Anthropic model IDs to Bedrock inference profile IDs.
 # Bedrock requires inference profile IDs (with regional prefix) for on-demand use.
@@ -37,8 +37,10 @@ _BEDROCK_MODEL_MAP = {
     "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6",
     "claude-sonnet-4-5": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "claude-sonnet-4-5-20250929": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "claude-sonnet-4-20250514": "us.anthropic.claude-sonnet-4-20250514-v1:0",
-    "claude-opus-4-20250514": "us.anthropic.claude-opus-4-20250514-v1:0",
+    "claude-sonnet-4-20250514": "us.anthropic.claude-sonnet-4-20250514-v1:0",  # deprecated, kept for backward compat
+    "claude-opus-4-20250514": "us.anthropic.claude-opus-4-20250514-v1:0",  # deprecated, kept for backward compat
+    "claude-sonnet-4-6-20250620": "us.anthropic.claude-sonnet-4-6-20250620-v1:0",
+    "claude-opus-4-6-20250620": "us.anthropic.claude-opus-4-6-20250620-v1:0",
     "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "claude-haiku-4-20250514": "us.anthropic.claude-haiku-4-20250514-v1:0",
     "claude-3-5-sonnet-20241022": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",

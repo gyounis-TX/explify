@@ -403,11 +403,13 @@ export function AdminScreen() {
           <p className="admin-active-provider">
             Currently active: <strong>{(() => {
               const MODEL_NAMES: Record<string, string> = {
+                "claude-sonnet-4-6-20250620": "Claude Sonnet 4.6",
                 "claude-sonnet-4-6": "Claude Sonnet 4.6",
+                "claude-opus-4-6-20250620": "Claude Opus 4.6",
                 "claude-sonnet-4-5": "Claude Sonnet 4.5",
                 "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
-                "claude-sonnet-4-20250514": "Claude Sonnet 4",
-                "claude-opus-4-20250514": "Claude Opus 4",
+                "claude-sonnet-4-20250514": "Claude Sonnet 4 (legacy)",
+                "claude-opus-4-20250514": "Claude Opus 4 (legacy)",
                 "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
                 "claude-haiku-4-20250514": "Claude Haiku 4",
                 "claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet",
@@ -550,7 +552,7 @@ export function AdminScreen() {
             <input
               type="text"
               className="form-input"
-              placeholder="e.g. claude-sonnet-4-20250514"
+              placeholder="e.g. claude-sonnet-4-6-20250620"
               value={claudeModel}
               onChange={(e) => setClaudeModel(e.target.value)}
             />
