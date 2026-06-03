@@ -17,9 +17,11 @@ _RESULT_PREFIX = "extraction-jobs/result/"
 
 
 def bucket() -> str:
-    b = os.getenv("S3_BUCKET")
+    # Dedicated PRIVATE bucket for job PHI (input docs + results). Must NOT be the public
+    # frontend/CDN bucket. Falls back to S3_BUCKET only for local/dev convenience.
+    b = os.getenv("EXTRACTION_S3_BUCKET") or os.getenv("S3_BUCKET")
     if not b:
-        raise RuntimeError("S3_BUCKET not configured")
+        raise RuntimeError("EXTRACTION_S3_BUCKET not configured")
     return b
 
 

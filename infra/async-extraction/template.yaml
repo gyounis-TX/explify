@@ -10,13 +10,35 @@ Parameters:
   WorkerImageUri: { Type: String, Description: "ECR image URI built from worker.Dockerfile" }
   Subnets: { Type: List<AWS::EC2::Subnet::Id>, Description: "Private subnets with RDS + NAT/VPC-endpoint egress" }
   SecurityGroups: { Type: List<AWS::EC2::SecurityGroup::Id>, Description: "SG(s) allowing RDS + AWS API egress" }
-  S3Bucket: { Type: String, Default: explify-frontend, Description: "Bucket for job input/result objects" }
   DatabaseSecretArn: { Type: String, Description: "Secrets Manager ARN holding DATABASE_URL" }
+  JobRetentionDays: { Type: Number, Default: 3, Description: "Days before job input/result objects (PHI) auto-expire" }
   MaxWorkers: { Type: Number, Default: 5 }
   TaskCpu: { Type: String, Default: "1024" }
   TaskMemory: { Type: String, Default: "2048" }
 
 Resources:
+  # Dedicated PRIVATE bucket for job PHI (input documents + extraction results).
+  # Deliberately NOT the public frontend/CDN bucket. Encrypted, public access blocked,
+  # and objects auto-expire so PHI is not retained.
+  JobsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub explify-extraction-jobs-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-job-objects
+            Status: Enabled
+            Prefix: extraction-jobs/
+            ExpirationInDays: !Ref JobRetentionDays
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -68,7 +90,7 @@ Resources:
                 Resource: !GetAtt ExtractionQueue.Arn
               - Effect: Allow
                 Action: [s3:GetObject, s3:PutObject]
-                Resource: !Sub arn:aws:s3:::${S3Bucket}/extraction-jobs/*
+                Resource: !Sub arn:aws:s3:::${JobsBucket}/extraction-jobs/*
               - Effect: Allow
                 Action: [bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream]
                 Resource: "*"
@@ -89,7 +111,7 @@ Resources:
           Essential: true
           Environment:
             - { Name: EXTRACTION_QUEUE_URL, Value: !Ref ExtractionQueue }
-            - { Name: S3_BUCKET, Value: !Ref S3Bucket }
+            - { Name: EXTRACTION_S3_BUCKET, Value: !Ref JobsBucket }
             - { Name: AWS_REGION, Value: !Ref "AWS::Region" }
           Secrets:
             - { Name: DATABASE_URL, ValueFrom: !Ref DatabaseSecretArn }
@@ -188,3 +210,6 @@ Outputs:
     Value: !Ref ExtractionQueue
   DeadLetterQueueUrl:
     Value: !Ref DeadLetterQueue
+  JobsBucketName:
+    Description: Set this as EXTRACTION_S3_BUCKET on the API service (private PHI bucket).
+    Value: !Ref JobsBucket

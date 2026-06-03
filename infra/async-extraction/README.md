@@ -35,10 +35,11 @@ capacity. Full rationale in [`docs/async-extraction/DESIGN.md`](../../docs/async
        WorkerImageUri=<ecr>/explify-worker:latest \
        Subnets=subnet-aaa,subnet-bbb \
        SecurityGroups=sg-xxxx \
-       DatabaseSecretArn=arn:aws:secretsmanager:...:secret:explify-DATABASE_URL \
-       S3Bucket=explify-frontend
+       DatabaseSecretArn=arn:aws:secretsmanager:...:secret:explify-DATABASE_URL
    ```
-   Note the `QueueUrl` output.
+   The stack creates a dedicated **private, encrypted** PHI bucket
+   (`explify-extraction-jobs-<account>`) with a lifecycle rule that expires objects
+   after `JobRetentionDays` (default 3). Note the `QueueUrl` and `JobsBucketName` outputs.
 3. **Wire the API** (one line) in `sidecar/main.py` (or `api/routes.py`), guarded by the flag:
    ```python
    from api.jobs_routes import router as jobs_router
@@ -47,8 +48,10 @@ capacity. Full rationale in [`docs/async-extraction/DESIGN.md`](../../docs/async
        app.include_router(jobs_router)
    ```
 4. Set on the **API** task: `ASYNC_EXTRACTION=true`, `EXTRACTION_QUEUE_URL=<QueueUrl output>`,
-   and ensure `S3_BUCKET` + DB env are present. The API task role needs
-   `sqs:SendMessage` on the queue and `s3:PutObject` on `extraction-jobs/input/*`.
+   `EXTRACTION_S3_BUCKET=<JobsBucketName output>` (+ existing DB env). The API task role
+   needs `sqs:SendMessage` on the queue, `s3:PutObject` on
+   `<JobsBucket>/extraction-jobs/input/*`, and `s3:GetObject` on
+   `<JobsBucket>/extraction-jobs/result/*` (to return results on poll).
 5. Build/serve the **web frontend** with `VITE_ASYNC_EXTRACTION=true` so the client uses
    submit+poll. (Both flags must be on: backend `ASYNC_EXTRACTION` and frontend
    `VITE_ASYNC_EXTRACTION`. With only the backend flag, the API exposes the job
@@ -67,11 +70,15 @@ the job, and scale back to `0` after the queue drains.
 
 ## PHI / retention
 
-- Job input/result objects live under `s3://<bucket>/extraction-jobs/`. **Add a
-  lifecycle rule** expiring that prefix (e.g. 24–72 h). Objects are written with SSE.
+- Job input/result objects live in a **dedicated private bucket**
+  (`explify-extraction-jobs-<account>`) created by the stack — public access blocked,
+  SSE on, **not** the public frontend/CDN bucket. Objects auto-expire after
+  `JobRetentionDays` (default 3) via the bucket lifecycle rule.
 - SQS carries **only the `job_id`** — no PHI.
-- Promote the `CREATE TABLE IF NOT EXISTS` DDL in `jobs/store.py` into a real migration
-  (the table is also covered by the existing `enforce_data_retention()` once wired).
+- The `extraction_jobs` table is part of the canonical migration
+  (`storage/migrations/schema.sql`) and its rows are purged after 7 days by
+  `enforce_data_retention()`. `jobs/store.py` keeps a matching
+  `CREATE TABLE IF NOT EXISTS` as a worker-startup fallback.
 
 ## Known follow-ups before production
 
@@ -84,6 +91,10 @@ the job, and scale back to `0` after the queue drains.
   (web only — `IS_TAURI` desktop always uses the sync sidecar). Same `ExtractionResult`
   return type, so `ImportScreen` and other callers are unchanged. Build the web app
   with `VITE_ASYNC_EXTRACTION=true` to turn it on.
+- ~~DB migration + S3 lifecycle~~ **Done.** `extraction_jobs` is in
+  `storage/migrations/schema.sql` (purged after 7 days by `enforce_data_retention()`);
+  job objects live in a dedicated private bucket with a lifecycle expiry built into the
+  stack.
 - **Scale-from-zero nuance:** the CloudWatch alarm drives `0 → N` via a step policy
   (target-tracking can't initiate from 0). Tune thresholds/cooldowns to your latency
   tolerance.

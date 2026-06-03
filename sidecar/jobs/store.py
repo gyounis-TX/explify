@@ -15,6 +15,10 @@ from storage.pg_database import _get_pool  # existing asyncpg pool accessor
 
 from .models import ExtractionJob, JobKind, JobStatus
 
+# Worker-startup fallback. The CANONICAL definition lives in
+# storage/migrations/schema.sql (applied by the API's run_migrations()); this matching
+# IF NOT EXISTS keeps the worker self-sufficient if it boots before the API. Keep the
+# two in sync (same columns + index names).
 _DDL = """
 CREATE TABLE IF NOT EXISTS extraction_jobs (
     job_id        UUID PRIMARY KEY,
@@ -26,12 +30,13 @@ CREATE TABLE IF NOT EXISTS extraction_jobs (
     result_s3_key TEXT,
     attempts      INTEGER NOT NULL DEFAULT 0,
     last_error    TEXT,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at  TIMESTAMPTZ
 );
-CREATE INDEX IF NOT EXISTS extraction_jobs_status_idx ON extraction_jobs (status);
-CREATE INDEX IF NOT EXISTS extraction_jobs_user_idx ON extraction_jobs (user_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_jobs_status ON extraction_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_extraction_jobs_user_id ON extraction_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_jobs_created_at ON extraction_jobs(created_at);
 """
 
 
