@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  explify async extraction — SQS queue + DLQ + scale-to-zero Fargate worker.
+  SCAFFOLDING: deploys alongside the existing explify ECS service without modifying it.
+  The worker service starts at desiredCount 0 and scales out on queue depth, back to 0
+  when drained — so extraction compute is paid only while jobs exist.
+
+Parameters:
+  EcsClusterName: { Type: String, Default: explify }
+  WorkerImageUri: { Type: String, Description: "ECR image URI built from worker.Dockerfile" }
+  Subnets: { Type: List<AWS::EC2::Subnet::Id>, Description: "Private subnets with RDS + NAT/VPC-endpoint egress" }
+  SecurityGroups: { Type: List<AWS::EC2::SecurityGroup::Id>, Description: "SG(s) allowing RDS + AWS API egress" }
+  S3Bucket: { Type: String, Default: explify-frontend, Description: "Bucket for job input/result objects" }
+  DatabaseSecretArn: { Type: String, Description: "Secrets Manager ARN holding DATABASE_URL" }
+  MaxWorkers: { Type: Number, Default: 5 }
+  TaskCpu: { Type: String, Default: "1024" }
+  TaskMemory: { Type: String, Default: "2048" }
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: explify-extraction-dlq
+      MessageRetentionPeriod: 1209600   # 14 days
+
+  ExtractionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: explify-extraction
+      VisibilityTimeout: 960            # > max job duration (15 min worker budget)
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/explify-extraction-worker
+      RetentionInDays: 30
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: [{ Effect: Allow, Principal: { Service: ecs-tasks.amazonaws.com }, Action: sts:AssumeRole }]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-db-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement: [{ Effect: Allow, Action: secretsmanager:GetSecretValue, Resource: !Ref DatabaseSecretArn }]
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: [{ Effect: Allow, Principal: { Service: ecs-tasks.amazonaws.com }, Action: sts:AssumeRole }]
+      Policies:
+        - PolicyName: worker-permissions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+                Resource: !GetAtt ExtractionQueue.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub arn:aws:s3:::${S3Bucket}/extraction-jobs/*
+              - Effect: Allow
+                Action: [bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream]
+                Resource: "*"
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: explify-extraction-worker
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: worker
+          Image: !Ref WorkerImageUri
+          Essential: true
+          Environment:
+            - { Name: EXTRACTION_QUEUE_URL, Value: !Ref ExtractionQueue }
+            - { Name: S3_BUCKET, Value: !Ref S3Bucket }
+            - { Name: AWS_REGION, Value: !Ref "AWS::Region" }
+          Secrets:
+            - { Name: DATABASE_URL, ValueFrom: !Ref DatabaseSecretArn }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: worker
+
+  WorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: explify-extraction-worker
+      Cluster: !Ref EcsClusterName
+      LaunchType: FARGATE
+      DesiredCount: 0                   # scale-to-zero baseline
+      TaskDefinition: !Ref TaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref Subnets
+          SecurityGroups: !Ref SecurityGroups
+          AssignPublicIp: DISABLED
+      Tags:
+        - { Key: app, Value: explify }
+
+  # --- Autoscaling: 0 <-> MaxWorkers driven by queue depth ---
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ResourceId: !Sub service/${EcsClusterName}/${WorkerService.Name}
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 0
+      MaxCapacity: !Ref MaxWorkers
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+
+  ScaleOutPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: extraction-scale-out
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ScalableTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ExactCapacity
+        Cooldown: 60
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - { MetricIntervalLowerBound: 0, MetricIntervalUpperBound: 10, ScalingAdjustment: 1 }
+          - { MetricIntervalLowerBound: 10, ScalingAdjustment: !Ref MaxWorkers }
+
+  QueueNotEmptyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale the worker out when messages are visible.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions: [{ Name: QueueName, Value: !GetAtt ExtractionQueue.QueueName }]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Ref ScaleOutPolicy]
+
+  ScaleInPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: extraction-scale-in
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ScalableTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ExactCapacity
+        Cooldown: 300
+        MetricAggregationType: Maximum
+        StepAdjustments:
+          - { MetricIntervalUpperBound: 0, ScalingAdjustment: 0 }
+
+  QueueEmptyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale the worker back to zero when the queue is empty.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions: [{ Name: QueueName, Value: !GetAtt ExtractionQueue.QueueName }]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      AlarmActions: [!Ref ScaleInPolicy]
+
+Outputs:
+  QueueUrl:
+    Description: Set this as EXTRACTION_QUEUE_URL on the API service.
+    Value: !Ref ExtractionQueue
+  DeadLetterQueueUrl:
+    Value: !Ref DeadLetterQueue
