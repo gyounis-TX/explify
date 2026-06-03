@@ -71,10 +71,10 @@ the job, and scale back to `0` after the queue drains.
 
 ## Known follow-ups before production
 
-- **Vision-OCR in the worker:** currently `llm_client=None` (tesseract-only). Refactor
-  `api.routes._build_extract_llm_client(request)` → `build_extract_llm_client(user_id)`
-  and construct from `settings_store.get_settings(job.user_id)` so the worker matches
-  the synchronous path's accuracy.
+- ~~Vision-OCR in the worker~~ **Done.** The worker builds the same per-user client as
+  the sync routes via `llm.factory.build_extract_llm_client(job.user_id)`, so
+  low-confidence pages get the Bedrock vision-OCR fallback (accuracy parity). The worker
+  task role already has `bedrock:InvokeModel`.
 - **Frontend:** migrate the upload UX from sync `POST /extract/pdf` to submit+poll.
 - **Scale-from-zero nuance:** the CloudWatch alarm drives `0 → N` via a step policy
   (target-tracking can't initiate from 0). Tune thresholds/cooldowns to your latency

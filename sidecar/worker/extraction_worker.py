@@ -23,6 +23,7 @@ import os
 import tempfile
 
 from extraction import ExtractionPipeline
+from llm.factory import build_extract_llm_client
 from jobs import queue as jq
 from jobs import s3io, store
 from jobs.models import JobKind, JobStatus
@@ -38,11 +39,11 @@ _SUFFIX = {JobKind.PDF: ".pdf", JobKind.IMAGE: ".img"}
 
 async def _run_pipeline(job) -> str:
     """Run the appropriate pipeline entry and return serialized ExtractionResult JSON."""
-    # NOTE (scaffolding): vision-OCR fallback needs a per-user LLM client. To keep this
-    # additive, llm_client is None here (tesseract-only). Promote by refactoring
-    # api.routes._build_extract_llm_client(request) -> build_extract_llm_client(user_id)
-    # and constructing it from settings_store.get_settings(job.user_id).
-    llm_client = None
+    # Build the same per-user vision-OCR client the synchronous /extract routes use, so
+    # low-confidence pages get the Bedrock vision-OCR fallback (accuracy parity). Returns
+    # None if the user has no usable provider/creds, in which case the pipeline runs
+    # tesseract-only — identical to the request path's behavior.
+    llm_client = await build_extract_llm_client(job.user_id)
 
     if job.kind == JobKind.TEXT:
         text = s3io.get_input(job.input_s3_key).decode("utf-8", errors="replace")

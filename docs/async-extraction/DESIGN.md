@@ -130,7 +130,11 @@ message (handles SQS at-least-once delivery).
 - `sidecar/jobs/` — job model, Postgres store (`CREATE TABLE IF NOT EXISTS`), SQS
   wrapper, S3 I/O.
 - `sidecar/worker/extraction_worker.py` — the SQS consumer that calls the **existing**
-  `ExtractionPipeline`.
+  `ExtractionPipeline`, building the same per-user vision-OCR client as the sync routes
+  (via `llm.factory.build_extract_llm_client`) for accuracy parity.
+- `sidecar/llm/factory.py` — request-free `build_extract_llm_client(user_id)`, shared by
+  the sync routes and the worker (the sync `_build_extract_llm_client(request)` now
+  delegates to it — a pure refactor, no behavior change).
 - `sidecar/api/jobs_routes.py` — additive `POST /extract/jobs` + `GET /extract/jobs/{id}`
   router (not mounted unless you wire it + flip the flag).
 - `infra/async-extraction/` — SQS+DLQ+worker CloudFormation, worker Dockerfile, README.
