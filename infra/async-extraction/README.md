@@ -49,6 +49,10 @@ capacity. Full rationale in [`docs/async-extraction/DESIGN.md`](../../docs/async
 4. Set on the **API** task: `ASYNC_EXTRACTION=true`, `EXTRACTION_QUEUE_URL=<QueueUrl output>`,
    and ensure `S3_BUCKET` + DB env are present. The API task role needs
    `sqs:SendMessage` on the queue and `s3:PutObject` on `extraction-jobs/input/*`.
+5. Build/serve the **web frontend** with `VITE_ASYNC_EXTRACTION=true` so the client uses
+   submit+poll. (Both flags must be on: backend `ASYNC_EXTRACTION` and frontend
+   `VITE_ASYNC_EXTRACTION`. With only the backend flag, the API exposes the job
+   endpoints but the SPA keeps calling the sync routes — a safe intermediate state.)
 
 ## Verify
 
@@ -75,7 +79,11 @@ the job, and scale back to `0` after the queue drains.
   the sync routes via `llm.factory.build_extract_llm_client(job.user_id)`, so
   low-confidence pages get the Bedrock vision-OCR fallback (accuracy parity). The worker
   task role already has `bedrock:InvokeModel`.
-- **Frontend:** migrate the upload UX from sync `POST /extract/pdf` to submit+poll.
+- ~~Frontend submit+poll~~ **Done.** `sidecarApi.extractPdf/extractFile` transparently
+  submit a job and poll `GET /extract/jobs/{id}` when `VITE_ASYNC_EXTRACTION=true`
+  (web only — `IS_TAURI` desktop always uses the sync sidecar). Same `ExtractionResult`
+  return type, so `ImportScreen` and other callers are unchanged. Build the web app
+  with `VITE_ASYNC_EXTRACTION=true` to turn it on.
 - **Scale-from-zero nuance:** the CloudWatch alarm drives `0 → N` via a step policy
   (target-tracking can't initiate from 0). Tune thresholds/cooldowns to your latency
   tolerance.

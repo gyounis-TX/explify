@@ -30,3 +30,12 @@ export const GIT_SHA: string = import.meta.env.VITE_GIT_SHA ?? "dev";
 
 /** ISO timestamp of the build. */
 export const BUILD_TIME: string = import.meta.env.VITE_BUILD_TIME ?? "";
+
+/**
+ * Async extraction (submit + poll) feature flag. Web mode only — the cloud SQS/worker
+ * pipeline does not exist in the Tauri desktop sidecar, so this is always false there.
+ * Enable by building/serving the web app with VITE_ASYNC_EXTRACTION=true once the
+ * backend's ASYNC_EXTRACTION flag and async-extraction stack are deployed.
+ */
+export const ASYNC_EXTRACTION_ENABLED: boolean =
+  !IS_TAURI && import.meta.env.VITE_ASYNC_EXTRACTION === "true";

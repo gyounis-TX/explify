@@ -1,4 +1,4 @@
-import { IS_TAURI, API_BASE_URL } from "./platform";
+import { IS_TAURI, API_BASE_URL, ASYNC_EXTRACTION_ENABLED } from "./platform";
 import { getSession } from "./supabase";
 import type {
   HealthResponse,
@@ -180,7 +180,63 @@ class SidecarApi {
     return response.json();
   }
 
+  /**
+   * Submit a document to the async extraction pipeline and poll until it completes.
+   * Returns the same ExtractionResult as the synchronous routes, so callers are
+   * unaffected. Used automatically by extractPdf/extractFile when ASYNC_EXTRACTION
+   * is enabled (web mode only). See docs/async-extraction/DESIGN.md.
+   */
+  private async extractViaJob(
+    file: File,
+    { intervalMs = 2000, timeoutMs = 15 * 60 * 1000 }: { intervalMs?: number; timeoutMs?: number } = {},
+  ): Promise<ExtractionResult> {
+    const baseUrl = await this.ensureInitialized();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const submit = await this.fetchWithAuth(`${baseUrl}/extract/jobs`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!submit.ok) {
+      await this.handleErrorResponse(submit);
+    }
+    const { job_id: jobId } = (await submit.json()) as { job_id: string; status: string };
+
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+
+      const poll = await this.fetchWithAuth(
+        `${baseUrl}/extract/jobs/${encodeURIComponent(jobId)}`,
+        { cache: "no-store" },
+      );
+      if (!poll.ok) {
+        await this.handleErrorResponse(poll);
+      }
+      const body = (await poll.json()) as {
+        status: "queued" | "processing" | "done" | "failed";
+        result?: string;
+        error?: string;
+      };
+
+      if (body.status === "done" && body.result) {
+        return JSON.parse(body.result) as ExtractionResult;
+      }
+      if (body.status === "failed") {
+        throw new Error(body.error || "Extraction failed. Please try again.");
+      }
+      if (Date.now() > deadline) {
+        throw new Error("Extraction timed out. Please try again.");
+      }
+    }
+  }
+
   async extractPdf(file: File): Promise<ExtractionResult> {
+    if (ASYNC_EXTRACTION_ENABLED) {
+      return this.extractViaJob(file);
+    }
+
     const baseUrl = await this.ensureInitialized();
     const formData = new FormData();
     formData.append("file", file);
@@ -198,6 +254,10 @@ class SidecarApi {
   }
 
   async extractFile(file: File): Promise<ExtractionResult> {
+    if (ASYNC_EXTRACTION_ENABLED) {
+      return this.extractViaJob(file);
+    }
+
     const baseUrl = await this.ensureInitialized();
     const formData = new FormData();
     formData.append("file", file);
