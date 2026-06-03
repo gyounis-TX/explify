@@ -124,7 +124,6 @@ export function AIModelScreen() {
                 "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
                 "claude-haiku-4-20250514": "Claude Haiku 4",
                 "claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet",
-                "claude-3-5-haiku-20241022": "Claude 3.5 Haiku",
               };
               const modelId = settings?.claude_model || "claude-sonnet-4-6";
               const modelName = MODEL_NAMES[modelId] || modelId;

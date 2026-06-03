@@ -44,7 +44,6 @@ _BEDROCK_MODEL_MAP = {
     "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "claude-haiku-4-20250514": "us.anthropic.claude-haiku-4-20250514-v1:0",
     "claude-3-5-sonnet-20241022": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
-    "claude-3-5-haiku-20241022": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
 }
 
 # Region prefix mapping for inference profiles
