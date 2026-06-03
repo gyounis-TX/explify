@@ -13,6 +13,7 @@ BAA (Business Associate Agreement) compliance:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -59,8 +60,34 @@ _BEDROCK_REGION_PREFIX = {
 }
 
 
-def _to_bedrock_model_id(model: str, region: str = "us-east-1") -> str:
-    """Convert an Anthropic model ID to its Bedrock inference profile ID."""
+def _load_app_inference_profiles() -> dict[str, str]:
+    """Optional per-app Bedrock cost allocation (opt-in, off by default).
+
+    ``BEDROCK_APP_PROFILE_MAP`` is a JSON object mapping a Bedrock inference-profile
+    ID (e.g. ``"us.anthropic.claude-sonnet-4-6"``) to an *application* inference-profile
+    ARN that is tagged ``app=explify`` (see infra/cost-tagging/). When set, model calls
+    are routed through the tagged profile so Cost Explorer can attribute Bedrock spend
+    to this app. Unset or invalid -> empty map -> no behavior change.
+    """
+    raw = os.getenv("BEDROCK_APP_PROFILE_MAP", "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        logger.warning("BEDROCK_APP_PROFILE_MAP is not valid JSON; ignoring")
+        return {}
+    if not isinstance(data, dict):
+        logger.warning("BEDROCK_APP_PROFILE_MAP must be a JSON object; ignoring")
+        return {}
+    return {str(k): str(v) for k, v in data.items() if v}
+
+
+_APP_INFERENCE_PROFILES = _load_app_inference_profiles()
+
+
+def _resolve_bedrock_profile_id(model: str, region: str = "us-east-1") -> str:
+    """Convert an Anthropic model ID to its Bedrock (system) inference profile ID."""
     # Already a Bedrock inference profile ID (has region prefix like "us." or "eu.")
     if model[:3] in ("us.", "eu.", "ap.") and "anthropic." in model:
         return model
@@ -77,6 +104,16 @@ def _to_bedrock_model_id(model: str, region: str = "us-east-1") -> str:
     # Best-effort: wrap in Bedrock format with region prefix
     prefix = _BEDROCK_REGION_PREFIX.get(region, "us")
     return f"{prefix}.anthropic.{model}-v1:0"
+
+
+def _to_bedrock_model_id(model: str, region: str = "us-east-1") -> str:
+    """Resolve the Bedrock model/profile to invoke.
+
+    Applies an optional per-app application-inference-profile override (for cost
+    allocation) on top of the standard system inference-profile resolution.
+    """
+    profile_id = _resolve_bedrock_profile_id(model, region)
+    return _APP_INFERENCE_PROFILES.get(profile_id, profile_id)
 
 
 class LLMProvider(str, Enum):
