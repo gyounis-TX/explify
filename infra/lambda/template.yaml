@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Explify API — scale-to-zero Lambda. Runs the existing FastAPI sidecar
+  (via Lambda Web Adapter) in the Explify VPC so it can reach RDS in the
+  private subnets. CloudFront for api.explify.app is a separate stack.
+
+Parameters:
+  Subnets:
+    Type: String
+    Default: "subnet-06af361b10f4d49df,subnet-0d7841adf8701ad98"
+    Description: Private subnets (reach RDS + NAT instance for outbound)
+  SecurityGroups:
+    Type: String
+    Default: "sg-01d0d29abbcf83d63"
+    Description: ECS task SG — already allow-listed by RDS on 5432
+  CognitoUserPoolId:
+    Type: String
+    Default: us-east-1_OetMuIlZE
+  CognitoClientId:
+    Type: String
+    Default: 57t2i7169ireum4c0ls7va7h6a
+  AllowedOrigins:
+    Type: String
+    Default: "https://explify.app,https://www.explify.app,https://app.explify.app"
+  AdminEmails:
+    Type: String
+    Default: gyounis@youniscardiology.com
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 3008
+    EphemeralStorage:
+      Size: 4096
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerContext: ../../
+      Dockerfile: infra/lambda/Dockerfile
+      DockerTag: explify-lambda
+    Properties:
+      PackageType: Image
+      Architectures: [x86_64]
+      VpcConfig:
+        SubnetIds: !Split [",", !Ref Subnets]
+        SecurityGroupIds: !Split [",", !Ref SecurityGroups]
+      Environment:
+        Variables:
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+          ADMIN_EMAILS: !Ref AdminEmails
+          REQUIRE_AUTH: "true"
+          # DATABASE_URL: resolved from SSM SecureString at deploy time so the
+          # FastAPI app gets a real Postgres URL via os.getenv (same as ECS).
+          DATABASE_URL: "{{resolve:ssm-secure:/explify/DATABASE_URL}}"
+          # STRIPE_SECRET_KEY: mirroring the literal SSM path string the
+          # current ECS task passes (the task has this in `env` not `secrets`,
+          # so the app receives the path, not the value — appears to be a
+          # pre-existing config bug; preserving behavior, not fixing it.)
+          STRIPE_SECRET_KEY: "/explify/STRIPE_SECRET_KEY"
+          STRIPE_WEBHOOK_SECRET: ""
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+        Cors:
+          AllowOrigins: ["*"]
+          AllowMethods: ["*"]
+          AllowHeaders: ["*"]
+      Policies:
+        # Read explify/* params (for any runtime SSM lookups the app might do)
+        - Statement:
+            - Effect: Allow
+              Action: [ssm:GetParameter, ssm:GetParameters]
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/explify/*
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt]
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+        # Cognito (mirrors current ECS task role permissions implicitly)
+        - Statement:
+            - Effect: Allow
+              Action: [cognito-idp:AdminGetUser, cognito-idp:ListUsers]
+              Resource: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}
+
+      # EventBridge keep-warm during typical work hours (skip nights/weekends).
+      # Same pattern as YCA; covers Houston 8am-6pm year-round.
+      Events:
+        KeepWarm:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0/10 13-23 ? * MON-FRI *)
+            Description: Keep the API Lambda warm during work hours
+
+Outputs:
+  FunctionUrl:
+    Value: !GetAtt ApiFunctionUrl.FunctionUrl
+  FunctionName:
+    Value: !Ref ApiFunction
+  FunctionArn:
+    Value: !GetAtt ApiFunction.Arn

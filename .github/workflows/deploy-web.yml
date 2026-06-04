@@ -11,28 +11,8 @@ on:
       - '.github/workflows/deploy-web.yml'
 
 jobs:
-  deploy-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - name: Login to ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      - name: Build and push Docker image
-        run: |
-          docker build -t ${{ secrets.ECR_URI }}:${{ github.sha }} -t ${{ secrets.ECR_URI }}:latest ./sidecar
-          docker push ${{ secrets.ECR_URI }}:${{ github.sha }}
-          docker push ${{ secrets.ECR_URI }}:latest
-      - name: Deploy to ECS
-        run: |
-          aws ecs update-service --cluster explify --service explify-api-service-cifg1mjg --force-new-deployment
-
+  # deploy-backend (ECS) was removed during the Lambda+CloudFront migration.
+  # API deploys are now in .github/workflows/deploy-api.yml (manual trigger).
   deploy-frontend:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,46 @@
+# Build + deploy the Lambda-backed Explify API. Manual trigger; defaults
+# are wired so a normal redeploy is a single click in the Actions tab.
+name: Deploy API (Lambda)
+
+on:
+  workflow_dispatch:
+    inputs:
+      subnets:
+        description: Private subnets for the Lambda VPC config
+        required: true
+        default: "subnet-06af361b10f4d49df,subnet-0d7841adf8701ad98"
+      security_groups:
+        description: SG for the Lambda (must be allow-listed by RDS)
+        required: true
+        default: "sg-01d0d29abbcf83d63"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - name: SAM build
+        run: sam build --template infra/lambda/template.yaml
+      - name: SAM deploy
+        run: |
+          sam deploy \
+            --stack-name explify-api-lambda \
+            --resolve-image-repos \
+            --resolve-s3 \
+            --no-confirm-changeset --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              Subnets='${{ inputs.subnets }}' \
+              SecurityGroups='${{ inputs.security_groups }}'
+      - name: Show outputs
+        run: |
+          aws cloudformation describe-stacks --stack-name explify-api-lambda \
+            --query "Stacks[0].Outputs" --output table

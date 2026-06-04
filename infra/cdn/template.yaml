@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  CloudFront in front of the Explify Lambda Function URL for api.explify.app.
+  Mirrors the YCA Portal CDN pattern. OAC is intentionally omitted — Origin
+  Access Control overwrites the viewer's Authorization header (Cognito Bearer)
+  with SigV4, which breaks JWT auth. The raw Function URL stays publicly
+  reachable; the app's Cognito JWT check is the auth boundary.
+
+Parameters:
+  ApiFunctionUrlHost:
+    Type: String
+    Description: Function URL hostname from the lambda stack (no scheme).
+  CustomDomain:
+    Type: String
+    Default: api.explify.app
+  CertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:628475584741:certificate/aebc0b7d-2f70-4780-a553-29695af677e2
+    Description: ACM wildcard cert *.explify.app
+
+Mappings:
+  Managed:
+    CachePolicy:
+      Disabled: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+    OriginRequestPolicy:
+      AllViewerExceptHostHeader: b689b0a8-53d0-40ab-baf2-68738e2966ac
+
+Resources:
+  CdnDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Explify API CDN (api.explify.app → Lambda Function URL)
+        HttpVersion: http2
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Aliases:
+          - !Ref CustomDomain
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: lambda-fn-url
+            DomainName: !Ref ApiFunctionUrlHost
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              HTTPSPort: 443
+              # FastAPI multipart uploads can be slow on cold start — bump timeouts.
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 30
+        # API has no static assets to cache — everything dynamic.
+        DefaultCacheBehavior:
+          TargetOriginId: lambda-fn-url
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !FindInMap [Managed, CachePolicy, Disabled]
+          OriginRequestPolicyId: !FindInMap [Managed, OriginRequestPolicy, AllViewerExceptHostHeader]
+
+Outputs:
+  CloudFrontDomain:
+    Value: !GetAtt CdnDistribution.DomainName
+    Description: Point api.explify.app at this CNAME.
+  DistributionId:
+    Value: !Ref CdnDistribution

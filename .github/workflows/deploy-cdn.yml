@@ -1,0 +1,53 @@
+# Deploy CloudFront for api.explify.app in front of the Lambda Function URL.
+# Manual-only. Run AFTER deploy-api succeeds; pass the Function URL host from
+# the lambda stack's output (or let the input default empty and look it up
+# from the stack).
+name: Deploy CDN (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      function_url_host:
+        description: "Function URL hostname (no scheme). Leave empty to read from lambda stack output."
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - name: Resolve Function URL host
+        id: fn
+        run: |
+          if [ -n "${{ inputs.function_url_host }}" ]; then
+            echo "host=${{ inputs.function_url_host }}" >> "$GITHUB_OUTPUT"
+          else
+            URL=$(aws cloudformation describe-stacks --stack-name explify-api-lambda \
+              --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" --output text)
+            HOST=$(echo "$URL" | sed -E 's#https?://([^/]+)/?#\1#')
+            echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          fi
+      - name: SAM build
+        run: sam build --template infra/cdn/template.yaml
+      - name: SAM deploy
+        run: |
+          sam deploy \
+            --stack-name explify-cdn \
+            --resolve-s3 \
+            --no-confirm-changeset --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              ApiFunctionUrlHost='${{ steps.fn.outputs.host }}'
+      - name: Show outputs
+        run: |
+          aws cloudformation describe-stacks --stack-name explify-cdn \
+            --query "Stacks[0].Outputs" --output table
