@@ -29,6 +29,14 @@ jobs:
           use-installer: true
       - name: SAM build
         run: sam build --template infra/lambda/template.yaml
+      - name: Read DATABASE_URL from SSM
+        id: db
+        run: |
+          DB_URL=$(aws ssm get-parameter --name /explify/DATABASE_URL --with-decryption \
+            --region us-east-1 --query 'Parameter.Value' --output text)
+          # Mask in logs so it never prints
+          echo "::add-mask::$DB_URL"
+          echo "url=$DB_URL" >> "$GITHUB_OUTPUT"
       - name: SAM deploy
         run: |
           sam deploy \
@@ -39,7 +47,8 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
               Subnets='${{ inputs.subnets }}' \
-              SecurityGroups='${{ inputs.security_groups }}'
+              SecurityGroups='${{ inputs.security_groups }}' \
+              DatabaseUrl='${{ steps.db.outputs.url }}'
       - name: Show outputs
         run: |
           aws cloudformation describe-stacks --stack-name explify-api-lambda \

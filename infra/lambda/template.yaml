@@ -26,6 +26,10 @@ Parameters:
   AdminEmails:
     Type: String
     Default: gyounis@youniscardiology.com
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: Resolved from SSM SecureString /explify/DATABASE_URL by the workflow.
 
 Globals:
   Function:
@@ -54,9 +58,10 @@ Resources:
           COGNITO_CLIENT_ID: !Ref CognitoClientId
           ADMIN_EMAILS: !Ref AdminEmails
           REQUIRE_AUTH: "true"
-          # DATABASE_URL: resolved from SSM SecureString at deploy time so the
-          # FastAPI app gets a real Postgres URL via os.getenv (same as ECS).
-          DATABASE_URL: "{{resolve:ssm-secure:/explify/DATABASE_URL}}"
+          # DATABASE_URL: workflow reads SSM at deploy time and passes the
+          # resolved value via parameter override (CFN does NOT support
+          # ssm-secure dynamic refs in Lambda env vars).
+          DATABASE_URL: !Ref DatabaseUrl
           # STRIPE_SECRET_KEY: mirroring the literal SSM path string the
           # current ECS task passes (the task has this in `env` not `secrets`,
           # so the app receives the path, not the value — appears to be a
