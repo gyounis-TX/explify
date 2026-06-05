@@ -159,9 +159,14 @@ async def enforce_data_retention():
         r5 = await conn.execute(
             "DELETE FROM chat_sessions WHERE expires_at < NOW()"
         )
+        # 6. Async extraction jobs older than 7 days (S3 input/result objects expire
+        #    independently via the bucket lifecycle rule; this clears the tracking rows)
+        r6 = await conn.execute(
+            "DELETE FROM extraction_jobs WHERE created_at < NOW() - INTERVAL '7 days'"
+        )
     logger.info(
-        "Retention enforcement: usage=%s, audit=%s, corrections=%s, letter_prompts=%s, chat_sessions=%s",
-        r1, r2, r3, r4, r5,
+        "Retention enforcement: usage=%s, audit=%s, corrections=%s, letter_prompts=%s, chat_sessions=%s, extraction_jobs=%s",
+        r1, r2, r3, r4, r5, r6,
     )
 
 

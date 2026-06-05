@@ -941,3 +941,24 @@ DO $$ BEGIN
     ALTER TABLE chat_sessions ADD COLUMN physician_name TEXT;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- Async extraction jobs: tracks OCR/extraction work offloaded to the SQS worker.
+-- Canonical definition (jobs/store.py keeps a matching CREATE TABLE IF NOT EXISTS as a
+-- worker-startup fallback). PHI lives in S3 (input/result objects), not on this row.
+CREATE TABLE IF NOT EXISTS extraction_jobs (
+    job_id        UUID PRIMARY KEY,
+    user_id       TEXT,
+    practice_id   TEXT,
+    kind          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'queued',
+    input_s3_key  TEXT,
+    result_s3_key TEXT,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    last_error    TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_extraction_jobs_status ON extraction_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_extraction_jobs_user_id ON extraction_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_extraction_jobs_created_at ON extraction_jobs(created_at);

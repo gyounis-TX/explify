@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Scheduled scaling for the explify API ECS service — scale to 0 outside clinic hours and
+  back up in the morning, so the near-idle Fargate task isn't billed 24/7. Attaches an
+  Application Auto Scaling target + scheduled actions to the EXISTING service; deploying
+  this does not recreate or modify the task definition. The async-extraction worker scales
+  to zero independently (see infra/async-extraction/). RDS is unaffected. Remove with
+  `delete-stack` to hand desiredCount back to manual control.
+
+Parameters:
+  ClusterName: { Type: String, Default: explify }
+  ServiceName: { Type: String, Default: explify-api-service-cifg1mjg }
+  Timezone: { Type: String, Default: America/Chicago }
+  DaytimeMin: { Type: Number, Default: 1 }
+  DaytimeMax: { Type: Number, Default: 2 }
+  UpSchedule: { Type: String, Default: "cron(0 6 ? * MON-FRI *)", Description: "Scale up: 6am Mon-Fri" }
+  DownSchedule: { Type: String, Default: "cron(0 20 ? * * *)", Description: "Scale to 0: 8pm daily" }
+
+Resources:
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ResourceId: !Sub service/${ClusterName}/${ServiceName}
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 0
+      MaxCapacity: !Ref DaytimeMax
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScheduledActions:
+        - ScheduledActionName: clinic-hours-up
+          Schedule: !Ref UpSchedule
+          Timezone: !Ref Timezone
+          ScalableTargetAction:
+            MinCapacity: !Ref DaytimeMin
+            MaxCapacity: !Ref DaytimeMax
+        - ScheduledActionName: off-hours-down
+          Schedule: !Ref DownSchedule
+          Timezone: !Ref Timezone
+          ScalableTargetAction:
+            MinCapacity: 0
+            MaxCapacity: 0
+
+Outputs:
+  Note:
+    Value: !Sub "Scheduled scaling attached to service/${ClusterName}/${ServiceName} (${Timezone})."

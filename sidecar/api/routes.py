@@ -124,17 +124,13 @@ pipeline = ExtractionPipeline()
 
 
 async def _build_extract_llm_client(request: Request) -> LLMClient | None:
-    """Build an LLM client for vision OCR fallback, or None if unavailable."""
-    try:
-        user_id = _get_user_id(request)
-        settings = await settings_store.get_settings(user_id=user_id)
-        provider_str = settings.llm_provider.value
-        api_key = settings_store.get_api_key_for_provider(provider_str)
-        if api_key:
-            return LLMClient(provider=LLMProvider(provider_str), api_key=api_key)
-    except Exception:
-        _logger.debug("Could not build LLM client for vision OCR", exc_info=True)
-    return None
+    """Build an LLM client for vision OCR fallback, or None if unavailable.
+
+    Thin request-bound wrapper over llm.factory.build_extract_llm_client so the async
+    extraction worker can construct the same client from a user_id (accuracy parity).
+    """
+    from llm.factory import build_extract_llm_client
+    return await build_extract_llm_client(_get_user_id(request))
 
 
 def _get_user_id(request: Request) -> str | None:
