@@ -71,10 +71,9 @@ Resources:
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
-        Cors:
-          AllowOrigins: ["*"]
-          AllowMethods: ["*"]
-          AllowHeaders: ["*"]
+        # CORS handled by FastAPI's CORSMiddleware (reads ALLOWED_ORIGINS env).
+        # Adding Cors here too produces DUPLICATE Access-Control-Allow-Origin
+        # headers which browsers reject as a CORS violation. Leave it off.
       Policies:
         # Read explify/* params (for any runtime SSM lookups the app might do)
         - Statement:
